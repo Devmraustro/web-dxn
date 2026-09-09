@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AIKnowledge } from "../../../Database/Models";
+import { escapeRegex } from "../../../utils/regex";
 
 // Initialize default AI knowledge base
 export const initializeAIMiddleware = async () => {
@@ -127,8 +128,37 @@ export const initializeAIMiddleware = async () => {
       },
     ];
     
+    // Upsert keyed on (key, language) so concurrent cold starts (multiple
+    // serverless instances booting against an empty DB) merge instead of
+    // duplicating the knowledge base.
     for (const item of defaultKnowledge) {
-      await AIKnowledge.create(item);
+      const { key, language } = item;
+      await AIKnowledge.updateOne(
+        { key, language },
+        { $setOnInsert: item },
+        { upsert: true }
+      ).catch(() => undefined);
+    }
+    // Final safety net: if two instances still raced the same upsert before
+    // either row existed, collapse exact duplicates (keep the first).
+    try {
+      const dup = await AIKnowledge.aggregate([
+        {
+          $group: {
+            _id: { key: "$key", language: "$language" },
+            ids: { $push: "$_id" },
+            n: { $sum: 1 },
+          },
+        },
+        { $match: { n: { $gt: 1 } } },
+      ]);
+      const extra: unknown[] = [];
+      for (const g of dup) extra.push(...(g.ids || []).slice(1));
+      if (extra.length > 0) {
+        await AIKnowledge.deleteMany({ _id: { $in: extra } });
+      }
+    } catch {
+      /* best-effort dedupe */
     }
     console.log("AI knowledge base initialized");
   }
@@ -172,8 +202,7 @@ export const searchAIKnowledge = async (req: Request, res: Response) => {
     if (raw.length > 64) {
       return res.status(400).json({ message: "Search query too long" });
     }
-    const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(escaped, "i");
+    const regex = new RegExp(escapeRegex(raw), "i");
 
     const results = await AIKnowledge.find({
       $or: [

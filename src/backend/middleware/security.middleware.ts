@@ -2,7 +2,21 @@ import { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-export const securityHeaders = helmet();
+/**
+ * Security headers. The default Helmet Content-Security-Policy restricts
+ * img-src to 'self' data:, which would block product photos served from
+ * Cloudinary (https://res.cloudinary.com) — the production upload backend —
+ * and the storefront renders them in <img> tags. Keep every other default
+ * directive untouched and only widen img-src to the Cloudinary host.
+ */
+export const securityHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "https://res.cloudinary.com"],
+    },
+  },
+});
 
 const stripMongoOperators = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -55,7 +69,7 @@ export const authRateLimiter = rateLimit({
   message: { message: "Too many login attempts, please try again later." },
 });
 
-export const validateInput = (req: Request, _res: Response, next: NextFunction) => {
+export const validateInput = (req: Request, res: Response, next: NextFunction) => {
   const MAX_KEYS = 100;
   const MAX_DEPTH = 10;
 
@@ -73,10 +87,15 @@ export const validateInput = (req: Request, _res: Response, next: NextFunction) 
   }
 
   try {
-    if (req.body && countKeys(req.body) > MAX_KEYS) {
-      return;
+    if (req.body && typeof req.body === "object") {
+      const keys = countKeys(req.body);
+      if (keys > MAX_KEYS) {
+        // Either too many keys overall or the depth limit was exceeded.
+        return res.status(413).json({ message: "Request body too complex" });
+      }
     }
   } catch {
+    return res.status(400).json({ message: "Invalid request body" });
   }
   next();
 };

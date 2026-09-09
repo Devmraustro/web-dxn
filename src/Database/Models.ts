@@ -14,7 +14,13 @@ const userSchema = new Schema({
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date },
+  // Password reset: hashed token + expiry stored per user (multi-instance and
+  // serverless friendly; never store the raw token).
+  passwordResetTokenHash: { type: String },
+  passwordResetExpiresAt: { type: Date },
 }, { timestamps: true });
+
+userSchema.index({ passwordResetTokenHash: 1 }, { unique: true, sparse: true });
 
 const User = mongoose.model("User", userSchema);
 
@@ -44,12 +50,14 @@ const Customer = mongoose.model("Customer", customerSchema);
 const productSchema = new Schema({
   sku: { type: String, unique: true, required: true },
   slug: { type: String, unique: true, required: true },
-  price: { type: Number, required: true, default: 0 },
-  compareAtPrice: { type: Number },
+  price: { type: Number, required: true, default: 0, min: 0 },
+  compareAtPrice: { type: Number, min: 0 },
+  image: { type: String },
+  images: { type: [String], default: [] },
   isActive: { type: Boolean, default: true },
   isFeatured: { type: Boolean, default: false },
   sortOrder: { type: Number, default: 0 },
-  stockQuantity: { type: Number, default: 0 }, // Server-authoritative stock
+  stockQuantity: { type: Number, default: 0, min: 0 }, // Server-authoritative stock
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
@@ -108,6 +116,7 @@ const offerSchema = new Schema({
   startDate: { type: Date },
   endDate: { type: Date },
   isFeatured: { type: Boolean, default: false },
+  sortOrder: { type: Number, default: 0 },
   productId: { type: Schema.Types.ObjectId, ref: "Product" },
   packId: { type: Schema.Types.ObjectId, ref: "Pack" },
   createdAt: { type: Date, default: Date.now },
@@ -158,7 +167,17 @@ const orderSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
   internalNotes: { type: String },
   adminId: { type: Schema.Types.ObjectId, ref: "User" },
+  // Opaque client idempotency key: unique (sparse) so duplicate submissions of
+  // the same checkout cannot create two orders, across restarts/replicas.
+  metadata: { type: Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
+
+// Real-query indexes: dashboard lists orders sorted by creation and filters by
+// status; admin top-product analytics unwinds line items; idempotency lookup.
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ "items.productId": 1 });
+orderSchema.index({ "metadata.idempotencyKey": 1 }, { unique: true, sparse: true });
 
 const Order = mongoose.model("Order", orderSchema);
 
@@ -167,12 +186,18 @@ const Order = mongoose.model("Order", orderSchema);
 // ==========================================
 
 const wilayaSchema = new Schema({
+  code: { type: Number },
   name: { type: String, required: true },
   nameFr: { type: String },
+  nameAr: { type: String },
   isActive: { type: Boolean, default: true },
   sortOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
+
+// Lookup by official code/name is the hot path for shipping rate resolution.
+wilayaSchema.index({ code: 1 }, { unique: true, sparse: true });
+wilayaSchema.index({ name: 1 }, { unique: true, sparse: true });
 
 const Wilaya = mongoose.model("Wilaya", wilayaSchema);
 

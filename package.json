@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && vite build --config src/frontend/vite.config.ts",
+    "build:backend": "tsc -p tsconfig.json",
     "build:frontend": "vite build --config src/frontend/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "ts-node -P src/backend/tsconfig.json src/backend/index.ts",

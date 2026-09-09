@@ -9,6 +9,7 @@ import {
 } from "../controllers/user.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { validateRequest } from "../middleware/validateRequest.middleware";
+import { authRateLimiter } from "../middleware/security.middleware";
 import {
   registerSchema,
   loginSchema,
@@ -19,22 +20,14 @@ import {
 
 const router = Router();
 
-// POST /api/users/register - Register new user
-router.post("/register", validateRequest(registerSchema), registerUser);
+// Public authentication endpoints are rate-limited (brute-force protection).
+router.post("/register", authRateLimiter, validateRequest(registerSchema), registerUser);
+router.post("/login", authRateLimiter, validateRequest(loginSchema), loginUser);
+router.post("/forgot-password", authRateLimiter, validateRequest(forgotPasswordSchema), forgotPassword);
+router.post("/reset-password/:token", authRateLimiter, validateRequest(resetPasswordSchema), resetPassword);
 
-// POST /api/users/login - Login
-router.post("/login", validateRequest(loginSchema), loginUser);
-
-// GET /api/users/me - Get current user (authenticated)
+// Authenticated profile endpoints
 router.get("/me", authenticate, getCurrentUser);
-
-// PUT /api/users/profile - Update profile
 router.put("/profile", authenticate, validateRequest(updateProfileSchema), updateProfile);
-
-// POST /api/users/forgot-password - Forgot password
-router.post("/forgot-password", validateRequest(forgotPasswordSchema), forgotPassword);
-
-// POST /api/users/reset-password/:token - Reset password
-router.post("/reset-password/:token", validateRequest(resetPasswordSchema), resetPassword);
 
 export default router;
