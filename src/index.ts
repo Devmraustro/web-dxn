@@ -57,4 +57,18 @@ const serverlessHandler = async (req: any, res: any) => {
   return app(req, res);
 };
 
-export default serverlessHandler;
+/**
+ * Vercel legacy launchers (the `@vercel/node` builder used by vercel.json)
+ * accept the request handler either as the module export itself
+ * (`module.exports = fn`) or as a `.default` property. The CommonJS output of
+ * this file is made compatible with BOTH conventions so the serverless entry
+ * works regardless of which shape the platform builder expects.
+ */
+const serverlessHandlerExport = serverlessHandler as (
+  req: any,
+  res: any
+) => Promise<unknown>;
+(serverlessHandlerExport as unknown as { default?: typeof serverlessHandlerExport }).default =
+  serverlessHandlerExport;
+
+export = serverlessHandlerExport;

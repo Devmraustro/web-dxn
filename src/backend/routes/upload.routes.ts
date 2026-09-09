@@ -8,18 +8,16 @@ import {
 
 const router = Router();
 
-// The multer middleware (memory storage + MIME/magic-byte checks) MUST run
-// before the controller, which reads req.file / req.files.
+// The multer middleware (memory storage + extension/declared-MIME checks) MUST
+// run before the controller, which reads req.file / req.files and additionally
+// verifies the file's magic bytes (content signature) before anything is
+// stored. Multer/validation errors flow to the central error middleware.
 router.post(
   "/image",
   authenticate,
   adminOnly,
   multerUploadImage,
-  uploadImage,
-  (req, res) => {
-    if (res.headersSent) return;
-    res.status(500).json({ message: "Upload handler error" });
-  }
+  uploadImage
 );
 
 router.post(
@@ -27,11 +25,7 @@ router.post(
   authenticate,
   adminOnly,
   multerUploadImages,
-  uploadImages,
-  (req, res) => {
-    if (res.headersSent) return;
-    res.status(500).json({ message: "Upload handler error" });
-  }
+  uploadImages
 );
 
 router.delete(

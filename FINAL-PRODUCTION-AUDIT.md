@@ -245,6 +245,53 @@ See TEST RESULTS below.
     `/tmp/uploads` Vercel default). → `app.ts` mounts the exported
     `UPLOAD_DIR`; the DB-free set includes `/uploads/`. FIXED.
 
+### Fixed (final independent forensic re-review — full HTTP upload chain + Vercel entry)
+35. **The admin upload endpoint was still completely broken end-to-end (500 on
+    every valid upload).** Root causes found by an actual DB-free HTTP test
+    (JWT-minted admin + real multipart PNG against the running app):
+    - `upload.middleware.ts` compared `file.mimetype` (`image/png`) against
+      `ALLOWED_EXTENSIONS`, a Set of *extension* strings prefixed with dots
+      (`".png"`) → the branch `!ALLOWED_EXTENSIONS.has(file.mimetype)` was
+      ALWAYS true → every upload rejected 500 “Invalid MIME type”.
+    - Even with that fixed, the magic-byte check read `file.buffer` inside
+      multer’s `fileFilter`, which runs BEFORE multer buffers the file → empty
+      buffer → every upload would fail again.
+    - The WebP signature expected `WEBP` at byte offset 4, but the RIFF
+      container places the chunk size there and `WEBP` at offset 8 → all valid
+      WebP files would be rejected.
+    → fileFilter now checks extension + declared MIME only (fast fail);
+    magic-byte validation moved into the controller where `req.file.buffer`
+    exists (`imageSignatureMismatch`, exported, WebP/R IFF corrected); batch
+    upload validates every file before storing any; multer rejection errors
+    carry `statusCode 400`. FIXED + VERIFIED by 18 new DB-free regression
+    tests (`upload-wiring.test.ts`) covering valid PNG/WebP/GIF/JPEG uploads,
+    content masquerading, HTML polyglots, disallowed extensions/MIME, batch
+    all-or-nothing, 401/403 authorization, and secure delete.
+36. **Upload error responses leaked internal error strings to clients**
+    (`controller` catch returned `error.message` — filesystem paths, provider
+    config). → Controllers log details server-side and return generic
+    messages; production upload failure stays generic. FIXED (prod smoke
+    verified: no storage provider configured → clean 500 “Upload failed”).
+37. **Vercel entry-point export shape was ambiguous**: `dist/index.js` only
+    set `exports.default`, but legacy `@vercel/node` launchers accept the
+    handler as either the module export or `.default`. → `src/index.ts` now
+    `export =`s a self-`.default`-tagged handler, so compiled output is a
+    callable `module.exports` with `.default` present (both conventions).
+    FIXED (compiled-output verified: `typeof require('./dist/index.js')` is
+    `function` and `.default === module`).
+38. **Rate limiter behind Vercel edge (second-order)**: with `trust proxy`
+    fixed (item 28), express-rate-limit keys on `req.ip` correctly. Local
+    re-verified with `VERCEL=1` smoke — health and API responses 200 under
+    `X-Forwarded-For`. No code change beyond item 28; recorded as VERIFIED.
+39. **Password reset + owner provisioning in production** (pre-existing on
+    main, re-confirmed, not introduced by this branch): public registration is
+    always `staff`; no out-of-band owner-provisioning tooling or SMTP sender
+    exists in the repository, so in production the reset link can never be
+    delivered and no new admin can self-register. Safe (fails closed, no
+    takeover oracle) but operationally incomplete → recorded under
+    CONFIGURATION_REQUIRED / DEFERRED below; NOT a code-level defect of this
+    diff.
+
 ### Not defects (documented)
 - **`src/lib/checkout/stack.ts` does not exist** in this repository (verified
   against working tree and `git ls-files`). There is no refund/proration code
@@ -268,7 +315,7 @@ See TEST RESULTS below.
 | Rate limiting | PASS | Global API limiter + per-route `authRateLimiter` on register/login/forgot/reset + AI/meta endpoint limits |
 | IDOR | PASS | Order detail: owner-or-admin only; profile endpoints keyed by token user |
 | Price/stock/shipping manipulation | PASS | All totals server-derived; shipping shared resolver; atomic stock decrement with compensation; restock on cancel/reject |
-| Upload security | PASS | Admin-only; **multer middleware mounted (fix 16)** — memory storage, magic-byte ↔ declared-MIME enforcement, extension allow-list, size limits; production storage fail-closed; delete gated to UUID files |
+| Upload security | PASS | Admin-only; **multer middleware mounted** — memory storage, extension + declared-MIME allow-lists in fileFilter, magic-byte (content-signature) enforcement in the controller after buffering (fix 35 — chain was 500-broken before this fix), all-or-nothing batch validation, size limits; production storage fail-closed; delete gated to UUID files (traversal rejected); 18 DB-free regression tests |
 | CSRF assumptions | PASS | API is bearer-token based (no cookie-session CSRF surface); auth token is not auto-sent cross-origin |
 | SSRF | PASS | No server-side URL fetch of user-supplied targets in shipping/SEO scope (Telegram/Meta/AI use fixed hosts + env credentials) |
 | Path traversal | PASS | `isSafeImageUrl` + UUID-only physical delete; traversal rejected |
@@ -355,7 +402,14 @@ Frontend admin shell also client-gates `/admin*`.
 
 ## UPLOADS
 
-PASS (code-verifiable) — see Security audit. Live Cloudinary round-trip:
+PASS — full HTTP chain verified end-to-end by DB-free tests
+(`upload-wiring.test.ts`, 18 tests: real PNG/WebP/GIF/JPEG multipart uploads
+succeed and persist to UPLOAD_DIR; text/HTML masquerading, MIME mismatches,
+disallowed extensions rejected 400; batch is all-or-nothing; 401/403 enforced;
+delete only accepts server-generated URLs and rejects traversal; content
+signatures enforced post-buffer). Local dev storage works; production fails
+closed without Cloudinary (or explicit persistent-volume opt-in) with a
+generic 500 (no internal leak). Live Cloudinary round-trip:
 **CONFIGURATION_REQUIRED** (credentials).
 
 ## FRONTEND
@@ -414,29 +468,35 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
   remain (fixes 27); `trust proxy` auto-enabled on Vercel so per-IP rate
   limits/`req.ip`/logs are correct behind the edge (fix 28). `VERCEL=1`
   production boot smoke: clean start, 200 health, zero EROFS/EACCES errors.
-- Note: `@vercel/node` legacy-build entry (`dist/index.js`, default export)
-  cannot be executed in this sandbox — Vercel deploy/cold-start remains
-  BLOCKED_BY_ENVIRONMENT. Vercel request payloads are capped (~4.5 MB): the
-  5 MB upload cap is therefore effectively ~4.5 MB on Vercel (documented in
-  EXTERNAL CONFIGURATION); typical review images are far below it.
+- Note: `@vercel/node` legacy-build entry (`dist/index.js`) cannot be executed
+  in this sandbox — Vercel deploy/cold-start remains BLOCKED_BY_ENVIRONMENT.
+  The entry is prepared for the platform builder's export conventions: the
+  compiled handler is exported as a callable `module.exports` AND as
+  `.default` (fix 37, verified on the compiled output). Vercel request
+  payloads are capped (~4.5 MB): the 5 MB upload cap is therefore effectively
+  ~4.5 MB on Vercel (documented in EXTERNAL CONFIGURATION); typical review
+  images are far below it.
 - Production storage: Cloudinary — **CONFIGURATION_REQUIRED**.
 - Actual Vercel project deploy / cold-start / lambda run:
   **BLOCKED_BY_ENVIRONMENT** (no Vercel project/credentials in sandbox).
 
-## TEST RESULTS (exact — final re-run incl. continuation fixes 27–34, 2026-09-09)
+## TEST RESULTS (exact — final independent forensic re-review, 2026-09-09)
 
 | Suite | Result |
 |---|---|
 | `npx tsc -p tsconfig.json --noEmit` | PASS — exit 0, 0 errors |
-| Full Jest, DB-free subset (`jest.config.js`, product/order/upload excluded) | 12 suites, **244/244** tests passed |
-| — of which `jest.unit.config.js` (ai-guardrail, security-fixes-v2, commerce-unit) | 3 suites, **53/53** |
-| — AI + Meta + security + telegram suites | 9 suites, 191/191 |
+| Full Jest, DB-free subset (`jest.config.js`, product/order/upload.test.ts excluded) | 13 suites, **262/262** tests passed |
+| — incl. new `upload-wiring.test.ts` (full HTTP upload chain) | 1 suite, **18/18** |
+| — `jest.unit.config.js` (ai-guardrail, security-fixes-v2, commerce-unit) | 3 suites, **53/53** |
+| — AI + Meta + security + telegram + commerce suites | 9 suites, 191/191 |
 | DB-backed suites (`order.test.ts`, `product.test.ts`, `upload.test.ts`) | **BLOCKED_BY_ENVIRONMENT** — no MongoDB in sandbox (mongod absent; mongodb-memory-server binary download blocked by sandbox network — ECONNRESET to fastdl.mongodb.org). DB-dependent tests time out buffering on connect; the handful of pure auth-path tests inside those files pass. NOT marked PASS, not code failures |
 | `npm run build` (tsc + Vite production) | PASS — exit 0 (Vite chunk-size warning only, 526 kB / 171 kB gzip) |
 | `npm run build:frontend` | PASS — 562 modules, `dist/frontend/build` |
 | `npm audit` | **0 vulnerabilities** |
-| Runtime smoke A (prod mode `dist/index.js`, no DB): `/api/health` degraded JSON 200, `/robots.txt` 200 text (correct disallows + Sitemap line), `/` 200 SPA HTML, `/sitemap.xml` 500 (DB down, buffering timeout — expected without Mongo) | PASS as described |
-| Runtime smoke B (`VERCEL=1` prod mode, no DB): clean cold-start boot (no EROFS/EACCES/import-time FS writes — fixes 27/34), `/api/health` 200 with `X-Forwarded-For` accepted under `trust proxy` (fix 28), missing `/uploads/*` & `/assets/*` & `*.js` → hard 404 (fix 29), real hashed asset → 200 `Cache-Control: immutable`, SPA route → 200 HTML, robots 200, DB-down sitemap 500 | PASS as described |
+| Runtime smoke A (prod mode `dist/index.js`, no DB): `/api/health` degraded JSON 200, `/robots.txt` 200 text (correct disallows + Sitemap line), `/` 200 SPA HTML, `/sitemap.xml` 500 (DB down — requires Mongo by definition) | PASS as described |
+| Runtime smoke B (`VERCEL=1` prod mode, no DB): clean cold-start boot (no EROFS/EACCES/import-time FS writes), `/api/health` 200, missing `/uploads/*` & `/assets/*` & `*.js` → hard 404, real hashed asset → 200 `Cache-Control: immutable`, SPA route → 200 HTML, robots 200, DB-down sitemap 500 | PASS as described |
+| Runtime smoke C (upload HTTP chain, dev local storage): valid PNG/WebP → 200 + file persisted; text/HTML masquerading → 400; pdf MIME → 400; staff → 403; no token → 401; delete stored URL → 200 (file removed); traversal & external delete URLs → 400 | PASS as described |
+| Runtime smoke D (prod, no storage provider): upload attempt → generic `500 {"message":"Upload failed"}` — no filesystem/provider detail leaked | PASS as described |
 
 ## DEPENDENCY AUDIT
 
@@ -490,6 +550,9 @@ transitive dependency of `axios` (`form-data ^4.0.6`), so a Vercel
 - Review-screenshot lightbox + image cleanup when product/review is deleted.
 - Dashboard “accrued vs realized” revenue toggle (delivered-only is the
   documented conservative definition).
+- Out-of-band owner/admin provisioning (public register is always `staff` and
+  no seed/CLI/console exists — pre-existing on main; production ops must
+  create the first admin directly in Mongo). DEFERRED / CONFIGURATION_REQUIRED.
 
 ## FINAL VERDICT
 
