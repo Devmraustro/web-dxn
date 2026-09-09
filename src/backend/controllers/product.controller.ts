@@ -150,14 +150,16 @@ async function ensureTranslations(productId: any, translations?: { ar?: any; fr?
   if (!translations) return;
   for (const lang of ["ar", "fr"] as const) {
     const t = translations[lang];
-    if (!t) continue;
+    if (!t || typeof t !== "object") continue;
+    // Only write the fields the payload actually carries: a partial update
+    // (e.g. title-only) must never blank the other translated content.
+    const patch: Record<string, unknown> = {};
+    if (t.title !== undefined) patch.title = String(t.title);
+    if (t.description !== undefined) patch.description = String(t.description);
+    if (t.size !== undefined) patch.size = String(t.size);
     await ProductTranslation.findOneAndUpdate(
       { productId, language: lang },
-      {
-        title: t.title || "",
-        description: t.description || "",
-        size: t.size || "",
-      },
+      { $set: patch },
       { upsert: true, runValidators: true }
     );
   }

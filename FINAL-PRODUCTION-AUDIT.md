@@ -125,6 +125,64 @@ providers, live Mongo/CI DB) remain CONFIGURATION_REQUIRED.
 15. **Admin review UI assumed a legacy translation shape** (`{ar:{name}}`) →
     renders both legacy and current translation forms + sku fallback. FIXED.
 
+### Fixed (final forensic review pass)
+16. **Upload endpoints were dead code**: `routes/upload.routes.ts` imported the
+    controller functions directly, so the multer middleware
+    (`middleware/upload.middleware.ts` — memory storage + magic-byte/MIME
+    checks) never ran and `req.file` was always undefined → every upload
+    returned 400 “No file uploaded”. → Routes now mount the multer middlewares
+    before the controllers. FIXED + wired (AdminReviewPage posts `/api/upload/image`).
+17. **AdminReviewPage multipart upload sent a manual
+    `Content-Type: multipart/form-data` header** (no boundary) — axios must
+    generate the boundary. → Header removed. FIXED.
+18. **Dashboard revenue semantics were inconsistent**: `getRevenueStats`
+    counted every non-cancelled order (including unpaid COD / unverified
+    BaridiMob) while `getDashboardStats` counted delivered only. → Both now use
+    the same delivered-only `REVENUE_MATCH`; cancelled/rejected excluded from
+    top-products/top-wilayas; daily/weekly now bucket by day; product rows
+    surfaced with pack kind + name (from order snapshot, else current
+    translation, else sku). FIXED.
+19. **Order status transition race + stuck-order on partial restock failure**:
+    a blind read-then-write status update could interleave two concurrent admin
+    transitions, and the guard flag was set *before* restoring stock, so a
+    mid-restore DB error left the order permanently unable to cancel or be
+    restocked. → Single atomic compare-and-set on
+    `{_id, status: <from>, [terminal]: stockClaimsRestoredAt missing}` decides
+    the winner; restock runs *after* the winning write with rollback of partial
+    increments and automatic revert of status + guard on failure. FIXED.
+20. **Helmet default CSP would block Cloudinary product images**: default
+    `img-src 'self' data:` is violated by `https://res.cloudinary.com` image
+    URLs (the production upload backend). → CSP keeps all other defaults and
+    widens `img-src` to `https://res.cloudinary.com`. FIXED.
+21. **No public `/robots.txt` or `/sitemap.xml`**: only `/api/seo/...`
+    existed; robots advertised `https://dxn.dz/sitemap.xml` which 404’d. →
+    Conventional URLs served (robots DB-free, sitemap DB-backed); robots
+    Sitemap line derives from `BASE_URL`. FIXED.
+22. **Serverless DB-gating excluded all `.xml` paths**, but the sitemap
+    queries Mongo — on a cold instance mongoose would buffer against an
+    unopened connection. → Only truly DB-free paths skip `ensureDB()`;
+    `/robots.txt` is excluded, `/sitemap.xml` and everything else is gated.
+    FIXED.
+23. **Idempotency duplicate-hit leaked internal metadata** (`stockClaims` /
+    `stockClaimsRestoredAt` were stripped in the controller path but not in the
+    middleware path). → Middleware duplicate response now strips the same
+    fields. FIXED.
+24. **Partial translation updates blanked sibling fields**: `ensureTranslations`
+    wrote `title: ""`, `description: ""` when a payload only contained one
+    field. → Only fields present in the payload are written. FIXED.
+25. **Legacy pre-58 wilaya datasets** (rows without `code`) were never upgraded
+    → missing wilayas could not be configured for shipping, and junk rows
+    (e.g. old typo “Timra”) stayed visible to shoppers. →
+    `initializeDefaultWilayas` now reconciles code-less datasets in place
+    (attach `code`/`nameAr`/`sortOrder`, canonical romanization, insert the
+    missing wilayas, deactivate non-canonical legacy rows) and never touches
+    datasets that already carry codes. FIXED.
+26. **ProductCard description logic crashed on legacy object-shaped
+    `translations`** (called `.find()` on an object) and had no
+    any-language/top-level fallback for Arabic when only French existed. →
+    Shared `pickProductDescription` helper used by ProductCard and
+    ProductDetailPage; safe across array/legacy/top-level shapes. FIXED.
+
 ### Not defects (documented)
 - **`src/lib/checkout/stack.ts` does not exist** in this repository (verified
   against working tree and `git ls-files`). There is no refund/proration code
@@ -148,13 +206,13 @@ providers, live Mongo/CI DB) remain CONFIGURATION_REQUIRED.
 | Rate limiting | PASS | Global API limiter + per-route `authRateLimiter` on register/login/forgot/reset + AI/meta endpoint limits |
 | IDOR | PASS | Order detail: owner-or-admin only; profile endpoints keyed by token user |
 | Price/stock/shipping manipulation | PASS | All totals server-derived; shipping shared resolver; atomic stock decrement with compensation; restock on cancel/reject |
-| Upload security | PASS | Admin-only; magic-byte ↔ declared-MIME enforcement; extension allow-list; size limits; production storage fail-closed; delete gated to UUID files |
+| Upload security | PASS | Admin-only; **multer middleware mounted (fix 16)** — memory storage, magic-byte ↔ declared-MIME enforcement, extension allow-list, size limits; production storage fail-closed; delete gated to UUID files |
 | CSRF assumptions | PASS | API is bearer-token based (no cookie-session CSRF surface); auth token is not auto-sent cross-origin |
 | SSRF | PASS | No server-side URL fetch of user-supplied targets in shipping/SEO scope (Telegram/Meta/AI use fixed hosts + env credentials) |
 | Path traversal | PASS | `isSafeImageUrl` + UUID-only physical delete; traversal rejected |
 | Webhook spoofing | PASS | Meta `X-Hub-Signature-256` HMAC-SHA256 over raw body, constant-time compare; no secrets logged |
 | Webhook replay/dedup | PASS | Durable unique `dedupKey` (sparse unique index); DB-backed tests BLOCKED_BY_ENVIRONMENT |
-| Race conditions | PASS | Order idempotency (unique sparse index) + atomic stock claims + guarded restock |
+| Race conditions | PASS | Order idempotency (unique sparse index) + atomic stock claims + compare-and-set status transitions with restock-after-write + rollback |
 | Sensitive logging | PASS | No tokens/secrets logged; error middleware strips internals in production |
 | Error disclosure | PASS | Production responses never include stack/internal strings |
 | Auth privilege escalation | PASS | `role` never accepted from register payload; admin guards on every write route |
@@ -276,40 +334,55 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
 - `vercel.json` added (catch-all serverless → `dist/index.js`, buildCommand
   `npm run build` which compiles TS + Vite). PASS (config review).
 - Express serverless handler: cached `ensureDB()`, 503 on API/meta when DB
-  down, static/health/SEO skip DB. PASS (code + local prod-mode smoke).
+  down, static/health/robots skip DB; `/sitemap.xml` correctly DB-gated (fix
+  22). PASS (code + local prod-mode smoke).
+- Vite hashed assets under `/assets/` get `Cache-Control: public,
+  max-age=31536000, immutable` (express static setHeaders + vercel.json rule).
 - SPA fallback / API 404 / meta 404 verified locally in `NODE_ENV=production`
   (`dist` output, no DB): `/` 200 HTML, `/product/foo` 200 HTML,
   `/api/health` degraded JSON, `/api/nope` JSON 404, `/meta/xyz` JSON 404,
-  DB-down `/api/products` → 500 (no crash). PASS (local runtime smoke).
+  `/robots.txt` 200 text, DB-down `/sitemap.xml` → 500 buffering timeout (no
+  crash; requires Mongo by definition). PASS (local runtime smoke).
+- Note: `@vercel/node` legacy-build entry (`dist/index.js`, default export)
+  cannot be executed in this sandbox — Vercel deploy/cold-start remains
+  BLOCKED_BY_ENVIRONMENT. Vercel request payloads are capped (~4.5 MB): the
+  5 MB upload cap is therefore effectively ~4.5 MB on Vercel (documented in
+  EXTERNAL CONFIGURATION); typical review images are far below it.
 - Production storage: Cloudinary — **CONFIGURATION_REQUIRED**.
 - Actual Vercel project deploy / cold-start / lambda run:
   **BLOCKED_BY_ENVIRONMENT** (no Vercel project/credentials in sandbox).
 
-## TEST RESULTS (exact)
+## TEST RESULTS (exact — final forensic re-run, 2026-09-09)
 
 | Suite | Result |
 |---|---|
 | `npx tsc -p tsconfig.json --noEmit` | PASS — exit 0, 0 errors |
-| Jest unit (`jest.unit.config.js`) — ai-guardrail, security-fixes-v2, commerce-unit | 3 suites, **53/53** tests passed |
-| Jest AI (`jest.ai.config.js`) | 7 suites, **167/167** tests passed |
-| security-fixes (H1–H4 production env + source scan) | **13/13** passed |
-| DB-backed suites (order, product, upload, durable dedup) | **BLOCKED_BY_ENVIRONMENT** (no MongoDB in sandbox — not marked PASS) |
-| `npm run build` (tsc + Vite production) | PASS — exit 0 |
-| `npm run build:frontend` | PASS — 560 modules, `dist/frontend/build` |
-| `npm audit --omit=dev` | **0 vulnerabilities** (was 2 moderate; fixed via `npm audit fix`) |
-| Runtime smoke (prod mode, DB absent) | PASS for health/robots/SPA/404 paths as above |
+| Full Jest, DB-free subset (`jest.config.js`, product/order/upload excluded) | 12 suites, **244/244** tests passed |
+| — of which `jest.unit.config.js` (ai-guardrail, security-fixes-v2, commerce-unit) | 3 suites, **53/53** |
+| — AI + Meta + security + telegram suites | 9 suites, 191/191 |
+| DB-backed suites (`order.test.ts`, `product.test.ts`, `upload.test.ts`) | **BLOCKED_BY_ENVIRONMENT** — no MongoDB in sandbox (mongod absent; mongodb-memory-server binary download blocked by sandbox network — ECONNRESET to fastdl.mongodb.org). DB-dependent tests time out buffering on connect; the handful of pure auth-path tests inside those files pass. NOT marked PASS, not code failures |
+| `npm run build` (tsc + Vite production) | PASS — exit 0 (Vite chunk-size warning only, 526 kB / 171 kB gzip) |
+| `npm run build:frontend` | PASS — 562 modules, `dist/frontend/build` |
+| `npm audit` | **0 vulnerabilities** |
+| Runtime smoke (prod mode `dist/index.js`, no DB): `/api/health` degraded JSON 200, `/robots.txt` 200 text (correct disallows + Sitemap line), `/` 200 SPA HTML, `/sitemap.xml` 500 (DB down, buffering timeout — expected without Mongo) | PASS as described |
 
 ## DEPENDENCY AUDIT
 
-0 vulnerabilities after `npm audit fix` (morgan→1.12.0, qs patched).
-`npm ls --depth=0` tree consistent. package-lock updated in sync.
+0 vulnerabilities (`npm audit` full tree, including audit of the sandbox
+no-save test helper). `package-lock.json` in sync with `package.json`.
+`form-data` (runtime `require` in the Cloudinary provider) is a production
+transitive dependency of `axios` (`form-data ^4.0.6`), so a Vercel
+`npm install --omit=dev` retains it; `os` is a Node builtin.
 
 ## GIT SECURITY
 
 - `git check-ignore -v .env` → ignored (`.gitignore:2:.env`).
 - `git ls-files .env` → no output (not tracked).
-- Secret-pattern scan across working tree + untracked files (AWS/Stripe/GitHub/
-  Slack/Google/private keys) → clean. PASS.
+- Secret-pattern scan across working tree + untracked files (Telegram bot
+  tokens, Meta tokens, OpenAI/Anthropic keys, Mongo credentials, JWT secrets,
+  SMTP credentials, AWS/Stripe/GitHub/Slack/Google/private keys) → clean. PASS.
+- No `.env` was added/modified by this change set (`git status` clean before
+  commit; only source files + this audit doc changed).
 
 ## GITHUB RELEASE
 

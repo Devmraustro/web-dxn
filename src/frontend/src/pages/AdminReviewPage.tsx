@@ -101,9 +101,8 @@ const AdminReviewPage = () => {
         const file = files[i];
         const fd = new FormData();
         fd.append("image", file);
-        const response = await axios.post("/api/upload/image", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        // No manual Content-Type: axios must set the multipart boundary itself.
+        const response = await axios.post("/api/upload/image", fd);
         newUrls.push(response.data.data.url);
       }
       setForm((prev) => ({ ...prev, images: [...prev.images, ...newUrls] }));

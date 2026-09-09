@@ -131,9 +131,18 @@ export const idempotencyMiddleware = (key: string) => {
 
     const existingOrder = await Order.findOne({ "metadata.idempotencyKey": idempotencyKey });
     if (existingOrder) {
+      // Same shape as the controller's duplicate-hit response: strip the
+      // internal metadata (stock-claims snapshot / restore marker) so clients
+      // only ever see the same payload they would get from a fresh POST.
+      const doc = existingOrder.toObject ? existingOrder.toObject() : existingOrder;
+      if (doc && doc.metadata && typeof doc.metadata === "object") {
+        doc.metadata = { ...doc.metadata };
+        delete doc.metadata.stockClaims;
+        delete doc.metadata.stockClaimsRestoredAt;
+      }
       return res.json({
         success: true,
-        data: existingOrder,
+        data: doc,
         message: "Order already created with this key - duplicate prevented",
       });
     }

@@ -24,8 +24,12 @@ if (require.main === module) {
  */
 const serverlessHandler = async (req: any, res: any) => {
   const path = (req?.url || "").split("?")[0] || "";
+  // Paths that can be fully served without a database connection. Everything
+  // else (including /sitemap.xml, which lists products) awaits ensureDB()
+  // first so mongoose never buffers queries against an unopened connection.
   const needsDb = !(
     path === "/api/health" ||
+    path === "/robots.txt" ||
     path === "/api/seo/robots.txt" ||
     path.startsWith("/assets/") ||
     path.endsWith(".js") ||
@@ -33,8 +37,6 @@ const serverlessHandler = async (req: any, res: any) => {
     path.endsWith(".svg") ||
     path.endsWith(".png") ||
     path.endsWith(".ico") ||
-    path.endsWith(".txt") ||
-    path.endsWith(".xml") ||
     path.endsWith(".webmanifest")
   );
   if (needsDb) {

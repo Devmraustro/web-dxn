@@ -41,16 +41,38 @@ const pickProductImage = (product: any): string => {
   return "";
 };
 
+/**
+ * Resolve the best localized description from any API shape (same strategy as
+ * pickProductTitle). Unlike the previous inline code, this never calls
+ * `.find()` on a legacy object-shaped translations map and always falls back to
+ * a top-level/other-language description instead of silently returning nothing.
+ */
+export const pickProductDescription = (product: any, language: string): string => {
+  if (!product) return "";
+  const want = language === "ar" ? "ar" : "fr";
+  const arr = Array.isArray(product.translations) ? product.translations : null;
+  if (arr) {
+    const found = arr.find((tr: any) => tr.language === want && tr.description);
+    if (found?.description) return found.description;
+    const anyLang = arr.find((tr: any) => tr.description);
+    if (anyLang?.description) return anyLang.description;
+  }
+  const nested = product.translations;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    if (nested[want]?.description) return nested[want].description;
+    if (nested.ar?.description) return nested.ar.description;
+    if (nested.fr?.description) return nested.fr.description;
+  }
+  return product.description || product.name || "";
+};
+
 const ProductCard = ({ product, language }: ProductCardProps) => {
   const { t } = useTranslation();
   const { language: lang } = useLanguage();
   const { addItem } = useCart();
 
   const productTitle = pickProductTitle(product, language);
-  const description =
-    language === "ar"
-      ? product.translations?.find?.((tr: any) => tr.language === "ar")?.description
-      : product.translations?.find?.((tr: any) => tr.language === "fr")?.description || product.description;
+  const description = pickProductDescription(product, language);
   const productSize = product.size || "";
   const productPrice = product.price || 0;
   const imageUrl = pickProductImage(product);

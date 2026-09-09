@@ -5,7 +5,7 @@ import { useCart } from "../context/CartContext";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Alert, Badge, Spinner } from "react-bootstrap";
 import ReviewCard from "../components/ReviewCard";
-import { pickProductTitle } from "../components/ProductCard";
+import { pickProductTitle, pickProductDescription } from "../components/ProductCard";
 
 const ProductDetailPage = () => {
   const { language } = useLanguage();
@@ -81,6 +81,7 @@ const ProductDetailPage = () => {
   }
 
   const title = pickProductTitle(product, language) || product.sku || "DXN Product";
+  const description = pickProductDescription(product, language);
   const price = Number(product.price) || 0;
   const compareAt = product.compareAtPrice ? Number(product.compareAtPrice) : 0;
   const imageUrl = product.image || (Array.isArray(product.images) && product.images.length ? product.images[0] : "");
@@ -192,10 +193,10 @@ const ProductDetailPage = () => {
             </p>
           )}
 
-          {product.description && (
+          {description && (
             <div className="mb-4">
               <h2 className="h5">{t("الوصف", "Description")}</h2>
-              <p style={{ whiteSpace: "pre-line" }}>{product.description}</p>
+              <p style={{ whiteSpace: "pre-line" }}>{description}</p>
             </div>
           )}
 

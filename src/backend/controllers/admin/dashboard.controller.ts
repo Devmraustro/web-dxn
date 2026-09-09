@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Order } from "../../../Database/Models";
+import { Order, Product, Pack, ProductTranslation } from "../../../Database/Models";
 
 /** Statuses whose orders never count toward revenue / sales analytics. */
 const EXCLUDED_STATUSES = ["cancelled", "rejected"];
@@ -22,13 +22,84 @@ const REVENUE_MATCH: Record<string, unknown> = {
   status: "delivered",
 };
 
+/**
+ * Sales-leader aggregation shared by /stats and /top-products:
+ *  - only orders that were not cancelled/rejected are counted
+ *  - each order line is grouped by product OR pack (pack lines have a null
+ *    productId, so they used to collapse into a single bogus "null product"
+ *    bucket — they now surface as kind: "pack")
+ *  - the bilingual name snapshot stored on the line at creation time is kept.
+ */
+function salesAggregation(limit: number): Record<string, unknown>[] {
+  return [
+    { $match: { status: { $nin: EXCLUDED_STATUSES } } },
+    { $unwind: "$items" },
+    // Skip malformed legacy lines that reference neither a product nor a pack.
+    {
+      $match: {
+        $or: [{ "items.productId": { $ne: null } }, { "items.packId": { $ne: null } }],
+      },
+    },
+    {
+      $group: {
+        _id: { $ifNull: ["$items.productId", "$items.packId"] },
+        kind: {
+          $first: {
+            $cond: [{ $ifNull: ["$items.productId", false] }, "product", "pack"],
+          },
+        },
+        name: { $first: { $ifNull: ["$items.productName", "$items.packName"] } },
+        totalSold: { $sum: "$items.quantity" },
+        revenue: { $sum: "$items.totalPrice" },
+      },
+    },
+    { $sort: { totalSold: -1 } },
+    { $limit: limit },
+  ];
+}
+
+/** Best-effort current-catalog label for a sales row (falls back to snapshot). */
+async function enrichSalesRows(rows: any[]): Promise<any[]> {
+  if (rows.length === 0) return rows;
+  const productIds = rows.filter((r: any) => r.kind === "product").map((r: any) => r._id);
+  const packIds = rows.filter((r: any) => r.kind === "pack").map((r: any) => r._id);
+
+  const [products, packs, trs] = await Promise.all([
+    productIds.length
+      ? Product.find({ _id: { $in: productIds } }).select("sku").lean()
+      : Promise.resolve([]),
+    packIds.length ? Pack.find({ _id: { $in: packIds } }).select("name").lean() : Promise.resolve([]),
+    productIds.length
+      ? ProductTranslation.find({ productId: { $in: productIds }, language: { $in: ["ar", "fr"] } })
+          .select("productId language title")
+          .lean()
+      : Promise.resolve([]),
+  ]);
+
+  const skuById = new Map((products as any[]).map((p: any) => [String(p._id), p.sku]));
+  const trById = new Map<string, string>();
+  for (const t of trs as any[]) {
+    const pid = String(t.productId);
+    if (!t.title) continue;
+    if (t.language === "ar" || !trById.has(pid)) trById.set(pid, t.title);
+  }
+  const packNameById = new Map((packs as any[]).map((p: any) => [String(p._id), p.name]));
+
+  return rows.map((r: any) => {
+    const id = String(r._id);
+    if (r.kind === "product") {
+      return { ...r, name: r.name || trById.get(id) || skuById.get(id) || id };
+    }
+    return { ...r, name: r.name || packNameById.get(id) || id };
+  });
+}
+
 // GET /api/admin/dashboard/stats
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
     // Today's date range
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 
     // Total orders
     const totalOrders = await Order.countDocuments();
@@ -53,7 +124,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       status: "delivered",
     });
 
-    // Revenue from delivered orders (never cancelled/rejected)
+    // Revenue from delivered orders
     const revenueResult = await Order.aggregate([
       { $match: REVENUE_MATCH },
       { $group: { _id: null, totalRevenue: { $sum: "$total" } } },
@@ -77,28 +148,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       .populate("customerId", "firstName lastName")
       .lean();
 
-    // Top sellers: group by the actual product/pack, excluding orders that
-    // were cancelled/rejected, and label each row from the bilingual name
-    // snapshot stored on the order line at creation time.
-    const topProducts = await Order.aggregate([
-      { $match: { status: { $nin: EXCLUDED_STATUSES } } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: { $ifNull: ["$items.productId", "$items.packId"] },
-          kind: {
-            $first: {
-              $cond: [{ $eq: ["$items.productId", null] }, "pack", "product"],
-            },
-          },
-          name: { $first: "$items.productName" },
-          totalSold: { $sum: "$items.quantity" },
-          revenue: { $sum: "$items.totalPrice" },
-        },
-      },
-      { $sort: { totalSold: -1 } },
-      { $limit: 5 },
-    ]);
+    const topProducts = await enrichSalesRows(await Order.aggregate(salesAggregation(5)));
 
     res.json({
       success: true,
@@ -171,8 +221,10 @@ export const getRevenueStats = async (req: Request, res: Response) => {
       }
     }
 
+    // Revenue definition consistent with getDashboardStats: delivered orders
+    // only (money actually received on COD / recognized as realized).
     const match: Record<string, unknown> = {
-      status: { $nin: EXCLUDED_STATUSES },
+      ...REVENUE_MATCH,
       createdAt: {
         $gte: startDate,
         ...(endDate ? { $lte: endDate } : {}),
@@ -180,7 +232,11 @@ export const getRevenueStats = async (req: Request, res: Response) => {
     };
 
     // Bucket at the requested granularity: day for daily/weekly, month otherwise.
-    const dayKey = { year: { $year: "$createdAt" }, month: { $month: "$createdAt" }, day: { $dayOfMonth: "$createdAt" } };
+    const dayKey = {
+      year: { $year: "$createdAt" },
+      month: { $month: "$createdAt" },
+      day: { $dayOfMonth: "$createdAt" },
+    };
     const monthKey = { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } };
     const groupId = period === "daily" || period === "weekly" ? dayKey : monthKey;
 
@@ -211,34 +267,8 @@ export const getRevenueStats = async (req: Request, res: Response) => {
 export const getTopProducts = async (req: Request, res: Response) => {
   try {
     const limit = toPositiveInt(req.query.limit, 10, 100);
-
-    const topProducts = await Order.aggregate([
-      { $match: { status: { $nin: EXCLUDED_STATUSES } } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: { $ifNull: ["$items.productId", "$items.packId"] },
-          kind: {
-            $first: {
-              $cond: [{ $eq: ["$items.productId", null] }, "pack", "product"],
-            },
-          },
-          name: { $first: "$items.productName" },
-          totalSold: { $sum: "$items.quantity" },
-          revenue: { $sum: "$items.totalPrice" },
-        },
-      },
-      { $sort: { totalSold: -1 } },
-      { $limit: limit },
-      {
-        $lookup: {
-          from: "products",
-          localField: "_id",
-          foreignField: "_id",
-          as: "product",
-        },
-      },
-    ]);
+    const rows = await Order.aggregate(salesAggregation(limit));
+    const topProducts = await enrichSalesRows(rows);
 
     res.json({
       success: true,
@@ -261,19 +291,15 @@ export const getTopWilayas = async (req: Request, res: Response) => {
         $group: {
           _id: "$customerInfo.wilaya",
           orderCount: { $sum: 1 },
-          totalRevenue: { $sum: "$total" },
+          // Revenue counts delivered orders only, consistent with the rest of
+          // the dashboard (COD is only paid at delivery).
+          revenue: {
+            $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] },
+          },
         },
       },
       { $sort: { orderCount: -1 } },
       { $limit: limit },
-      {
-        $lookup: {
-          from: "wilayas",
-          localField: "_id",
-          foreignField: "name",
-          as: "wilayaInfo",
-        },
-      },
     ]);
 
     res.json({

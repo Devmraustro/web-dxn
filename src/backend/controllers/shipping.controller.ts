@@ -3,13 +3,28 @@ import { Wilaya, ShippingRate } from "../../Database/Models";
 import { ALGERIAN_WILAYAS } from "../data/algerianWilayas";
 import { resolveShippingFee, defaultShippingFee } from "../services/shipping.service";
 
+/** Compare names ignoring diacritics/case so "Setif" matches "Sétif". */
+const normalizeName = (s: string): string =>
+  String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
 /**
- * Seed the full canonical 58-wilaya dataset when the collection is empty.
- * Existing installations are left untouched (never overwrite admin data).
+ * Seed the canonical 58-wilaya dataset.
+ *
+ * 1. Empty collection → insert the full canonical dataset.
+ * 2. Collection that looks like the pre-2019 legacy seed (rows without a
+ *    `code`) → reconcile in place: attach the official code / Arabic name to
+ *    legacy rows that correspond to a canonical wilaya (renaming accent
+ *    variants to the canonical romanization so shipping lookups and admin rate
+ *    setup agree), and insert the wilayas the legacy list never had.
+ * 3. Any other existing data is left untouched (never overwrite admin data).
  */
 export const initializeDefaultWilayas = async () => {
-  const wilayaCount = await Wilaya.countDocuments({});
-  if (wilayaCount === 0) {
+  const existing = await Wilaya.find({}).select("code name nameFr nameAr").lean();
+
+  if (existing.length === 0) {
     for (const w of ALGERIAN_WILAYAS) {
       await Wilaya.create({
         code: w.code,
@@ -21,8 +36,72 @@ export const initializeDefaultWilayas = async () => {
       });
     }
     console.log(`Default wilayas initialized (${ALGERIAN_WILAYAS.length})`);
+    return 0;
   }
-  return wilayaCount;
+
+  // A dataset that already carries official codes is admin-managed: leave it.
+  const anyHasCode = existing.some((w: any) => typeof w.code === "number");
+  if (anyHasCode) {
+    return existing.length;
+  }
+
+  const canonicalNorms = new Set(
+    ALGERIAN_WILAYAS.flatMap((w) => [normalizeName(w.name), normalizeName(w.nameFr)])
+  );
+
+  let added = 0;
+  let upgraded = 0;
+  let deactivated = 0;
+  for (const w of ALGERIAN_WILAYAS) {
+    const legacy = existing.find((doc: any) => {
+      const d = doc as any;
+      return (
+        d.name === w.name ||
+        d.nameFr === w.nameFr ||
+        d.nameAr === w.nameAr ||
+        normalizeName(d.name) === normalizeName(w.name)
+      );
+    });
+
+    if (legacy) {
+      const d = legacy as any;
+      const patch: Record<string, unknown> = { code: w.code, sortOrder: w.code };
+      if (d.name !== w.name) patch.name = w.name; // canonical romanization
+      if (!d.nameFr) patch.nameFr = w.nameFr;
+      if (!d.nameAr) patch.nameAr = w.nameAr;
+      await Wilaya.updateOne({ _id: legacy._id }, { $set: patch }).catch(() => undefined);
+      upgraded += 1;
+    } else {
+      // Not present under any spelling — add the missing wilaya.
+      await Wilaya.create({
+        code: w.code,
+        name: w.name,
+        nameFr: w.nameFr,
+        nameAr: w.nameAr,
+        sortOrder: w.code,
+        isActive: true,
+      }).catch(() => undefined); // unique-index race: another instance seeded it
+      added += 1;
+    }
+  }
+  // Legacy rows that correspond to NO canonical wilaya (e.g. the old typo
+  // "Timra") are not deleted (order history may reference them by name) but
+  // they are deactivated so they never surface in the public wilaya list or
+  // shipping lookups.
+  for (const doc of existing) {
+    const d = doc as any;
+    if (d.code !== undefined && d.code !== null) continue;
+    if (canonicalNorms.has(normalizeName(d.name))) continue;
+    await Wilaya.updateOne({ _id: doc._id }, { $set: { isActive: false } }).catch(() => undefined);
+    deactivated += 1;
+  }
+
+  if (added || upgraded || deactivated) {
+    console.log(
+      `Wilaya legacy dataset reconciled (${added} added, ${upgraded} upgraded, ${deactivated} deactivated)`
+    );
+  }
+  return existing.length;
 };
 
 // GET /api/shipping/wilayas - Get active wilayas (public, ordered by code)

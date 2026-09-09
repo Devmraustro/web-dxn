@@ -451,60 +451,48 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 const RESTOCK_ON_STATUS = new Set(["cancelled", "rejected"]);
 
 /**
- * Restore the inventory reserved by an order when it is cancelled/rejected.
- *
- * The exact per-product claim snapshot (server-computed at creation, stored in
- * metadata.stockClaims) is used so the store never guesses how much to give
- * back, and a guard flag makes the restore idempotent under concurrent admin
- * requests (the first writer restores, later ones get a 409 instead of
- * double-restocking).
+ * Build the exact per-product claim list to restore from the order doc.
+ * Prefers the server-side snapshot (metadata.stockClaims) written at creation;
+ * falls back to direct product lines only for orders placed before snapshots
+ * existed (pack component claims cannot be reconstructed in that case).
  */
-async function restockOrderInventory(orderId: any, targetStatus: string): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
-  try {
-    const guard = await Order.findOneAndUpdate(
-      {
-        _id: orderId,
-        status: { $ne: targetStatus },
-        "metadata.stockClaimsRestoredAt": { $exists: false },
-      },
-      { $set: { "metadata.stockClaimsRestoredAt": new Date() } },
-      { new: true }
-    );
-    if (!guard) {
-      // Either already in the target status (handled by the transition check)
-      // or a concurrent request restored stock first.
-      return { ok: false, status: 409, message: "Order stock has already been restored" };
-    }
+function claimsToRestore(order: any): Array<{ productId: any; quantity: number }> {
+  const claims: Array<{ productId: string; quantity: number }> = Array.isArray(order?.metadata?.stockClaims)
+    ? order.metadata.stockClaims
+    : [];
+  if (claims.length > 0) return claims;
+  return (order?.items || [])
+    .filter((i: any) => i && i.productId && Number(i.quantity) > 0)
+    .map((i: any) => ({ productId: i.productId, quantity: Number(i.quantity) }));
+}
 
-    const claims: Array<{ productId: string; quantity: number }> = Array.isArray(guard.metadata?.stockClaims)
-      ? guard.metadata.stockClaims
-      : [];
-    if (claims.length === 0) {
-      // No snapshot: fall back to direct product lines only (packs are skipped
-      // because their components are not stored on the order).
-      const directClaims: Array<{ productId: any; quantity: number }> = (guard.items || [])
-        .filter((i: any) => i && i.productId && i.quantity > 0)
-        .map((i: any) => ({ productId: i.productId, quantity: i.quantity }));
-      for (const claim of directClaims) {
-        await Product.updateOne({ _id: claim.productId }, { $inc: { stockQuantity: claim.quantity } }).catch(() => undefined);
-      }
-    } else {
-      for (const claim of claims) {
-        const qty = Number(claim.quantity);
-        if (!claim.productId || !Number.isFinite(qty) || qty <= 0) continue;
-        // Restore regardless of the product's current isActive flag: the stock
-        // figure is inventory, not sellability, and the quantity is from the
-        // server-side snapshot taken when the order was placed.
-        await Product.updateOne(
-          { _id: claim.productId },
-          { $inc: { stockQuantity: qty } }
-        ).catch(() => undefined);
-      }
+/**
+ * Restore reserved inventory after an order reaches a terminal status.
+ * Idempotent callers only: the guard flag must already be owned by the caller
+ * (see updateOrderStatus). Compensates partial writes so a mid-loop failure
+ * cannot double-restock on retry.
+ */
+async function applyRestock(order: any): Promise<{ ok: true } | { ok: false; message: string }> {
+  const claims = claimsToRestore(order);
+  const applied: Array<{ productId: any; quantity: number }> = [];
+  try {
+    for (const claim of claims) {
+      const qty = Number(claim.quantity);
+      if (!claim.productId || !Number.isFinite(qty) || qty <= 0) continue;
+      // Restore regardless of the product's current isActive flag: the stock
+      // figure is inventory, not sellability, and the quantity comes from the
+      // server-side snapshot taken when the order was placed.
+      await Product.updateOne({ _id: claim.productId }, { $inc: { stockQuantity: qty } });
+      applied.push({ productId: claim.productId, quantity: qty });
     }
     return { ok: true };
   } catch (error) {
     console.error("Restock order inventory error:", error);
-    return { ok: false, status: 500, message: "Server error" };
+    // Roll back the units already restored so a retry cannot double-restock.
+    for (const a of applied) {
+      await Product.updateOne({ _id: a.productId }, { $inc: { stockQuantity: -a.quantity } }).catch(() => undefined);
+    }
+    return { ok: false, message: "Server error while restoring stock" };
   }
 }
 
@@ -518,30 +506,64 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
     if (!currentOrder) {
       return res.status(404).json({ message: "Order not found" });
     }
+    const fromStatus = currentOrder.status;
 
-    if (!VALID_TRANSITIONS[currentOrder.status] || !VALID_TRANSITIONS[currentOrder.status].includes(status)) {
-      return res.status(400).json({ message: `Invalid state transition from ${currentOrder.status} to ${status}` });
+    if (!VALID_TRANSITIONS[fromStatus] || !VALID_TRANSITIONS[fromStatus].includes(status)) {
+      return res.status(400).json({ message: `Invalid state transition from ${fromStatus} to ${status}` });
     }
 
-    // Cancelling / rejecting frees the reserved inventory. This must succeed
-    // before the status write so stock can never be lost for a cancelled order.
-    if (RESTOCK_ON_STATUS.has(status)) {
-      const restored = await restockOrderInventory(id, status);
+    // Atomic compare-and-set transition: only the request that flips the order
+    // away from `fromStatus` wins. Concurrent admins (cancel vs ship) resolve
+    // here instead of racing two blind writes.
+    const isTerminal = RESTOCK_ON_STATUS.has(status);
+    const updated = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        status: fromStatus,
+        ...(isTerminal ? { "metadata.stockClaimsRestoredAt": { $exists: false } } : {}),
+      },
+      {
+        $set: {
+          status,
+          adminId: req.user?.userId || req.user?.id,
+          ...(isTerminal ? { "metadata.stockClaimsRestoredAt": new Date() } : {}),
+        },
+      },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(409).json({
+        message: isTerminal
+          ? "Order stock has already been restored"
+          : "Order was already transitioned by another request",
+      });
+    }
+
+    // Terminal statuses free the reserved inventory. If the restore fails we
+    // revert the status + guard flag so the order is retryable and the stock
+    // claim is not lost.
+    if (isTerminal) {
+      const restored = await applyRestock(updated);
       if (!restored.ok) {
-        return res.status(restored.status).json({ message: restored.message });
+        await Order.updateOne(
+          { _id: id, "metadata.stockClaimsRestoredAt": { $exists: true } },
+          {
+            $set: { status: fromStatus },
+            $unset: { "metadata.stockClaimsRestoredAt": 1 },
+          }
+        ).catch(() => undefined);
+        return res.status(500).json({ message: restored.message });
       }
     }
 
-    const order = await Order.findByIdAndUpdate(id, { status, adminId: req.user?.userId || req.user?.id }, { new: true });
-
     // Telegram notification is best-effort.
     try {
-      await sendOrderStatusUpdate(order, status);
+      await sendOrderStatusUpdate(updated, status);
     } catch {
       /* non-fatal */
     }
 
-    res.json({ success: true, data: publicOrderPayload(order) });
+    res.json({ success: true, data: publicOrderPayload(updated) });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("Cast to ObjectId")) {

@@ -13,33 +13,40 @@ import { Product } from "../../Database/Models";
 
 const router = Router();
 
-// GET /api/seo/sitemap - Generate and serve sitemap.xml
-router.get("/sitemap", async (req: Request, res: Response) => {
+/** Absolute sitemap URL advertised to crawlers (env-driven, domain-aware). */
+const publicSitemapUrl = (): string =>
+  `${(process.env.BASE_URL || "https://dxn.dz").replace(/\/+$/, "")}/sitemap.xml`;
+
+/** GET sitemap.xml (queries active products; needs the DB). */
+export const serveSitemap = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Get all active products
     const products = await Product.find({ isActive: true })
       .select("slug updatedAt")
       .lean();
-    
+
     const sitemap = generateSitemap(products);
-    
+
     res.type("application/xml").send(sitemap);
   } catch (error) {
     console.error("Generate sitemap error:", error);
     res.status(500).json({ message: "Server error" });
   }
-});
+};
 
-// GET /api/seo/robots.txt - Generate and serve robots.txt
-router.get("/robots.txt", (req: Request, res: Response) => {
+/** GET robots.txt (no DB access). */
+export const serveRobots = (_req: Request, res: Response): void => {
   try {
-    const robotsTxt = generateRobotsTxt();
-    res.type("text/plain").send(robotsTxt);
+    res.type("text/plain").send(generateRobotsTxt(publicSitemapUrl()));
   } catch (error) {
     console.error("Generate robots.txt error:", error);
     res.status(500).json({ message: "Server error" });
   }
-});
+};
+
+// GET /api/seo/sitemap (legacy alias) and /api/seo/robots.txt
+router.get("/sitemap", serveSitemap);
+router.get("/sitemap.xml", serveSitemap);
+router.get("/robots.txt", serveRobots);
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 const isArOrFr = (v: unknown): v is "ar" | "fr" => v === "ar" || v === "fr";

@@ -18,7 +18,7 @@ import userRoutes from "./routes/user.routes";
 import adminRoutes from "./routes/admin.routes";
 import aiRoutes from "./routes/ai.routes";
 import metaRoutes from "./routes/meta.routes";
-import seoRoutes from "./seo/routes";
+import seoRoutes, { serveRobots, serveSitemap } from "./seo/routes";
 import reviewRoutes from "./routes/review.routes";
 import uploadRoutes from "./routes/upload.routes";
 import errorMiddleware from "./middleware/error.middleware";
@@ -118,12 +118,28 @@ app.use("/meta", metaRoutes);
 // SEO
 app.use("/api/seo", seoRoutes);
 
+// Crawler entry points at conventional public URLs (also under /api/seo for
+// backward compatibility). robots.txt is DB-free; sitemap.xml needs products.
+app.get("/robots.txt", serveRobots);
+app.get("/sitemap.xml", serveSitemap);
+
 // --- Frontend static serving (production) ---
 // Mounted AFTER all API/meta/backend routers so it never shadows them. Only
 // existing frontend build assets (js/css/img) are served; requests that miss
 // fall through to the SPA fallback below.
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/build")));
+  // Vite emits content-hashed files under /assets — cache them aggressively.
+  // The HTML shell and un-hashed paths stay uncached (default) so deploys are
+  // picked up immediately.
+  app.use(
+    express.static(path.join(__dirname, "../frontend/build"), {
+      setHeaders(res, filePath) {
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
 }
 
 // --- 404 / SPA fallback ---

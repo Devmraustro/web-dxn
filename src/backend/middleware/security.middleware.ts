@@ -2,7 +2,21 @@ import { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-export const securityHeaders = helmet();
+/**
+ * Security headers. The default Helmet Content-Security-Policy restricts
+ * img-src to 'self' data:, which would block product photos served from
+ * Cloudinary (https://res.cloudinary.com) — the production upload backend —
+ * and the storefront renders them in <img> tags. Keep every other default
+ * directive untouched and only widen img-src to the Cloudinary host.
+ */
+export const securityHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "https://res.cloudinary.com"],
+    },
+  },
+});
 
 const stripMongoOperators = (value: unknown): unknown => {
   if (Array.isArray(value)) {
