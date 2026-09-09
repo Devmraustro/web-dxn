@@ -3,14 +3,28 @@ import path from "path";
 import crypto from "crypto";
 import https from "https";
 
-const UPLOAD_DIR = path.resolve(
-  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads")
+// Serverless-safe default: Vercel's project directory is READ-ONLY, so a
+// filesystem-backed local store must live under the writable /tmp dir there
+// (still ephemeral — production is expected to use Cloudinary). Local/Docker
+// keeps the conventional ./uploads folder. UPLOAD_DIR overrides everything.
+export const UPLOAD_DIR = path.resolve(
+  process.env.UPLOAD_DIR ||
+    (process.env.VERCEL ? "/tmp/uploads" : path.join(process.cwd(), "uploads"))
 );
 
 const STORAGE_PROVIDER = (process.env.STORAGE_PROVIDER || "local") as "local" | "cloudinary";
 
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+/** Best-effort ensure the local upload dir exists (never at import time — the
+ * runtime filesystem may be read-only on serverless platforms). */
+function ensureUploadDir(): void {
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Upload directory is not writable (${UPLOAD_DIR}): ${msg}`);
+  }
 }
 
 /** Allowed file extensions (must match upload.middleware magic-byte checks). */
@@ -59,6 +73,7 @@ function getImageUrl(filename: string): string {
 
 export class LocalStorageProvider implements StorageProvider {
   async upload(file: Express.Multer.File): Promise<string> {
+    ensureUploadDir();
     const ext = path.extname(file.originalname).toLowerCase();
     const safeExt = SAFE_EXTENSIONS.has(ext) ? ext : ".jpg";
     const filename = `${crypto.randomUUID()}${safeExt}`;

@@ -25,6 +25,10 @@ export const initializeDefaultWilayas = async () => {
   const existing = await Wilaya.find({}).select("code name nameFr nameAr").lean();
 
   if (existing.length === 0) {
+    // Concurrent cold starts (several serverless instances booting against an
+    // empty DB) may race the empty check; the unique code/name indexes make
+    // duplicate inserts fail, so ignore 11000 per row — the other instance's
+    // insert already satisfied that row.
     for (const w of ALGERIAN_WILAYAS) {
       await Wilaya.create({
         code: w.code,
@@ -33,6 +37,8 @@ export const initializeDefaultWilayas = async () => {
         nameAr: w.nameAr,
         sortOrder: w.code,
         isActive: true,
+      }).catch((err: any) => {
+        if (err?.code !== 11000) throw err;
       });
     }
     console.log(`Default wilayas initialized (${ALGERIAN_WILAYAS.length})`);

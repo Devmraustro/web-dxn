@@ -39,6 +39,17 @@ Result status by area below. **No HIGH/CRITICAL known issues remain** in
 code-verifiable scope. External integrations (Cloudinary, SMTP, Meta, paid AI
 providers, live Mongo/CI DB) remain CONFIGURATION_REQUIRED.
 
+**Final continuation review (fixes 27–34 below)** closed the last
+serverless-readiness gaps found by re-reading the full diff: import-time
+filesystem writes that would EROFS Vercel cold starts (logger file transport,
+upload dir `mkdir`), per-IP rate limiting behind the Vercel edge proxy
+(`trust proxy`), SPA fallback returning HTML 200 for missing files, `/uploads`
+wrongly DB-gated in the serverless handler, and concurrent-seed duplicate
+races in the AI knowledge base and default wilaya initializers. All DB-free
+checks were re-run at the final head: 244/244 + 53/53, tsc 0 errors, build
+exit 0, `npm audit` 0 — plus `VERCEL=1` production boot and static/404 smokes.
+See TEST RESULTS below.
+
 ---
 
 ## CURRENT ARCHITECTURE
@@ -182,6 +193,57 @@ providers, live Mongo/CI DB) remain CONFIGURATION_REQUIRED.
     any-language/top-level fallback for Arabic when only French existed. →
     Shared `pickProductDescription` helper used by ProductCard and
     ProductDetailPage; safe across array/legacy/top-level shapes. FIXED.
+
+### Fixed (final continuation review — serverless cold-start & proxy pass)
+27. **Import-time filesystem writes crashed Vercel cold starts**: `winston`
+    opened a `logs/combined.log` file transport and `mkdir`-ed the logs dir at
+    module import time, and `storage.ts` `mkdir`-ed the uploads dir at import
+    time. On Vercel/lambda the project directory is READ-ONLY (`/var/task`),
+    so every cold start would throw EROFS before the request handler ran. →
+    Logger now uses console-only on Vercel and creates the file transport
+    lazily behind a try/catch; `storage.ts` never touches disk at import
+    (per-write `ensureUploadDir()`); uploads default to `/tmp/uploads` on
+    Vercel. FIXED + VERIFIED (`VERCEL=1 NODE_ENV=production` boot smoke on
+    `dist/index.js`: clean startup, `/api/health` 200).
+28. **Rate limiters saw one shared IP behind the proxy**: without
+    `trust proxy`, every Vercel visitor appears as the same edge IP, so the
+    global/auth/AI per-IP limiters are either bypassed (pooled) or trip the
+    whole site at once, and access logs lose client IPs. → `trust proxy`
+    enabled automatically on Vercel (and via explicit `TRUST_PROXY=<hops>` for
+    nginx/Caddy); documented in `.env.example`. FIXED (behaviour verified in
+    local `VERCEL=1` smoke).
+29. **Missing extension-like files returned the SPA shell with HTTP 200**: the
+    SPA fallback ran for ANY production GET, so a missing
+    `/uploads/foo.png`, `/assets/nope.js` or `/somefile.js` returned
+    `index.html` 200 — misleading browsers/crawlers and breaking hard 404
+    expectations for assets. → Paths with a dot-extension never hit the SPA
+    fallback (plain 404); fallback also guards on the built index.html
+    existing (API-only deployments 404 the SPA root instead of erroring).
+    FIXED + VERIFIED (smoke: missing `/uploads/*` and `/assets/*` → 404; real
+    hashed asset → 200 immutable; SPA route → 200).
+30. **`/uploads/` was DB-gated in the serverless handler**: a cold Vercel
+    function receiving `/uploads/<file>` would call `ensureDB()` first and
+    503 when the DB was down, even though uploads are plain static files.
+    → Added to the DB-free passthrough set alongside `/assets/`. FIXED.
+31. **Default AI-knowledge seeding was not concurrency-safe**: two cold
+    serverless instances booting against an empty DB both saw count 0 and both
+    inserted the 30 seed rows (15 keys × 2 languages) → duplicated knowledge
+    base. → Per-row upserts keyed on `(key, language)` plus a best-effort
+    post-seed dedupe. FIXED (DB behaviour BLOCKED_BY_ENVIRONMENT; logic
+    compile-verified).
+32. **Default wilaya seeding was not concurrency-safe**: two instances racing
+    the empty-collection branch could collide on the unique code/name indexes
+    and abort startup. → Per-row E11000 (duplicate-key) is ignored — the
+    concurrent instance's insert already satisfied that row. FIXED.
+33. **`/api/orders` route comment described the middleware pipeline in the
+    wrong order** (claimed validation ran before idempotency; code runs
+    idempotency first so a keyed retry short-circuits to the stored order
+    before body validation). → Comment corrected to match code. FIXED
+    (comment only).
+34. **`src/index.ts` SPA/static DB-free set and `app.ts` uploads static mount
+    diverged from storage defaults** (hardcoded `./uploads` vs the new
+    `/tmp/uploads` Vercel default). → `app.ts` mounts the exported
+    `UPLOAD_DIR`; the DB-free set includes `/uploads/`. FIXED.
 
 ### Not defects (documented)
 - **`src/lib/checkout/stack.ts` does not exist** in this repository (verified
@@ -335,14 +397,23 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
   `npm run build` which compiles TS + Vite). PASS (config review).
 - Express serverless handler: cached `ensureDB()`, 503 on API/meta when DB
   down, static/health/robots skip DB; `/sitemap.xml` correctly DB-gated (fix
-  22). PASS (code + local prod-mode smoke).
+  22), `/uploads/` now DB-free too (fix 30). PASS (code + local prod-mode
+  smoke, including `VERCEL=1`).
 - Vite hashed assets under `/assets/` get `Cache-Control: public,
-  max-age=31536000, immutable` (express static setHeaders + vercel.json rule).
+  max-age=31536000, immutable` (express static setHeaders + vercel.json rule);
+  uploads static mounts the Vercel-aware `UPLOAD_DIR` (`/tmp/uploads` on
+  Vercel, `./uploads` locally) (fix 34).
 - SPA fallback / API 404 / meta 404 verified locally in `NODE_ENV=production`
-  (`dist` output, no DB): `/` 200 HTML, `/product/foo` 200 HTML,
-  `/api/health` degraded JSON, `/api/nope` JSON 404, `/meta/xyz` JSON 404,
-  `/robots.txt` 200 text, DB-down `/sitemap.xml` → 500 buffering timeout (no
-  crash; requires Mongo by definition). PASS (local runtime smoke).
+  (`dist` output, no DB, both plain and `VERCEL=1`): `/` 200 HTML,
+  `/product/foo` 200 HTML, `/api/health` degraded JSON, `/api/nope` JSON 404,
+  `/meta/xyz` JSON 404, `/robots.txt` 200 text, DB-down `/sitemap.xml` → 500
+  buffering timeout (no crash; requires Mongo by definition), missing
+  `/uploads/x.png` & `/assets/x.js` & `/somefile.js` → hard 404 (fix 29), real
+  hashed asset → 200 `immutable`. PASS (local runtime smoke).
+- Cold-start filesystem safety: no import-time `mkdir`/file-transport writes
+  remain (fixes 27); `trust proxy` auto-enabled on Vercel so per-IP rate
+  limits/`req.ip`/logs are correct behind the edge (fix 28). `VERCEL=1`
+  production boot smoke: clean start, 200 health, zero EROFS/EACCES errors.
 - Note: `@vercel/node` legacy-build entry (`dist/index.js`, default export)
   cannot be executed in this sandbox — Vercel deploy/cold-start remains
   BLOCKED_BY_ENVIRONMENT. Vercel request payloads are capped (~4.5 MB): the
@@ -352,7 +423,7 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
 - Actual Vercel project deploy / cold-start / lambda run:
   **BLOCKED_BY_ENVIRONMENT** (no Vercel project/credentials in sandbox).
 
-## TEST RESULTS (exact — final forensic re-run, 2026-09-09)
+## TEST RESULTS (exact — final re-run incl. continuation fixes 27–34, 2026-09-09)
 
 | Suite | Result |
 |---|---|
@@ -364,7 +435,8 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
 | `npm run build` (tsc + Vite production) | PASS — exit 0 (Vite chunk-size warning only, 526 kB / 171 kB gzip) |
 | `npm run build:frontend` | PASS — 562 modules, `dist/frontend/build` |
 | `npm audit` | **0 vulnerabilities** |
-| Runtime smoke (prod mode `dist/index.js`, no DB): `/api/health` degraded JSON 200, `/robots.txt` 200 text (correct disallows + Sitemap line), `/` 200 SPA HTML, `/sitemap.xml` 500 (DB down, buffering timeout — expected without Mongo) | PASS as described |
+| Runtime smoke A (prod mode `dist/index.js`, no DB): `/api/health` degraded JSON 200, `/robots.txt` 200 text (correct disallows + Sitemap line), `/` 200 SPA HTML, `/sitemap.xml` 500 (DB down, buffering timeout — expected without Mongo) | PASS as described |
+| Runtime smoke B (`VERCEL=1` prod mode, no DB): clean cold-start boot (no EROFS/EACCES/import-time FS writes — fixes 27/34), `/api/health` 200 with `X-Forwarded-For` accepted under `trust proxy` (fix 28), missing `/uploads/*` & `/assets/*` & `*.js` → hard 404 (fix 29), real hashed asset → 200 `Cache-Control: immutable`, SPA route → 200 HTML, robots 200, DB-down sitemap 500 | PASS as described |
 
 ## DEPENDENCY AUDIT
 

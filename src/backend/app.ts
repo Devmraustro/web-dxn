@@ -2,9 +2,11 @@ import express from "express";
 import morgan from "morgan";
 import cors from "cors";
 import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
 import { securityHeaders, noSqlInjectionProtection, rateLimiter, validateInput } from "./middleware/security.middleware";
+import { UPLOAD_DIR } from "./config/storage";
 
 dotenv.config();
 
@@ -25,6 +27,18 @@ import errorMiddleware from "./middleware/error.middleware";
 
 // Initialize app
 const app = express();
+
+// Behind a proxy (Vercel/any reverse proxy) client IPs arrive via
+// X-Forwarded-For. Without `trust proxy`, every visitor would share one IP,
+// which (a) defeats the per-IP rate limiters (auth, AI, global) — or, with
+// express-rate-limit's strict validation, throws on proxied requests — and
+// (b) skews access logs. Vercel is the single trusted ingress in production,
+// so trust one proxy hop there; locally, trust proxy stays off unless
+// TRUST_PROXY is explicitly set (e.g. 1 behind an nginx/Caddy reverse proxy).
+if (process.env.VERCEL || process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set("trust proxy", Number.isInteger(hops) && hops > 0 ? hops : 1);
+}
 
 // --- Middleware ---
 
@@ -68,8 +82,11 @@ app.use(
   })
 );
 
-// Serve uploaded files (admin image uploads)
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Serve uploaded files (admin image uploads, local provider). On Vercel this
+// directory is /tmp/uploads (ephemeral, usually empty — production images are
+// served from Cloudinary URLs); on local/Docker it is ./uploads. express.static
+// on a missing dir is a safe 404, never a crash.
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 // --- API Routes ---
 
@@ -150,12 +167,23 @@ app.use((req, res) => {
     res.status(404).json({ message: "Meta endpoint not found" });
   } else if (
     process.env.NODE_ENV === "production" &&
-    req.method === "GET"
+    req.method === "GET" &&
+    // Paths that look like files (have a dot-extension) are never SPA routes:
+    // a missing /uploads/..., /assets/..., /favicon.ico etc. must 404 instead
+    // of returning index.html (which would mislead crawlers and browsers).
+    !path.extname(req.path)
   ) {
     // SPA fallback: serve index.html ONLY for browser/frontend GET routes.
     // API and meta paths are explicitly excluded above, so index.html is
     // never returned for a backend endpoint.
-    res.sendFile(path.resolve(__dirname, "../frontend/build", "index.html"));
+    const indexHtml = path.resolve(__dirname, "../frontend/build", "index.html");
+    if (fs.existsSync(indexHtml)) {
+      res.sendFile(indexHtml);
+    } else {
+      // No built frontend in this deployment (e.g. an API-only Vercel
+      // function): report the SPA root as not found rather than erroring.
+      res.status(404).send("Not Found");
+    }
   } else {
     res.status(404).send("Not Found");
   }
