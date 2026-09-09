@@ -28,6 +28,14 @@ import errorMiddleware from "./middleware/error.middleware";
 // Initialize app
 const app = express();
 
+// The Express app serves the built frontend (static assets + SPA fallback)
+// when running in production OR on Vercel. Vercel's serverless runtime does
+// not guarantee NODE_ENV=production, and the whole deployment (frontend
+// routes included) is served through this one function, so it must mount the
+// frontend whenever VERCEL is present as well.
+const servesFrontend =
+  process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+
 // Behind a proxy (Vercel/any reverse proxy) client IPs arrive via
 // X-Forwarded-For. Without `trust proxy`, every visitor would share one IP,
 // which (a) defeats the per-IP rate limiters (auth, AI, global) — or, with
@@ -140,11 +148,11 @@ app.use("/api/seo", seoRoutes);
 app.get("/robots.txt", serveRobots);
 app.get("/sitemap.xml", serveSitemap);
 
-// --- Frontend static serving (production) ---
+// --- Frontend static serving (production / Vercel) ---
 // Mounted AFTER all API/meta/backend routers so it never shadows them. Only
 // existing frontend build assets (js/css/img) are served; requests that miss
 // fall through to the SPA fallback below.
-if (process.env.NODE_ENV === "production") {
+if (servesFrontend) {
   // Vite emits content-hashed files under /assets — cache them aggressively.
   // The HTML shell and un-hashed paths stay uncached (default) so deploys are
   // picked up immediately.
@@ -166,7 +174,7 @@ app.use((req, res) => {
   } else if (req.path.startsWith("/meta/")) {
     res.status(404).json({ message: "Meta endpoint not found" });
   } else if (
-    process.env.NODE_ENV === "production" &&
+    servesFrontend &&
     req.method === "GET" &&
     // Paths that look like files (have a dot-extension) are never SPA routes:
     // a missing /uploads/..., /assets/..., /favicon.ico etc. must 404 instead

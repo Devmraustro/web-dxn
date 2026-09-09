@@ -47,7 +47,15 @@ const serverlessHandler = async (req: any, res: any) => {
       console.error("Database unavailable:", err instanceof Error ? err.message : String(err));
       if (path.startsWith("/api/") || path.startsWith("/meta/")) {
         if (!res.headersSent) {
-          res.status(503).json({ message: "Service temporarily unavailable — database connection required" });
+          // Raw-Node-safe 503: this branch runs BEFORE Express has handled the
+          // request, so `res` is the platform response (no .status/.json yet).
+          res.statusCode = 503;
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({
+              message: "Service temporarily unavailable — database connection required",
+            })
+          );
         }
         return;
       }

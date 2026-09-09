@@ -22,6 +22,11 @@ uploads/
 data/
 *.pid
 
+# The canonical wilaya seed is SOURCE data and must be tracked, so re-include
+# this one path under the generic data/ rule above.
+!src/backend/data/
+!src/backend/data/algerianWilayas.ts
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -64,7 +64,7 @@ See TEST RESULTS below.
 | Commerce core | `src/backend/services/commerce.ts` | Pure math: `lineTotal`, `offerDiscountForLine`, `finalTotal`, bounds/rounding |
 | Shipping core | `src/backend/services/shipping.service.ts` + `controllers/shipping.controller.ts` | `resolveShippingFee` shared by `/calculate` and order creation; seed-on-empty canonical wilayas |
 | Storage | `src/backend/config/storage.ts` | Local (dev) or Cloudinary (prod) provider; fail-closed in prod without object storage |
-| Deploy | `vercel.json`, `Dockerfile`, `docker-compose.yml` | Catch-all serverless routing to `dist/index.js`; `npm run build` = tsc + Vite |
+| Deploy | `vercel.json`, `api/index.js`, `Dockerfile`, `docker-compose.yml` | Modern Vercel config: `npm run build` = tsc + Vite, then zero-config function `api/index.js` (wraps compiled `dist/index.js`) with catch-all rewrite; no legacy `builds` |
 
 ---
 
@@ -292,6 +292,38 @@ See TEST RESULTS below.
     CONFIGURATION_REQUIRED / DEFERRED below; NOT a code-level defect of this
     diff.
 
+### Fixed (urgent Vercel deployment fix — legacy "builds" removal)
+40. **Legacy `vercel.json` "builds" made Vercel skip the real build (zero
+    deployable output / platform 404).** When top-level `"builds"` exists,
+    Vercel's legacy builder pipeline takes over and does not run the normal
+    build — the production log shows the build "Completed … [8ms]" with no
+    `functions`/`static`/`services` output. `npm run build` (tsc + Vite) was
+    never executed, so `dist/` (and the SPA at `dist/frontend/build`) did not
+    exist for the `@vercel/node` builder. → Removed `builds` and the legacy
+    `routes`; `vercel.json` now uses the modern config (`buildCommand`, an
+    auto-detected `api/index.js` serverless function with
+    `functions.includeFiles` for the frontend build, and a single catch-all
+    `rewrites` to `/api/index`). The compiled Express handler keeps serving
+    every route (/api/*, /meta/*, /uploads/*, /robots.txt, /sitemap.xml,
+    /assets/*, SPA fallback) exactly as before. FIXED + VERIFIED by direct
+    raw-Node invocation of `api/index.js` over HTTP (health 200, robots 200,
+    `/` + SPA fallback 200 HTML, hashed asset 200 immutable, locales 200,
+    missing upload 404, DB-down /api 503, sitemap 500 as designed).
+41. **Three deploy-blocking gaps found while verifying the fix.**
+    (a) `.gitignore`'s blanket `data/` rule silently excluded the canonical
+    `src/backend/data/algerianWilayas.ts` seed, so it was never committed and
+    is missing from main — `npm run build` fails (TS2307) as soon as
+    Vercel runs it. File restored (58 wilayas, `code/name/nameFr/nameAr`,
+    satisfies the existing `commerce-unit` regression test) with precise
+    `.gitignore` exceptions. (b) `NODE_ENV=production` is not guaranteed on
+    Vercel's Node runtime, yet the static mount + SPA fallback were gated on
+    it; the gate now also enables when `VERCEL` is set. (c) the serverless
+    handler's DB-down 503 ran BEFORE Express and used `res.status().json()`
+    on the platform's raw `res` (no such helpers) — now writes
+    `statusCode`/`setHeader`/`end` directly (crash reproduced by the raw-Node
+    harness, then fixed). All FIXED + VERIFIED (tsc, build, DB-free suites,
+    function-invocation smoke).
+
 ### Not defects (documented)
 - **`src/lib/checkout/stack.ts` does not exist** in this repository (verified
   against working tree and `git ls-files`). There is no refund/proration code
@@ -447,35 +479,60 @@ price, stock, description, add-to-cart, reviews), `/cart`, `/checkout`
 
 ## VERCEL READINESS
 
-- `vercel.json` added (catch-all serverless → `dist/index.js`, buildCommand
-  `npm run build` which compiles TS + Vite). PASS (config review).
+- **Modern (non-legacy) deployment config (fix 40).** The original
+  `vercel.json` used the deprecated top-level `"builds"` array, which makes
+  Vercel skip the normal build pipeline: `npm run build` (tsc + Vite) is NOT
+  run, so the output contains no `functions`/`static`/`services` and the
+  deployment produces zero deployable output (platform-level 404). The
+  merged production log confirmed this exact failure. → `vercel.json` now has
+  only `buildCommand: "npm run build"`, a zero-config serverless function at
+  `api/index.js` (requires the compiled `dist/index.js` handler and exports it
+  both as `module.exports` and `.default`), `functions.api/index.js
+  .includeFiles: "dist/frontend/build/**"` (packs the built SPA into the
+  function), and a catch-all `rewrites: [/(.*) → /api/index]` so every route
+  (/, /api/*, /meta/*, /uploads/*, /robots.txt, /sitemap.xml, /assets/*) is
+  served by the single Express function exactly as before. FIXED + VERIFIED
+  locally by invoking `api/index.js` as a raw Node `(req,res)` function
+  (equivalent to a Vercel function invocation): health 200, robots 200,
+  `/` and SPA fallback 200 HTML, hashed `/assets/*` 200 immutable,
+  `/locales/*.json` 200, missing `/uploads/*` 404, DB-down `/api/*` 503 and
+  `/sitemap.xml` 500 (DB-gated), no crashes.
+- **Frontend served without `NODE_ENV=production` (fix 41).** Vercel's Node
+  runtime does not guarantee `NODE_ENV=production`, and the whole deployment
+  (frontend routes included) goes through the function. The static mount and
+  SPA fallback now activate when `VERCEL` is set as well
+  (`servesFrontend = NODE_ENV === "production" || !!VERCEL`).
+- **503 pre-Express response is raw-Node safe (fix 41).** The serverless
+  handler's DB-down 503 ran before Express, but used `res.status().json()` on
+  the platform response (no such helpers on a raw Node `res`). It now writes
+  `res.statusCode`/`setHeader`/`end` directly.
+- **Canonical wilaya seed is now tracked (fix 41).** `.gitignore` contained a
+  blanket `data/` rule, so `src/backend/data/algerianWilayas.ts` (the 58-row
+  canonical dataset imported by shipping/SEO/checkout) was never committed and
+  is missing from main — `npm run build` fails with TS2307 the moment Vercel
+  runs it. The file is restored (58 rows, `code/name/nameFr/nameAr`, verified
+  by the existing `commerce-unit` regression test) and re-included with
+  precise `.gitignore` exceptions.
 - Express serverless handler: cached `ensureDB()`, 503 on API/meta when DB
   down, static/health/robots skip DB; `/sitemap.xml` correctly DB-gated (fix
   22), `/uploads/` now DB-free too (fix 30). PASS (code + local prod-mode
   smoke, including `VERCEL=1`).
 - Vite hashed assets under `/assets/` get `Cache-Control: public,
-  max-age=31536000, immutable` (express static setHeaders + vercel.json rule);
+  max-age=31536000, immutable` (express static setHeaders);
   uploads static mounts the Vercel-aware `UPLOAD_DIR` (`/tmp/uploads` on
   Vercel, `./uploads` locally) (fix 34).
-- SPA fallback / API 404 / meta 404 verified locally in `NODE_ENV=production`
-  (`dist` output, no DB, both plain and `VERCEL=1`): `/` 200 HTML,
-  `/product/foo` 200 HTML, `/api/health` degraded JSON, `/api/nope` JSON 404,
-  `/meta/xyz` JSON 404, `/robots.txt` 200 text, DB-down `/sitemap.xml` → 500
-  buffering timeout (no crash; requires Mongo by definition), missing
-  `/uploads/x.png` & `/assets/x.js` & `/somefile.js` → hard 404 (fix 29), real
-  hashed asset → 200 `immutable`. PASS (local runtime smoke).
 - Cold-start filesystem safety: no import-time `mkdir`/file-transport writes
   remain (fixes 27); `trust proxy` auto-enabled on Vercel so per-IP rate
   limits/`req.ip`/logs are correct behind the edge (fix 28). `VERCEL=1`
   production boot smoke: clean start, 200 health, zero EROFS/EACCES errors.
-- Note: `@vercel/node` legacy-build entry (`dist/index.js`) cannot be executed
-  in this sandbox — Vercel deploy/cold-start remains BLOCKED_BY_ENVIRONMENT.
-  The entry is prepared for the platform builder's export conventions: the
-  compiled handler is exported as a callable `module.exports` AND as
-  `.default` (fix 37, verified on the compiled output). Vercel request
-  payloads are capped (~4.5 MB): the 5 MB upload cap is therefore effectively
-  ~4.5 MB on Vercel (documented in EXTERNAL CONFIGURATION); typical review
-  images are far below it.
+- Note: a real Vercel deploy cannot be executed in this sandbox — live
+  deploy/cold-start remains BLOCKED_BY_ENVIRONMENT. The function entry was
+  verified by direct raw-Node invocation of `api/index.js` against the
+  compiled `dist` output (fix 40), which is the closest sandbox-possible
+  equivalent to a platform function call. Vercel request payloads are capped
+  (~4.5 MB): the 5 MB upload cap is therefore effectively ~4.5 MB on Vercel
+  (documented in EXTERNAL CONFIGURATION); typical review images are far below
+  it.
 - Production storage: Cloudinary — **CONFIGURATION_REQUIRED**.
 - Actual Vercel project deploy / cold-start / lambda run:
   **BLOCKED_BY_ENVIRONMENT** (no Vercel project/credentials in sandbox).
