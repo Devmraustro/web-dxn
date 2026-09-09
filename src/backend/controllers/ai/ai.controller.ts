@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AIKnowledge } from "../../../Database/Models";
+import { escapeRegex } from "../../../utils/regex";
 
 // Initialize default AI knowledge base
 export const initializeAIMiddleware = async () => {
@@ -172,8 +173,7 @@ export const searchAIKnowledge = async (req: Request, res: Response) => {
     if (raw.length > 64) {
       return res.status(400).json({ message: "Search query too long" });
     }
-    const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(escaped, "i");
+    const regex = new RegExp(escapeRegex(raw), "i");
 
     const results = await AIKnowledge.find({
       $or: [

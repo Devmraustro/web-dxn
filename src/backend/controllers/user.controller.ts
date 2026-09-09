@@ -3,7 +3,6 @@ import crypto from "crypto";
 import { User, Customer } from "../../Database/Models";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { validateAlgerianPhone } from "../../utils/orderNumber";
 import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from "../config/env";
 
 // --- Registration ---
@@ -17,10 +16,8 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Email is required" });
     }
     
-    // Validate phone if provided
-    if (phone && !validateAlgerianPhone(phone)) {
-      return res.status(400).json({ message: "Invalid Algerian phone number" });
-    }
+    // Phone validity is enforced by the register schema (validateRequest) which
+    // accepts all Algerian mobile prefixes 05/06/07; no duplicated check here.
     
     // Hash password
     const saltRounds = parseInt(BCRYPT_SALT_ROUNDS);
@@ -191,16 +188,10 @@ export const updateProfile = async (req: Request, res: Response) => {
 
 // --- Forgot password ---
 
-// In-memory reset token store. Tokens are opaque random hex, hashed at rest,
-// time-bounded, single-use, and keyed by user id. For multi-instance prod use
-// a shared store (Redis/DB) but the contract (hashed token + expiry) stays.
-interface ResetTokenRecord {
-  tokenHash: string;
-  userId: string;
-  expiresAt: number;
-}
-const resetTokens = new Map<string, ResetTokenRecord>();
-
+// Reset tokens are stored per-user in MongoDB as a SHA-256 hash + expiry:
+//   - multi-instance / serverless safe (no per-instance memory store)
+//   - single-use (cleared after a successful reset)
+//   - opaque (raw token is never persisted and never logged)
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const hashToken = (token: string): string =>
   crypto.createHash("sha256").update(token).digest("hex");
@@ -225,20 +216,30 @@ export const forgotPassword = async (req: Request, res: Response) => {
     // Generate a random opaque token, store only its hash, set TTL.
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = hashToken(rawToken);
-    resetTokens.set(tokenHash, {
-      tokenHash,
-      userId: user._id.toString(),
-      expiresAt: Date.now() + RESET_TOKEN_TTL_MS,
-    });
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordResetTokenHash: tokenHash,
+          passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      }
+    );
 
-    // No email service configured: include the token in the response so the
-    // owner can test the flow. In production with SMTP, replace with a
-    // sendEmail(...) call and remove the `devResetToken` field.
-    res.json({
+    // NO SMTP is configured in this build. Returning the raw token in the
+    // response body would let anyone who knows an email address take over the
+    // account, so it is only echoed in non-production environments for local
+    // testing. In production the owner must wire an SMTP sender (see
+    // docs/DEPLOYMENT.md) so the token is delivered out-of-band; until then the
+    // reset flow fails closed with a generic message.
+    const response: Record<string, unknown> = {
       success: true,
       message: "If an account with this email exists, a password reset link has been sent.",
-      devResetToken: rawToken,
-    });
+    };
+    if (process.env.NODE_ENV !== "production") {
+      response.devResetToken = rawToken;
+    }
+    res.json(response);
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ message: "Server error" });
@@ -263,29 +264,23 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
 
     const tokenHash = hashToken(token);
-    const record = resetTokens.get(tokenHash);
-
-    if (!record) {
-      return res.status(400).json({ message: "Invalid or expired reset token" });
-    }
-    if (record.expiresAt < Date.now()) {
-      resetTokens.delete(tokenHash);
-      return res.status(400).json({ message: "Invalid or expired reset token" });
-    }
-
-    const user = await User.findById(record.userId);
+    const user = await User.findOne({
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: { $gt: new Date() },
+    });
     if (!user) {
-      resetTokens.delete(tokenHash);
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
     const saltRounds = parseInt(BCRYPT_SALT_ROUNDS) || 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
-    user.password = hashedPassword;
-    await user.save();
 
-    // Single-use: delete token so it cannot be replayed
-    resetTokens.delete(tokenHash);
+    // Single-use: clear the token fields atomically with the new password so a
+    // replayed token cannot be used twice.
+    user.password = hashedPassword;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
 
     res.json({
       success: true,

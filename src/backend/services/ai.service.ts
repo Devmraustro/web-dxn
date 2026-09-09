@@ -20,8 +20,8 @@ interface AIResponse {
 // using customer input as a regex source. Without this an attacker can craft
 // input like "(a+)+$" to cause catastrophic backtracking or break the query.
 const MAX_QUERY_LEN = 64;
-export const escapeRegex = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+import { escapeRegex } from "../../utils/regex";
+export { escapeRegex };
 
 /**
  * Process a customer message and generate an AI response

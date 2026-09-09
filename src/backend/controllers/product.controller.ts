@@ -1,106 +1,141 @@
 import { Request, Response } from "express";
 import { Product, ProductTranslation } from "../../Database/Models";
 
-// GET /api/products - Get all active products (sold-out products REMAIN VISIBLE so
-// customers can see them and be notified when back in stock). Only inactive products
-// are excluded. The frontend can display stock status using stockQuantity.
+/** Escape regex metacharacters before a user string is used as a $regex source. */
+const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const TRANSLATION_CONTENT_KEYS = ["language", "title", "description", "size", "metaTitle", "metaDescription"] as const;
+
+/** Extract only the translatable content fields (never _id / productId). */
+function pickTranslationContent(doc: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of TRANSLATION_CONTENT_KEYS) {
+    if (doc?.[key] !== undefined) out[key] = doc[key];
+  }
+  return out;
+}
+
+/**
+ * Enrich a product document for API consumers:
+ *  - `translations`: sanitized array of every available translation (used by
+ *    the storefront language selector). Only content keys are exposed.
+ *  - top-level merged content: title/description/size/meta* of the effective
+ *    translation (requested language, otherwise the first available one
+ *    ordered ar→fr). Top-level fields keep legacy consumers working and make
+ *    the payload self-describing for any single-language request.
+ * Never leaks _id / productId / timestamps of the translation documents.
+ */
+async function enrichWithTranslation(product: any, language?: "ar" | "fr") {
+  const base = { ...product };
+  const docs = await ProductTranslation.find({ productId: product._id })
+    .sort({ language: 1 }) // ar before fr for a stable default
+    .lean();
+
+  if (docs.length === 0) {
+    return base;
+  }
+
+  const translations = docs.map((d: any) => pickTranslationContent(d));
+  let effective = language ? docs.find((d: any) => d.language === language) : undefined;
+  if (!effective) {
+    effective = language
+      ? undefined
+      : docs[0];
+  }
+
+  const merged = effective ? pickTranslationContent(effective) : {};
+  return { ...base, ...merged, translations };
+}
+
+// GET /api/products - List active products (sold-out products remain visible
+// with stockQuantity so customers can see stock status).
 export const getProducts = async (req: Request, res: Response) => {
   try {
     const { language, featured, search } = req.query;
-    const lang = language as "ar" | "fr" | undefined;
+    const lang = language === "ar" || language === "fr" ? language : undefined;
 
-    // Build query - ACTIVE products only, sold-out IS included
     const query: any = { isActive: true };
-    
     if (featured) query.isFeatured = featured === "true";
-    if (search) {
-      const raw = String(search);
+
+    if (search && String(search).trim()) {
+      const raw = String(search).trim();
+      // ReDoS / runaway-regex guard: never feed attacker input longer than the
+      // cap directly into a $regex, and always escape metacharacters first so
+      // the payload is matched as literal text.
       if (raw.length > 64) {
         return res.status(400).json({ message: "Search query too long" });
       }
-      // Escape regex metacharacters so user input is treated as a literal string.
-      // Without this, an attacker can craft ReDoS payloads (e.g. (a+)+$ ) or
-      // alter the match semantics. 64-char cap also bounds regex cost.
-      const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escaped = escapeRegex(raw);
+
+      // Search the translatable fields (title/description) which live in the
+      // ProductTranslation collection, plus sku/slug on the product itself.
+      const translationMatches = await ProductTranslation.find({
+        $or: [
+          { title: { $regex: escaped, $options: "i" } },
+          { description: { $regex: escaped, $options: "i" } },
+        ],
+      })
+        .select("productId")
+        .lean();
+      const ids = translationMatches.map((t: any) => t.productId);
       query.$or = [
-        { "translations.title": { $regex: escaped, $options: "i" } },
-        { "translations.description": { $regex: escaped, $options: "i" } },
+        { sku: { $regex: escaped, $options: "i" } },
+        { slug: { $regex: escaped, $options: "i" } },
+        ...(ids.length ? [{ _id: { $in: ids } }] : []),
       ];
     }
-    
-    // Populate translations
+
     const products = await Product.find(query)
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean();
-    
-    // Enrich with translation data
-    const enrichedProducts = await Promise.all(
-      products.map(async (product: any) => {
-        const translations = await ProductTranslation.find({
-          productId: product._id,
-          language: lang,
-        });
-        
-        return {
-          ...product,
-          ...(lang && translations.length > 0 ? translations[0] : {}),
-          // Fallback to first available language
-          ...(lang && translations.length === 0
-            ? await ProductTranslation.findOne({
-                productId: product._id,
-              })
-              .lean()
-            : {}),
-        };
-      })
-    );
-    
-    res.json({
-      success: true,
-      count: enrichedProducts.length,
-      data: enrichedProducts,
-    });
+
+    const enriched = await Promise.all(products.map((p: any) => enrichWithTranslation(p, lang)));
+
+    res.json({ success: true, count: enriched.length, data: enriched });
   } catch (error) {
     console.error("Get products error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// GET /api/products/:id - Get single product with translations
-export const getProductById = async (req: Request, res: Response) => {
+/** Shared handler for product lookup by _id or by slug. */
+async function findProduct(selector: { _id?: any; slug?: string }, lang?: "ar" | "fr") {
+  const product = await Product.findOne(selector).lean();
+  if (!product) return null;
+  const enriched = await enrichWithTranslation(product, lang);
+  return enriched;
+}
+
+// GET /api/products/slug/:slug - public detail by slug (SEO/SPA route)
+export const getProductBySlug = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { language } = req.query;
-    const lang = language as "ar" | "fr" | undefined;
-    
-    const product = await Product.findById(id).lean();
+    const { slug } = req.params;
+    const language = req.query.language;
+    const lang = language === "ar" || language === "fr" ? language : undefined;
+
+    const product = await findProduct({ slug: String(slug) }, lang);
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    
-    // Get translations for requested language
-    const translations = await ProductTranslation.find({
-      productId: product._id,
-      language: lang,
-    });
-    
-    // Fallback: get first available translation
-    const translation = 
-      translations.length > 0 
-        ? translations[0] 
-        : await ProductTranslation.findOne({ productId: product._id })
-            .sort({ language: 1 })
-            .lean();
-    
-    const enrichedProduct = {
-      ...product,
-      ...(translation || {}),
-    };
-    
-    res.json({
-      success: true,
-      data: enrichedProduct,
-    });
+    res.json({ success: true, data: product });
+  } catch (error) {
+    console.error("Get product by slug error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET /api/products/:id - product detail (public)
+export const getProductById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const language = req.query.language;
+    const lang = language === "ar" || language === "fr" ? language : undefined;
+
+    const product = await findProduct({ _id: id }, lang);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    res.json({ success: true, data: product });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("Cast to ObjectId")) {
@@ -111,117 +146,82 @@ export const getProductById = async (req: Request, res: Response) => {
   }
 };
 
+async function ensureTranslations(productId: any, translations?: { ar?: any; fr?: any }) {
+  if (!translations) return;
+  for (const lang of ["ar", "fr"] as const) {
+    const t = translations[lang];
+    if (!t) continue;
+    await ProductTranslation.findOneAndUpdate(
+      { productId, language: lang },
+      {
+        title: t.title || "",
+        description: t.description || "",
+        size: t.size || "",
+      },
+      { upsert: true, runValidators: true }
+    );
+  }
+}
+
 // POST /api/products - Create product (admin)
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { sku, slug, ...productData } = req.body;
-    
-    // Check if SKU or slug already exists
+    const { sku, slug, translations, ...productData } = req.body;
+
     const existingSku = await Product.findOne({ sku });
     if (existingSku) {
       return res.status(400).json({ message: "SKU already exists" });
     }
-    
     const existingSlug = await Product.findOne({ slug });
     if (existingSlug) {
       return res.status(400).json({ message: "Slug already exists" });
     }
-    
-    // Create product
-    const product = new Product({
-      sku,
-      slug,
-      ...productData,
-    });
-    
-    await product.save();
-    
-    // Create default translations if provided
-    const { translations } = req.body;
-    if (translations && translations.ar && translations.fr) {
-      await ProductTranslation.create({
-        productId: product._id,
-        language: "ar",
-        title: translations.ar.title,
-        description: translations.ar.description,
-        size: translations.ar.size,
-      });
-      
-      await ProductTranslation.create({
-        productId: product._id,
-        language: "fr",
-        title: translations.fr.title,
-        description: translations.fr.description,
-        size: translations.fr.size,
-      });
-    }
-    
-    res.status(201).json({
-      success: true,
-      data: product,
-    });
+
+    const product = await Product.create({ sku, slug, ...productData });
+
+    await ensureTranslations(product._id, translations);
+
+    res.status(201).json({ success: true, data: product });
   } catch (error) {
     console.error("Create product error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// PUT /api/products/:id - Update product
+// PUT /api/products/:id - Update product (admin)
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { sku, slug, ...updateData } = req.body;
-    
-    // Check if new SKU/slug conflicts with existing products
+    const { sku, slug, translations, ...updateData } = req.body;
+
     if (sku) {
       const existingSku = await Product.findOne({ sku, _id: { $ne: id } });
       if (existingSku) {
         return res.status(400).json({ message: "SKU already exists" });
       }
     }
-    
     if (slug) {
       const existingSlug = await Product.findOne({ slug, _id: { $ne: id } });
       if (existingSlug) {
         return res.status(400).json({ message: "Slug already exists" });
       }
     }
-    
-    const product = await Product.findByIdAndUpdate(id, updateData, {
+
+    const update: Record<string, unknown> = { ...updateData };
+    if (sku !== undefined) update.sku = sku;
+    if (slug !== undefined) update.slug = slug;
+
+    const product = await Product.findByIdAndUpdate(id, update, {
       new: true,
       runValidators: true,
     });
-    
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    
-    // Update translations if provided
-    const { translations } = req.body;
-    if (translations) {
-      // Update Arabic translation
-      if (translations.ar) {
-        await ProductTranslation.findOneAndUpdate(
-          { productId: id, language: "ar" },
-          { title: translations.ar.title, description: translations.ar.description, size: translations.ar.size },
-          { upsert: true }
-        );
-      }
-      
-      // Update French translation
-      if (translations.fr) {
-        await ProductTranslation.findOneAndUpdate(
-          { productId: id, language: "fr" },
-          { title: translations.fr.title, description: translations.fr.description, size: translations.fr.size },
-          { upsert: true }
-        );
-      }
-    }
-    
-    res.json({
-      success: true,
-      data: product,
-    });
+
+    await ensureTranslations(product._id, translations);
+
+    res.json({ success: true, data: product });
   } catch (error) {
     console.error("Update product error:", error);
     res.status(500).json({ message: "Server error" });
@@ -232,21 +232,11 @@ export const updateProduct = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
-    const product = await Product.findByIdAndUpdate(
-      id,
-      { isActive: false },
-      { new: true }
-    );
-    
+    const product = await Product.findByIdAndUpdate(id, { isActive: false }, { new: true });
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    
-    res.json({
-      success: true,
-      data: product,
-    });
+    res.json({ success: true, data: product });
   } catch (error) {
     console.error("Delete product error:", error);
     res.status(500).json({ message: "Server error" });
@@ -257,21 +247,25 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const toggleFeatured = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
     const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    
     product.isFeatured = !product.isFeatured;
     await product.save();
-    
-    res.json({
-      success: true,
-      data: product,
-    });
+    res.json({ success: true, data: product });
   } catch (error) {
     console.error("Toggle featured error:", error);
     res.status(500).json({ message: "Server error" });
   }
+};
+
+export default {
+  getProducts,
+  getProductById,
+  getProductBySlug,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  toggleFeatured,
 };

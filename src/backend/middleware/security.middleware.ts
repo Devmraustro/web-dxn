@@ -55,7 +55,7 @@ export const authRateLimiter = rateLimit({
   message: { message: "Too many login attempts, please try again later." },
 });
 
-export const validateInput = (req: Request, _res: Response, next: NextFunction) => {
+export const validateInput = (req: Request, res: Response, next: NextFunction) => {
   const MAX_KEYS = 100;
   const MAX_DEPTH = 10;
 
@@ -73,10 +73,15 @@ export const validateInput = (req: Request, _res: Response, next: NextFunction) 
   }
 
   try {
-    if (req.body && countKeys(req.body) > MAX_KEYS) {
-      return;
+    if (req.body && typeof req.body === "object") {
+      const keys = countKeys(req.body);
+      if (keys > MAX_KEYS) {
+        // Either too many keys overall or the depth limit was exceeded.
+        return res.status(413).json({ message: "Request body too complex" });
+      }
     }
   } catch {
+    return res.status(400).json({ message: "Invalid request body" });
   }
   next();
 };

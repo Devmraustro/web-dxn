@@ -8,6 +8,7 @@
 import { DataAccess } from "./core/retrieval";
 import { CatalogItem, OfferInfo, ShippingInfo } from "./core/types";
 import { matchesQuery, queryTerms } from "./core/catalogSearch";
+import { escapeRegex } from "../../utils/regex";
 
 // Dynamic require so unit tests (which never call this module) do not need a
 // server connection or the models to be loaded.
@@ -99,7 +100,17 @@ export class MongooseDataAccess implements DataAccess {
       officeDelivery: true,
     };
     if (wilaya) {
-      const wil = await m.Wilaya.findOne({ name: new RegExp(wilaya, "i") }).lean();
+      // Exact canonical-spelling match on any of the three spellings; the
+      // input is regex-escaped so chat text can never inject regex/ReDoS.
+      const esc = escapeRegex(wilaya);
+      const wil = await m.Wilaya.findOne({
+        $or: [
+          { name: { $regex: `^${esc}$`, $options: "i" } },
+          { nameFr: { $regex: `^${esc}$`, $options: "i" } },
+          { nameAr: { $regex: `^${esc}$` } },
+        ],
+        isActive: true,
+      }).lean();
       if (wil) {
         const rates = await m.ShippingRate.find({ wilayaId: wil._id, isActive: true }).lean();
         for (const r of rates as any[]) {

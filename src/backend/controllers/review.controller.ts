@@ -48,13 +48,20 @@ export const createReview = async (req: Request, res: Response) => {
   }
 };
 
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
 // GET /api/reviews/product/:productId - Get reviews for a product
 export const getProductReviews = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
     const { limit = 10 } = req.query;
 
-    const reviews = await Review.find({ productId, isPublished: true })
+    const pid = Array.isArray(productId) ? productId[0] : productId;
+    if (!pid || !OBJECT_ID_RE.test(pid)) {
+      return res.status(400).json({ message: "Invalid product ID format" });
+    }
+
+    const reviews = await Review.find({ productId: pid, isPublished: true })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit as string))
       .lean();
@@ -76,7 +83,12 @@ export const getAllReviews = async (req: Request, res: Response) => {
 
     const filter: any = { isPublished: true };
 
-    if (productId) filter.productId = productId;
+    if (productId) {
+      if (!OBJECT_ID_RE.test(productId as string)) {
+        return res.status(400).json({ message: "Invalid product ID format" });
+      }
+      filter.productId = productId;
+    }
     if (rating) filter.rating = parseInt(rating as string);
     // Language filtering would be on translations in a full implementation
 

@@ -272,3 +272,42 @@
   padding: 1rem 0;
   border-top: 1px solid #dee2e6;
 }
+/* Product links: whole image clickable, name inherits link color cleanly */
+.product-image-link,
+.product-name-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.product-image-link:hover .product-name-link,
+.product-name-link:hover {
+  color: #14532d;
+}
+
+.product-name-link {
+  font-weight: 700;
+}
+
+.product-description {
+  color: #6c757d;
+  font-size: 0.85rem;
+  min-height: 2.4em;
+}
+
+.product-action {
+  margin-top: auto;
+}
+
+/* Admin table responsive niceties */
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+@media (max-width: 576px) {
+  .admin-sidebar-title {
+    text-align: center;
+  }
+  .admin-content {
+    padding: 1rem;
+  }
+}

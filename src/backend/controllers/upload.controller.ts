@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getStorageProvider } from "../config/storage";
+import { getStorageProvider, isSafeImageUrl } from "../config/storage";
 
 export const uploadImage = async (req: Request, res: Response) => {
   try {
@@ -17,7 +17,7 @@ export const uploadImage = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Upload image error:", error.message);
-    res.status(500).json({ message: "Upload failed" });
+    res.status(500).json({ message: error?.message || "Upload failed" });
   }
 };
 
@@ -39,23 +39,16 @@ export const uploadImages = async (req: Request, res: Response) => {
     res.json({ success: true, data: results });
   } catch (error: any) {
     console.error("Upload images error:", error.message);
-    res.status(500).json({ message: "Upload failed" });
+    res.status(500).json({ message: error?.message || "Upload failed" });
   }
 };
 
 export const deleteImage = async (req: Request, res: Response) => {
   try {
     const { url } = req.body;
+    const allowedBase = (process.env.BASE_URL || "http://localhost:5000").replace(/\/+$/, "");
 
-    if (!url || typeof url !== "string") {
-      res.status(400).json({ message: "URL is required" });
-      return;
-    }
-
-    const allowedBase =
-      process.env.BASE_URL || "http://localhost:5000";
-    if (!url.startsWith(allowedBase + "/uploads/") &&
-        !url.startsWith("https://res.cloudinary.com/")) {
+    if (!url || typeof url !== "string" || !isSafeImageUrl(url, allowedBase)) {
       res.status(400).json({ message: "Invalid image URL" });
       return;
     }

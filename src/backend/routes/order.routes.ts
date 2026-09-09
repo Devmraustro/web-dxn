@@ -6,7 +6,6 @@ import {
   updateOrderStatus,
 } from "../controllers/order.controller";
 import { validateStock } from "../middleware/inventory.middleware";
-import { validateOrderPricing } from "../middleware/inventory.middleware";
 import { idempotencyMiddleware } from "../middleware/inventory.middleware";
 import { authenticate, adminOnly } from "../middleware/auth.middleware";
 import { validateRequest } from "../middleware/validateRequest.middleware";
@@ -21,13 +20,17 @@ router.get("/", authenticate, adminOnly, getOrders);
 router.get("/:id", authenticate, getOrderById);
 
 // POST /api/orders - Create new order (checkout - public, guest-friendly)
-// Apply: idempotency key, stock validation, pricing validation
+// Pipeline (in execution order):
+//   1. validateRequest — shape/type validation of the untrusted payload
+//   2. idempotencyMiddleware — reject duplicate submissions (Idempotency-Key)
+//   3. validateStock — pre-flight stock availability read
+//   4. createOrder — authoritative prices/shipping/discounts + atomic stock
+// Client-supplied totals are NEVER used to price the order.
 router.post(
   "/",
   idempotencyMiddleware("Idempotency-Key"),
-  validateStock,
-  validateOrderPricing,
   validateRequest(orderCreateSchema),
+  validateStock,
   createOrder
 );
 

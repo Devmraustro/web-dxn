@@ -29,9 +29,12 @@ interface Review {
 
 interface Product {
   _id: string;
-  sku: string;
-  translations?: { ar?: { name: string }; fr?: { name: string } };
-  [key: string]: any;
+  sku?: string;
+  language?: string;
+  title?: string;
+  translations?:
+    | Array<{ language?: string; title?: string }>
+    | { ar?: { name?: string; title?: string }; fr?: { name?: string; title?: string } };
 }
 
 const AdminReviewPage = () => {
@@ -204,14 +207,34 @@ const AdminReviewPage = () => {
     }
   };
 
-  const getProductName = (review: Review) => {
-    if (typeof review.productId === "object" && review.productId) {
-      const p = review.productId;
-      if (p.translations?.ar?.name) return p.translations.ar.name;
-      if (p.translations?.fr?.name) return p.translations.fr.name;
-      if (p.sku) return p.sku;
+  const productDisplayName = (p: any, language: string): string => {
+    if (!p) return "";
+    const want = language === "ar" ? "ar" : "fr";
+    // New API shape: translations as array of { language, title }
+    if (Array.isArray(p.translations)) {
+      const found = p.translations.find((tr: any) => tr.language === want);
+      if (found?.title) return found.title;
+      const anyLang = p.translations.find((tr: any) => tr.title);
+      if (anyLang?.title) return anyLang.title;
+    } else if (p.translations && typeof p.translations === "object") {
+      if (p.translations[want]?.name) return p.translations[want].name;
+      if (p.translations[want]?.title) return p.translations[want].title;
+      if (p.translations.ar?.name) return p.translations.ar.name;
+      if (p.translations.fr?.name) return p.translations.fr.name;
     }
-    return typeof review.productId === "string" ? review.productId : "";
+    // Enriched top-level merge (API called with ?language=)
+    if (p.language === want && p.title) return p.title;
+    return p.sku || String(p._id || "").slice(0, 8);
+  };
+
+  const getProductName = (review: Review) => {
+    const raw: any = review.productId;
+    const id = raw && typeof raw === "object" ? String(raw._id || "") : String(raw || "");
+    // Prefer the current catalog label (fall back to the raw stored value).
+    const match = products.find((p) => p._id === id);
+    if (match) return productDisplayName(match, language);
+    if (raw && typeof raw === "object") return productDisplayName(raw, language);
+    return id;
   };
 
   if (loading) {
@@ -345,10 +368,7 @@ const AdminReviewPage = () => {
                 <option value="">— {t("اختر المنتج", "Sélectionner un produit")} —</option>
                 {products.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.translations?.ar?.name ||
-                      p.translations?.fr?.name ||
-                      p.sku ||
-                      p._id}
+                    {productDisplayName(p, language)}
                   </option>
                 ))}
               </Form.Select>

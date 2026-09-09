@@ -60,9 +60,40 @@ const translationSchema = yup.object({
   size: yup.string(),
 });
 
+const productCreateFields = {
+  price: yup.number().min(0, "Price cannot be negative").max(10_000_000).required("Price is required"),
+  compareAtPrice: yup.number().min(0).max(10_000_000),
+  stockQuantity: yup
+    .number()
+    .integer("Stock must be an integer")
+    .min(0, "Stock cannot be negative")
+    .max(1_000_000),
+  isActive: yup.boolean(),
+  isFeatured: yup.boolean(),
+  sortOrder: yup.number().integer().min(0).max(1_000_000),
+  image: yup.string().max(500),
+  images: yup.array().of(yup.string().max(500)).max(10),
+};
+
+const productUpdateFields = {
+  price: yup.number().min(0, "Price cannot be negative").max(10_000_000),
+  compareAtPrice: yup.number().min(0).max(10_000_000),
+  stockQuantity: yup
+    .number()
+    .integer("Stock must be an integer")
+    .min(0, "Stock cannot be negative")
+    .max(1_000_000),
+  isActive: yup.boolean(),
+  isFeatured: yup.boolean(),
+  sortOrder: yup.number().integer().min(0).max(1_000_000),
+  image: yup.string().max(500),
+  images: yup.array().of(yup.string().max(500)).max(10),
+};
+
 export const productSchema = yup.object({
   sku: yup.string().required("SKU is required").max(100),
   slug: yup.string().required("Slug is required").max(200),
+  ...productCreateFields,
   translations: yup.object({
     ar: translationSchema,
     fr: translationSchema,
@@ -72,6 +103,7 @@ export const productSchema = yup.object({
 export const productUpdateSchema = yup.object({
   sku: yup.string().max(100),
   slug: yup.string().max(200),
+  ...productUpdateFields,
   translations: yup.object({
     ar: translationSchema,
     fr: translationSchema,
@@ -113,17 +145,29 @@ const customerInfoSchema = yup.object({
   secondPhone: yup.string().test("algerian-phone", "Invalid Algerian phone number", phoneTest),
 });
 
-const cartItemSchema = yup.object({
-  productId: yup.string(),
-  packId: yup.string(),
-  quantity: yup
-    .number()
-    .integer("Quantity must be an integer")
-    .positive("Quantity must be positive")
-    .max(999, "Quantity too large")
-    .required("Quantity is required"),
-  unitPrice: yup.number().positive(),
-});
+export const cartItemSchema = yup
+  .object({
+    productId: yup.string().matches(/^[0-9a-fA-F]{24}$/, "Invalid product id"),
+    packId: yup.string().matches(/^[0-9a-fA-F]{24}$/, "Invalid pack id"),
+    quantity: yup
+      .number()
+      .integer("Quantity must be an integer")
+      .positive("Quantity must be positive")
+      .max(999, "Quantity too large")
+      .required("Quantity is required"),
+    // unitPrice is accepted for client-side display compatibility but NEVER
+    // used by the server to compute totals.
+    unitPrice: yup.number().positive(),
+  })
+  .test(
+    "exactly-one-identifier",
+    "Each cart item must reference exactly one product or pack",
+    (value) => {
+      const hasProduct = typeof value?.productId === "string" && value.productId.length > 0;
+      const hasPack = typeof value?.packId === "string" && value.packId.length > 0;
+      return hasProduct !== hasPack;
+    }
+  );
 
 export const orderCreateSchema = yup.object({
   customerInfo: customerInfoSchema.required("Customer information is required"),
@@ -197,11 +241,30 @@ export const shippingCalculateSchema = yup.object({
 
 // --- Offer schemas ---
 
+const offerValue = (required: boolean) => {
+  let schema: yup.NumberSchema = yup
+    .number()
+    .min(0, "Offer value cannot be negative")
+    .max(10_000_000)
+    .test("value-by-type", "Percentage offers are capped at 100", function percentageBound(value?: number) {
+      if (value === undefined) return true;
+      const type = (this.parent as any)?.type;
+      if (type === "percentage" && value > 100) {
+        return this.createError({ message: "Percentage offer cannot exceed 100" });
+      }
+      return true;
+    });
+  if (required) {
+    schema = schema.required("Value is required");
+  }
+  return schema;
+};
+
 export const offerCreateSchema = yup.object({
   title: yup.string().required().max(200),
   slug: yup.string().required().max(200),
   type: yup.string().oneOf(["percentage", "fixed"]).required("Type is required"),
-  value: yup.number().required("Value is required").min(0).max(100),
+  value: offerValue(true),
   productId: yup.string(),
   packId: yup.string(),
   startDate: yup.date(),
@@ -212,7 +275,7 @@ export const offerUpdateSchema = yup.object({
   title: yup.string().max(200),
   slug: yup.string().max(200),
   type: yup.string().oneOf(["percentage", "fixed"]),
-  value: yup.number().min(0).max(100),
+  value: offerValue(false),
   productId: yup.string(),
   packId: yup.string(),
   startDate: yup.date(),

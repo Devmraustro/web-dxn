@@ -47,6 +47,9 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
           >
             {t("التقييمات", "Avis")}
           </NavLink>
+          <NavLink to="/" className="admin-link">
+            {t("العودة للمتجر", "Voir la boutique")}
+          </NavLink>
         </nav>
         <button type="button" className="admin-logout" onClick={handleLogout}>
           {t("تسجيل الخروج", "Déconnexion")}

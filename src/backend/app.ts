@@ -1,10 +1,10 @@
 import express from "express";
 import morgan from "morgan";
-import helmet from "helmet";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-import { securityHeaders, noSqlInjectionProtection, xssSanitization, rateLimiter, authRateLimiter, validateInput } from "./middleware/security.middleware";
+import mongoose from "mongoose";
+import { securityHeaders, noSqlInjectionProtection, rateLimiter, validateInput } from "./middleware/security.middleware";
 
 dotenv.config();
 
@@ -30,16 +30,20 @@ const app = express();
 
 // Security headers and injection protection
 app.use(securityHeaders);
+// Single NoSQL-operator + XSS sanitizer pass over body/query/params.
 app.use(noSqlInjectionProtection);
-app.use(xssSanitization);
 
-// Rate limiting
+// Global rate limiting (auth endpoints have their own stricter limiter in the
+// user routes, and the AI/Meta routes define endpoint-specific limits).
 app.use(rateLimiter);
-app.use("/api/auth", authRateLimiter);
 
-// CORS - allow frontend origin
+// CORS - allow frontend origin(s). CORS_ORIGIN may be a comma-separated list.
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+  origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   credentials: true,
   optionsSuccessStatus: 204,
 };
@@ -49,15 +53,20 @@ app.use(cors(corsOptions));
 // raw parser must mount BEFORE the JSON parser consumes the stream.
 app.use("/meta", express.raw({ type: "*/*", limit: "1mb" }));
 
-// Body parsing with size limit
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// Body parsing with bounded size (uploads arrive as multipart via multer).
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// Input validation
+// Input validation (body complexity bound)
 app.use(validateInput);
 
-// HTTP request logging (dev in development, combined in production)
-app.use(morgan(process.env.NODE_ENV === "development" ? "dev" : "combined"));
+// HTTP request logging: dev format in development; combined in production
+// (skipped entirely on Vercel, whose runtime already logs requests).
+app.use(
+  morgan(process.env.NODE_ENV === "development" ? "dev" : "combined", {
+    skip: () => !!process.env.VERCEL,
+  })
+);
 
 // Serve uploaded files (admin image uploads)
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -66,7 +75,11 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({
+    status: mongoose.connection.readyState === 1 ? "ok" : "degraded",
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Products

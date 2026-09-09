@@ -26,21 +26,36 @@ const ProductListPage = () => {
     loadProducts();
   }, [language]);
 
-  if (loading) return <div>Loading products...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (loading) {
+    return <div className="text-center mt-5 py-5">{language === "ar" ? "جارٍ تحميل المنتجات..." : "Chargement des produits..."}</div>;
+  }
+  if (error) {
+    return (
+      <Container className="mt-5" style={{ maxWidth: 560 }}>
+        <div className="alert alert-danger" role="alert">
+          {language === "ar" ? "فشل تحميل المنتجات" : "Échec du chargement des produits"}
+        </div>
+      </Container>
+    );
+  }
 
   return (
     <>
       <Container>
         <h1 className="mb-4">{language === "ar" ? "المنتجات" : "Produits"}</h1>
-        <Row>
-          {products.map((product) => (
-            <Col key={product._id} xs={12} sm={6} md={4} xl={3}>
-              <ProductCard product={product} language={language} />
-            </Col>
-          ))}
-        </Row>
-        {products.length === 0 && <p>{language === "ar" ? "لا توجد منتجات" : "Aucun produit"}</p>}
+        {products.length === 0 ? (
+          <p className="text-center py-5 text-muted">
+            {language === "ar" ? "لا توجد منتجات حالياً" : "Aucun produit disponible"}
+          </p>
+        ) : (
+          <Row>
+            {products.map((product) => (
+              <Col key={product._id} xs={12} sm={6} md={4} xl={3} className="mb-4 d-flex">
+                <ProductCard product={product} language={language} />
+              </Col>
+            ))}
+          </Row>
+        )}
       </Container>
     </>
   );

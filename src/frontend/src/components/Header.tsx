@@ -102,7 +102,7 @@ const Header = () => {
               {t("تسجيل الخروج", "Déconnexion")}
             </button>
           ) : (
-            <Link to="/admin" className="dxn-login-link">
+            <Link to="/admin/login" className="dxn-login-link">
               {t("دخول الأدمن", "Admin")}
             </Link>
           )}

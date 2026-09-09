@@ -15,6 +15,7 @@ import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminReviewPage from "./pages/AdminReviewPage";
+import ProductDetailPage from "./pages/ProductDetailPage";
 
 const App = () => (
   <BrowserRouter>
@@ -22,6 +23,7 @@ const App = () => (
     <Routes>
       <Route path="/" element={<ProductListPage />} />
       <Route path="/products" element={<ProductListPage />} />
+      <Route path="/product/:slug" element={<ProductDetailPage />} />
       <Route path="/cart" element={<CartPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />

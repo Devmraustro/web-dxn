@@ -5,10 +5,9 @@ import { Pack, PackItem, Product } from "../../Database/Models";
 export const getPacks = async (req: Request, res: Response) => {
   try {
     const { featured, active } = req.query;
-    const query: any = {};
-    
+    const query: any = { isActive: active !== "false" };
+
     if (featured) query.isFeatured = featured === "true";
-    if (active !== undefined) query.isActive = active === "true";
     
     const packs = await Pack.find(query)
       .sort({ sortOrder: 1, createdAt: -1 })
@@ -75,23 +74,19 @@ export const createPack = async (req: Request, res: Response) => {
     
     // Add pack items if provided
     if (contents && Array.isArray(contents)) {
-      for (const content of contents) {
-        const { productId, quantity } = content;
-        
-        // Verify product exists and is active
-        const product = await Product.findById(productId);
-        if (!product || !product.isActive) {
-          return res.status(400).json({ 
-            message: `Product ${productId} not found or inactive` 
-          });
-        }
-        
-        await PackItem.create({
-          packId: pack._id,
-          productId,
-          quantity,
-        });
+      // Verify every component first so a bad payload cannot leave a partial pack.
+      const ids = contents.map((c: any) => c.productId);
+      const products = await Product.find({ _id: { $in: ids }, isActive: true }).select("_id").lean();
+      if (products.length !== contents.length) {
+        return res.status(400).json({ message: "One or more products are not found or inactive" });
       }
+      await PackItem.insertMany(
+        contents.map((content: any) => ({
+          packId: pack._id,
+          productId: content.productId,
+          quantity: content.quantity || 1,
+        }))
+      );
     }
     
     res.status(201).json({
@@ -125,7 +120,13 @@ export const updatePack = async (req: Request, res: Response) => {
       }
     }
     
-    const pack = await Pack.findByIdAndUpdate(id, updateData, {
+    const update: Record<string, unknown> = { ...updateData };
+    if (name !== undefined) update.name = name;
+    if (slug !== undefined) update.slug = slug;
+    if (price !== undefined) update.price = price;
+    if (compareAtPrice !== undefined) update.compareAtPrice = compareAtPrice;
+
+    const pack = await Pack.findByIdAndUpdate(id, update, {
       new: true,
       runValidators: true,
     });
@@ -134,28 +135,21 @@ export const updatePack = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Pack not found" });
     }
     
-    // Update pack items if contents provided
+    // Update pack items if contents provided (clear and recreate atomically)
     if (contents && Array.isArray(contents)) {
-      // This is simplified - in production we'd handle add/remove/replace
-      // For now, clear and recreate
-      await PackItem.deleteMany({ packId: id });
-      
-      for (const content of contents) {
-        const { productId, quantity } = content;
-        
-        const product = await Product.findById(productId);
-        if (!product || !product.isActive) {
-          return res.status(400).json({ 
-            message: `Product ${productId} not found or inactive` 
-          });
-        }
-        
-        await PackItem.create({
-          packId: pack._id,
-          productId,
-          quantity,
-        });
+      const ids = contents.map((c: any) => c.productId);
+      const products = await Product.find({ _id: { $in: ids }, isActive: true }).select("_id").lean();
+      if (products.length !== contents.length) {
+        return res.status(400).json({ message: "One or more products are not found or inactive" });
       }
+      await PackItem.deleteMany({ packId: pack._id });
+      await PackItem.insertMany(
+        contents.map((content: any) => ({
+          packId: pack._id,
+          productId: content.productId,
+          quantity: content.quantity || 1,
+        }))
+      );
     }
     
     res.json({

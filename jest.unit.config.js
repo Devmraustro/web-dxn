@@ -12,6 +12,7 @@ module.exports = {
   testMatch: [
     "<rootDir>/src/backend/tests/ai-guardrail.test.ts",
     "<rootDir>/src/backend/tests/security-fixes-v2.test.ts",
+    "<rootDir>/src/backend/tests/commerce-unit.test.ts",
   ],
   transform: {
     "^.+\\.ts$": [

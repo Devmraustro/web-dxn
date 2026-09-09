@@ -8,7 +8,6 @@ import {
   getFrenchMetaTags,
   getCategorySchema,
   getBreadcrumbSchema,
-  ALGERIAN_WILAYAS,
 } from "./utils";
 import { Product } from "../../Database/Models";
 
@@ -42,23 +41,33 @@ router.get("/robots.txt", (req: Request, res: Response) => {
   }
 });
 
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+const isArOrFr = (v: unknown): v is "ar" | "fr" => v === "ar" || v === "fr";
+
+/** Shared product lookup for SEO endpoints (validates the id first). */
+async function findSeoProduct(productId: unknown, res: Response) {
+  if (productId && (typeof productId !== "string" || !OBJECT_ID_RE.test(productId))) {
+    res.status(400).json({ message: "Invalid product ID format" });
+    return null;
+  }
+  if (!productId) {
+    res.status(400).json({ message: "productId query parameter is required" });
+    return null;
+  }
+  return Product.findById(productId).lean();
+}
+
 // GET /api/seo/meta - Get product meta tags
 router.get("/meta", async (req: Request, res: Response) => {
   try {
     const { productId, language } = req.query;
-    const lang = language as "ar" | "fr" || "ar";
-    
-    let product;
-    if (productId) {
-      product = await Product.findById(productId).lean();
-    }
-    
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-    
+    const lang = isArOrFr(language) ? language : "ar";
+
+    const product = await findSeoProduct(productId, res);
+    if (!product) return;
+
     const metaTags = getProductMetaTags(product, lang);
-    
+
     res.json({
       success: true,
       data: metaTags,
@@ -73,19 +82,13 @@ router.get("/meta", async (req: Request, res: Response) => {
 router.get("/schema/product", async (req: Request, res: Response) => {
   try {
     const { productId, language } = req.query;
-    const lang = language as "ar" | "fr" || "ar";
-    
-    let product;
-    if (productId) {
-      product = await Product.findById(productId).lean();
-    }
-    
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-    
+    const lang = isArOrFr(language) ? language : "ar";
+
+    const product = await findSeoProduct(productId, res);
+    if (!product) return;
+
     const schema = getProductSchema(product, lang);
-    
+
     res.json({
       success: true,
       data: schema,

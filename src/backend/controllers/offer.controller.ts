@@ -168,16 +168,17 @@ export const updateOffer = async (req: Request, res: Response) => {
       }
     }
     
-    const offer = await Offer.findByIdAndUpdate(id, {
-      title,
-      slug,
-      type,
-      value,
-      productId,
-      packId,
-      startDate: startDate ? new Date(startDate) : undefined,
-      endDate: endDate ? new Date(endDate) : undefined,
-    }, { new: true });
+    const update: Record<string, unknown> = {};
+    if (title !== undefined) update.title = title;
+    if (slug !== undefined) update.slug = slug;
+    if (type !== undefined) update.type = type;
+    if (value !== undefined) update.value = value;
+    if (productId !== undefined) update.productId = productId;
+    if (packId !== undefined) update.packId = packId;
+    if (startDate !== undefined) update.startDate = startDate ? new Date(startDate) : null;
+    if (endDate !== undefined) update.endDate = endDate ? new Date(endDate) : null;
+
+    const offer = await Offer.findByIdAndUpdate(id, update, { new: true, runValidators: true });
     
     if (!offer) {
       return res.status(404).json({ message: "Offer not found" });

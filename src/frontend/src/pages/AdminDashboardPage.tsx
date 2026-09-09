@@ -153,10 +153,21 @@ const AdminDashboardPage = () => {
                     </thead>
                     <tbody>
                       {stats.topProducts.slice(0, 5).map((product: any, index: number) => {
-                        const productName = product.product?.title || product._id?.substring(0, 8) || "Product";
+                        const productName =
+                          product.name ||
+                          product.product?.title ||
+                          String(product._id || "").substring(0, 8) ||
+                          "—";
                         return (
                           <tr key={index}>
-                            <td>{productName}</td>
+                            <td>
+                              {productName}
+                              {product.kind === "pack" && (
+                                <Badge pill bg="dark" className="ms-2">
+                                  {language === "ar" ? "حزمة" : "Pack"}
+                                </Badge>
+                              )}
+                            </td>
                             <td>{product.totalSold}</td>
                             <td>{product.revenue?.toLocaleString() || "0"} DA</td>
                           </tr>

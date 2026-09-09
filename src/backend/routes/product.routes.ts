@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import {
   getProducts,
   getProductById,
+  getProductBySlug,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -15,6 +16,9 @@ const router = Router();
 
 // GET /api/products - Get all products with filtering (public)
 router.get("/", getProducts);
+
+// GET /api/products/slug/:slug - Get single product by slug (public)
+router.get("/slug/:slug", getProductBySlug);
 
 // GET /api/products/:id - Get single product (public)
 router.get("/:id", getProductById);
