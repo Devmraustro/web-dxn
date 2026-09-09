@@ -1,0 +1,134 @@
+/**
+ * Phase 19N/19O — Meta Messaging Client (Instagram + Facebook)
+ *
+ * Officially send messages back to customers through Meta's Graph API using
+ * the page access token. No scraping, no browser automation, no unofficial
+ * APIs.
+ *
+ * For unit tests, inject a transport function; in production the default
+ * transport calls the Graph API over HTTPS.
+ */
+import axios from "axios";
+import { withRetry, RetryOptions } from "../core/retry";
+
+export type MetaPlatform = "instagram" | "facebook";
+
+export interface MetaMessengerOptions {
+  pageAccessToken: string;
+  /** Conversation API ID, may differ per platform / page. */
+  graphVersion?: string;
+  transport?: (url: string, body: unknown, headers: Record<string, string>) => Promise<unknown>;
+}
+
+/**
+ * Classify an outbound Meta API error as transient (safe to retry) or not.
+ * Retries only transient conditions: network/timeout, 5xx, and 429 rate-limit
+ * (Meta itself recommends backing off on 429). 4xx client errors (400 invalid
+ * payload, 401/403 auth) are permanent and must NOT be retried. Robust to both
+ * real axios errors and plain thrown objects so retry decisions never change
+ * based on how the transport throws.
+ */
+export function isTransientMetaError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { response?: { status?: unknown }; code?: string; request?: unknown };
+
+  const status = typeof e.response?.status === "number" ? e.response.status : undefined;
+  if (status !== undefined) {
+    if (status === 429) return true;
+    if (status >= 500 && status <= 599) return true;
+    return false;
+  }
+
+  const code = e.code || "";
+  if (
+    code === "ECONNABORTED" ||
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ENOTFOUND" ||
+    code === "ETIMEDOUT" ||
+    code === "EAI_AGAIN" ||
+    code === "EPIPE"
+  ) {
+    return true;
+  }
+
+  // Axios network error shape: a `request` was made but no `response` received.
+  if (e.request != null && e.response == null) return true;
+
+  return false;
+}
+
+export class MetaMessenger {
+  private token: string;
+  private graphVersion: string;
+  private transport: (url: string, body: unknown, headers: Record<string, string>) => Promise<unknown>;
+  private retry: RetryOptions;
+
+  constructor(opts: MetaMessengerOptions) {
+    this.token = opts.pageAccessToken;
+    this.graphVersion = opts.graphVersion || "v26.0";
+    this.retry = {
+      maxAttempts: 3,
+      baseDelayMs: 250,
+      shouldRetry: isTransientMetaError,
+    };
+    this.transport =
+      opts.transport ||
+      (async (url, body, headers) => {
+        const res = await axios.post(url, body, {
+          headers: { "Content-Type": "application/json", ...headers },
+          timeout: 30000,
+        });
+        return res.data;
+      });
+  }
+
+  get configured(): boolean {
+    return !!this.token;
+  }
+
+  /**
+   * Send a text message to a PSID on the given platform.
+   * @returns the recipient / message id from the API, or null on failure.
+   */
+  async sendText(
+    platform: MetaPlatform,
+    recipientId: string,
+    text: string
+  ): Promise<{ recipientId?: string; messageId?: string }> {
+    if (!this.token) {
+      throw new Error("MetaMessenger: page access token not configured");
+    }
+    // Validate inputs
+    if (!recipientId || typeof recipientId !== "string") {
+      throw new Error("MetaMessenger: recipientId is required");
+    }
+    if (!text || typeof text !== "string") {
+      throw new Error("MetaMessenger: text is required");
+    }
+    if (text.length > 4096) {
+      // Meta's text message cap; truncate safely to avoid permanent 4xx.
+      text = text.substring(0, 4096);
+    }
+    const base = `https://graph.facebook.com/${this.graphVersion}/me/messages`;
+    // Use the Authorization header (Bearer) instead of putting the access
+    // token in the URL query string. Tokens in query strings get logged by
+    // intermediate proxies, server access logs, and CDN edge nodes.
+    const url = base;
+    const body = {
+      recipient: { id: recipientId },
+      messaging_type: "RESPONSE",
+      message: { text },
+    };
+    // Transient-only bounded retry: a 5xx/429/timed-out send is retried, but a
+    // permanent 4xx fails immediately so we never duplicate side effects.
+    const data: any = await withRetry(() =>
+      this.transport(url, body, { Authorization: `Bearer ${this.token}` }),
+      this.retry
+    );
+    return {
+      recipientId: data?.recipient_id,
+      messageId: data?.message_id,
+    };
+  }
+}

@@ -1,0 +1,77 @@
+Database connection failed - starting without database: MongooseServerSelectionError: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017
+    at _handleConnectionErrors (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongoose\lib\connection.js:1175:11)
+    at NativeConnection.openUri (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongoose\lib\connection.js:1106:11)
+    at async connectDB (C:\Users\Utilisateur\Documents\web dxn\dist\backend\db.js:10:18)
+    at async connectToDatabase (C:\Users\Utilisateur\Documents\web dxn\dist\backend\index.js:20:9) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'Unknown',
+    servers: Map(1) { 'localhost:27017' => [ServerDescription] },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: null,
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'Unknown',
+    servers: Map(1) { 'localhost:27017' => [ServerDescription] },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: null,
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+MongoDB connection error: MongoServerSelectionError: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017
+    at Topology.selectServer (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\sdam\topology.js:348:38)
+    at async Topology._connect (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\sdam\topology.js:220:28)
+    at async Topology.connect (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\sdam\topology.js:171:13)
+    at async topologyConnect (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\mongo_client.js:257:17)
+    at async MongoClient._connect (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\mongo_client.js:270:13)
+    at async MongoClient.connect (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\mongo_client.js:195:13)
+    at async NativeConnection.createClient (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongoose\lib\drivers\node-mongodb-native\connection.js:346:3)
+    at async NativeConnection.openUri (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongoose\lib\connection.js:1104:5)
+    at async connectDB (C:\Users\Utilisateur\Documents\web dxn\dist\backend\db.js:10:18)
+    at async connectToDatabase (C:\Users\Utilisateur\Documents\web dxn\dist\backend\index.js:20:9) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'Unknown',
+    servers: Map(1) { 'localhost:27017' => [ServerDescription] },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: null,
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017
+      at Socket.<anonymous> (C:\Users\Utilisateur\Documents\web dxn\node_modules\mongodb\lib\cmap\connect.js:314:44)
+      at Object.onceWrapper (node:events:623:26)
+      at Socket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(3) { 'SystemOverloadedError', 'RetryableError', 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: AggregateError [ECONNREFUSED]: 
+        at internalConnectMultiple (node:net:1134:18)
+        at afterConnectMultiple (node:net:1715:7) {
+      code: 'ECONNREFUSED',
+      [errors]: [Array]
+    }
+  }
+}

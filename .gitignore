@@ -1,0 +1,39 @@
+# Environment variables - NEVER commit secrets
+.env
+.env.local
+.env.production
+.env.*.local
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Uploads / runtime data
+uploads/
+data/
+*.pid
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
+
+# Test artifacts
+*.log.err

@@ -1,0 +1,212 @@
+src/backend/app.ts(22,8): error TS2613: Module '"C:/Users/Utilisateur/Documents/web dxn/src/backend/middleware/error.middleware"' has no default export. Did you mean to use 'import { errorMiddleware } from "C:/Users/Utilisateur/Documents/web dxn/src/backend/middleware/error.middleware"' instead?
+src/backend/config.ts(1,15): error TS2307: Cannot find module './env' or its corresponding type declarations.
+src/backend/config.ts(2,15): error TS2307: Cannot find module './validation' or its corresponding type declarations.
+src/backend/controllers/admin/dashboard.controller.ts(2,77): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/ai/ai.controller.ts(2,29): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/controllers/offer.controller.ts(2,38): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/offer.controller.ts(19,25): error TS7006: Parameter 'offer' implicitly has an 'any' type.
+src/backend/controllers/order.controller.ts(2,77): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/controllers/order.controller.ts(3,37): error TS2307: Cannot find module '../utils/orderNumber' or its corresponding type declarations.
+src/backend/controllers/pack.controller.ts(2,41): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/product.controller.ts(2,45): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/product.controller.ts(28,27): error TS7006: Parameter 'product' implicitly has an 'any' type.
+src/backend/controllers/review.controller.ts(2,33): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/controllers/shipping.controller.ts(2,38): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/shipping.controller.ts(129,32): error TS7006: Parameter 'wilaya' implicitly has an 'any' type.
+src/backend/controllers/user.controller.ts(2,32): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/controllers/user.controller.ts(5,60): error TS2307: Cannot find module '../utils/orderNumber' or its corresponding type declarations.
+src/backend/controllers/user.controller.ts(6,10): error TS2724: '"../services/telegram.service"' has no exported member named 'sendTelegramOrderNotification'. Did you mean 'sendNewOrderNotification'?
+src/backend/controllers/user.controller.ts(76,9): error TS18046: 'error' is of type 'unknown'.
+src/backend/controllers/user.controller.ts(107,23): error TS2769: No overload matches this call.
+  Overload 1 of 5, '(payload: string | object | Buffer, secretOrPrivateKey: null, options?: (SignOptions & { algorithm: "none"; }) | undefined): string', gave the following error.
+    Argument of type 'string' is not assignable to parameter of type 'null'.
+  Overload 2 of 5, '(payload: string | object | Buffer, secretOrPrivateKey: string | Buffer | Uint8Array | KeyObject | { key: string | Buffer; passphrase: string; } | ... 16 more ... | RawPrivateKeyInput, options?: SignOptions | undefined): string', gave the following error.
+    Type 'string' is not assignable to type 'number | StringValue | undefined'.
+  Overload 3 of 5, '(payload: string | object | Buffer, secretOrPrivateKey: string | Buffer | Uint8Array | KeyObject | { key: string | Buffer; passphrase: string; } | ... 16 more ... | RawPrivateKeyInput, callback: SignCallback): void', gave the following error.
+    Object literal may only specify known properties, and 'expiresIn' does not exist in type 'SignCallback'.
+src/backend/controllers/user.controller.ts(135,42): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/controllers/user.controller.ts(158,21): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/controllers/user.controller.ts(173,11): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/db.ts(7,7): error TS2353: Object literal may only specify known properties, and 'useNewUrlParser' does not exist in type 'ConnectOptions'.
+src/backend/index.ts(4,10): error TS2305: Module '"./config"' has no exported member 'PORT'.
+src/backend/middleware/auth.middleware.ts(18,18): error TS2349: This expression is not callable.
+  Type 'Number' has no call signatures.
+src/backend/middleware/auth.middleware.ts(29,9): error TS2349: This expression is not callable.
+  Type 'Number' has no call signatures.
+src/backend/middleware/auth.middleware.ts(37,18): error TS2349: This expression is not callable.
+  Type 'Number' has no call signatures.
+src/backend/middleware/error.middleware.ts(2,20): error TS2307: Cannot find module '../utils/logger' or its corresponding type declarations.
+src/backend/middleware/inventory.middleware.ts(2,38): error TS2307: Cannot find module '../Database/Models' or its corresponding type declarations.
+src/backend/middleware/inventory.middleware.ts(117,11): error TS7022: 'idempotencyKey' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/backend/middleware/inventory.middleware.ts(117,40): error TS2448: Block-scoped variable 'idempotencyKey' used before its declaration.
+src/backend/middleware/security.middleware.ts(3,17): error TS2307: Cannot find module 'xss-clean' or its corresponding type declarations.
+src/backend/middleware/security.middleware.ts(5,27): error TS2307: Cannot find module 'express-mongo-sanitize' or its corresponding type declarations.
+src/backend/middleware/security.middleware.ts(79,30): error TS2339: Property 'session' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(185,16): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(185,29): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(189,24): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(189,36): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(189,55): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(192,28): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(192,46): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(192,71): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(200,28): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(200,50): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(200,79): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(208,23): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(208,46): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(208,76): error TS2339: Property 'files' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(219,15): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(219,27): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(220,13): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(220,33): error TS2339: Property 'file' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(249,13): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(249,25): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/middleware/security.middleware.ts(249,54): error TS2339: Property 'user' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/backend/routes/admin.routes.ts(10,10): error TS2305: Module '"../middleware/auth.middleware"' has no exported member 'adminOnly'.
+src/backend/routes/admin.routes.ts(15,12): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'PathParams'.
+src/backend/routes/admin.routes.ts(25,25): error TS2304: Cannot find name 'productRoutes'.
+src/backend/routes/admin.routes.ts(28,22): error TS2304: Cannot find name 'packRoutes'.
+src/backend/routes/admin.routes.ts(31,23): error TS2304: Cannot find name 'offerRoutes'.
+src/backend/routes/admin.routes.ts(34,25): error TS2552: Cannot find name 'shippingRoutes'. Did you mean 'ShippingRate'?
+src/backend/routes/admin.routes.ts(37,23): error TS2304: Cannot find name 'orderRoutes'.
+src/backend/routes/admin.routes.ts(40,26): error TS2304: Cannot find name 'customerRoutes'.
+src/backend/routes/admin.routes.ts(43,24): error TS2304: Cannot find name 'reviewRoutes'.
+src/backend/routes/admin.routes.ts(46,19): error TS2304: Cannot find name 'aiRoutes'.
+src/backend/routes/admin.routes.ts(49,25): error TS2304: Cannot find name 'settingsRoutes'.
+src/backend/routes/order.routes.ts(16,17): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'RequestHandlerParams<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+      Type '(req: any, res: Response, next: any) => any' is not assignable to type 'RequestHandler<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+        Types of parameters 'res' and 'res' are incompatible.
+          Type 'Response<any, Record<string, any>, number>' is missing the following properties from type 'Response': headers, ok, statusText, url, and 9 more.
+src/backend/routes/order.routes.ts(19,20): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'RequestHandlerParams<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+      Type '(req: any, res: Response, next: any) => any' is not assignable to type 'RequestHandler<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+        Types of parameters 'res' and 'res' are incompatible.
+          Type 'Response<any, Record<string, any>, number>' is missing the following properties from type 'Response': headers, ok, statusText, url, and 9 more.
+src/backend/routes/order.routes.ts(32,27): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'RequestHandlerParams<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+      Type '(req: any, res: Response, next: any) => any' is not assignable to type 'RequestHandler<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+        Types of parameters 'res' and 'res' are incompatible.
+          Type 'Response<any, Record<string, any>, number>' is missing the following properties from type 'Response': headers, ok, statusText, url, and 9 more.
+src/backend/routes/pack.routes.ts(12,28): error TS2307: Cannot find module '../middleware/validationSchema' or its corresponding type declarations.
+src/backend/routes/product.routes.ts(11,31): error TS2307: Cannot find module '../middleware/validationSchema' or its corresponding type declarations.
+src/backend/routes/shipping.routes.ts(9,30): error TS2307: Cannot find module '../middleware/validationSchema' or its corresponding type declarations.
+src/backend/routes/user.routes.ts(11,45): error TS2307: Cannot find module '../middleware/validationSchema' or its corresponding type declarations.
+src/backend/routes/user.routes.ts(16,26): error TS2304: Cannot find name 'validateRequest'.
+src/backend/routes/user.routes.ts(19,23): error TS2304: Cannot find name 'validateRequest'.
+src/backend/routes/user.routes.ts(22,19): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'RequestHandlerParams<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+      Type '(req: any, res: Response, next: any) => any' is not assignable to type 'RequestHandler<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+        Types of parameters 'res' and 'res' are incompatible.
+          Type 'Response<any, Record<string, any>, number>' is missing the following properties from type 'Response': headers, ok, statusText, url, and 9 more.
+src/backend/routes/user.routes.ts(25,24): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '(req: any, res: Response, next: any) => any' is not assignable to parameter of type 'RequestHandlerParams<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+      Type '(req: any, res: Response, next: any) => any' is not assignable to type 'RequestHandler<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+        Types of parameters 'res' and 'res' are incompatible.
+          Type 'Response<any, Record<string, any>, number>' is missing the following properties from type 'Response': headers, ok, statusText, url, and 9 more.
+src/backend/seo/routes.ts(12,25): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/seo/routes.ts(13,10): error TS2459: Module '"../seo/utils"' declares 'ALGERIAN_WILAYAS' locally, but it is not exported.
+src/backend/seo/routes.ts(16,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(33,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(44,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(71,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(98,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(118,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(136,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(146,1): error TS2304: Cannot find name 'router'.
+src/backend/seo/routes.ts(155,16): error TS2304: Cannot find name 'router'.
+src/backend/seo/utils.ts(4,37): error TS2307: Cannot find module '../utils/orderNumber' or its corresponding type declarations.
+src/backend/services/ai.service.ts(1,25): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/services/telegram.service.ts(2,23): error TS2307: Cannot find module '../DatabaseModels' or its corresponding type declarations.
+src/backend/services/telegram.service.ts(62,66): error TS18046: 'error' is of type 'unknown'.
+src/backend/services/telegram.service.ts(102,67): error TS18046: 'error' is of type 'unknown'.
+src/backend/services/telegram.service.ts(131,68): error TS18046: 'error' is of type 'unknown'.
+src/backend/services/telegram.service.ts(161,62): error TS18046: 'error' is of type 'unknown'.
+src/backend/tests/order.test.ts(2,10): error TS2614: Module '"../../backend/index"' has no exported member 'startServer'. Did you mean to use 'import startServer from "../../backend/index"' instead?
+src/backend/tests/order.test.ts(3,33): error TS2307: Cannot find module '../../DatabaseModels' or its corresponding type declarations.
+src/backend/tests/order.test.ts(5,5): error TS7034: Variable 'app' implicitly has type 'any' in some locations where its type cannot be determined.
+src/backend/tests/order.test.ts(6,5): error TS7034: Variable 'server' implicitly has type 'any' in some locations where its type cannot be determined.
+src/backend/tests/order.test.ts(15,3): error TS7005: Variable 'server' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(38,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(68,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(78,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(103,39): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(124,39): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(176,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(185,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(205,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/order.test.ts(227,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(2,10): error TS2614: Module '"../../backend/index"' has no exported member 'startServer'. Did you mean to use 'import startServer from "../../backend/index"' instead?
+src/backend/tests/product.test.ts(3,45): error TS2307: Cannot find module '../../DatabaseModels' or its corresponding type declarations.
+src/backend/tests/product.test.ts(5,5): error TS7034: Variable 'app' implicitly has type 'any' in some locations where its type cannot be determined.
+src/backend/tests/product.test.ts(6,5): error TS7034: Variable 'server' implicitly has type 'any' in some locations where its type cannot be determined.
+src/backend/tests/product.test.ts(15,3): error TS7005: Variable 'server' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(27,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(45,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(72,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(82,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(90,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(118,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(127,21): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(147,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/product.test.ts(170,38): error TS7005: Variable 'app' implicitly has an 'any' type.
+src/backend/tests/setup.ts(27,29): error TS18048: 'mongoose.connection.db' is possibly 'undefined'.
+src/Database/Models.ts(290,10): error TS18004: No value exists in scope for the shorthand property 'OrderItem'. Either declare one or provide an initializer.
+src/frontend/public/i18n.ts(3,27): error TS2307: Cannot find module '../locales/ar.json' or its corresponding type declarations.
+src/frontend/public/i18n.ts(4,27): error TS2307: Cannot find module '../locales/fr.json' or its corresponding type declarations.
+src/frontend/public/i18n.ts(5,22): error TS2307: Cannot find module 'i18next-browser-language-detector' or its corresponding type declarations.
+src/frontend/public/i18n.ts(13,4): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(callback?: Callback | undefined): Promise<TFunction<"translation", undefined>>', gave the following error.
+    Object literal may only specify known properties, and 'resources' does not exist in type 'Callback'.
+  Overload 2 of 2, '(options: InitOptions<unknown>, callback?: Callback | undefined): Promise<TFunction<"translation", undefined>>', gave the following error.
+    Object literal may only specify known properties, and 'initImmediate' does not exist in type 'InitOptions<unknown>'.
+src/frontend/src/components/LanguageSelector.tsx(5,11): error TS2339: Property 'language' does not exist on type 'unknown'.
+src/frontend/src/components/LanguageSelector.tsx(5,21): error TS2339: Property 'changeLanguage' does not exist on type 'unknown'.
+src/frontend/src/components/ProductCard.tsx(2,32): error TS2307: Cannot find module 'react-bootstrap' or its corresponding type declarations.
+src/frontend/src/context/LanguageContext.tsx(2,18): error TS2307: Cannot find module '../i18n' or its corresponding type declarations.
+src/frontend/src/context/LanguageContext.tsx(4,25): error TS2554: Expected 1 arguments, but got 0.
+src/frontend/src/pages/AdminDashboardPage.tsx(4,64): error TS2307: Cannot find module 'react-bootstrap' or its corresponding type declarations.
+src/frontend/src/pages/AdminDashboardPage.tsx(8,11): error TS2339: Property 'language' does not exist on type 'unknown'.
+src/frontend/src/pages/CartPage.tsx(4,59): error TS2307: Cannot find module 'react-bootstrap' or its corresponding type declarations.
+src/frontend/src/pages/CartPage.tsx(5,10): error TS2724: '"formik"' has no exported member named 'useForm'. Did you mean 'useFormik'?
+src/frontend/src/pages/CartPage.tsx(9,11): error TS2339: Property 'language' does not exist on type 'unknown'.
+src/frontend/src/pages/CartPage.tsx(35,38): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(36,37): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(37,34): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(42,35): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(43,36): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(44,36): error TS2304: Cannot find name 't'.
+src/frontend/src/pages/CartPage.tsx(54,7): error TS2304: Cannot find name 'window'.
+src/frontend/src/pages/CartPage.tsx(68,8): error TS2304: Cannot find name 'LanguageSelector'.
+src/frontend/src/pages/CartPage.tsx(93,40): error TS2304: Cannot find name 'decreaseQuantity'.
+src/frontend/src/pages/CartPage.tsx(102,40): error TS2304: Cannot find name 'increaseQuantity'.
+src/frontend/src/pages/CheckoutPage.tsx(4,78): error TS2307: Cannot find module 'react-bootstrap' or its corresponding type declarations.
+src/frontend/src/pages/CheckoutPage.tsx(6,10): error TS2724: '"formik"' has no exported member named 'useForm'. Did you mean 'useFormik'?
+src/frontend/src/pages/CheckoutPage.tsx(17,11): error TS2339: Property 'language' does not exist on type 'unknown'.
+src/frontend/src/pages/CheckoutPage.tsx(70,5): error TS2588: Cannot assign to 'formData' because it is a constant.
+src/frontend/src/pages/CheckoutPage.tsx(76,5): error TS2588: Cannot assign to 'formData' because it is a constant.
+src/frontend/src/pages/CheckoutPage.tsx(84,74): error TS2345: Argument of type '(value: string) => boolean' is not assignable to parameter of type 'TestFunction<string | undefined, AnyObject>'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/frontend/src/pages/CheckoutPage.tsx(123,8): error TS2304: Cannot find name 'LanguageSelector'.
+src/frontend/src/pages/CheckoutPage.tsx(149,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/frontend/src/pages/CheckoutPage.tsx(162,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/frontend/src/pages/CheckoutPage.tsx(178,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/frontend/src/pages/CheckoutPage.tsx(196,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/frontend/src/pages/CheckoutPage.tsx(238,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/frontend/src/pages/CheckoutPage.tsx(321,36): error TS2304: Cannot find name 'window'.
+src/frontend/src/pages/ProductListPage.tsx(6,37): error TS2307: Cannot find module 'react-bootstrap' or its corresponding type declarations.
+src/frontend/src/pages/ProductListPage.tsx(9,11): error TS2339: Property 'language' does not exist on type 'unknown'.
+src/utils/logger.ts(1,21): error TS2307: Cannot find module 'winston' or its corresponding type declarations.
+src/utils/logger.ts(8,10): error TS7031: Binding element 'timestamp' implicitly has an 'any' type.
+src/utils/logger.ts(8,21): error TS7031: Binding element 'level' implicitly has an 'any' type.
+src/utils/logger.ts(8,28): error TS7031: Binding element 'message' implicitly has an 'any' type.

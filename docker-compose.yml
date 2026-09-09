@@ -1,0 +1,42 @@
+services:
+  # Backend API
+  api:
+    build: .
+    container_name: dxn-api
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/dxn_store
+      - JWT_SECRET=dxn_dev_secret_change_prod
+      - CORS_ORIGIN=http://localhost:3000
+      - TELEGRAM_BOT_TOKEN=dev_token
+      - TELEGRAM_CHAT_ID=dev_chat_id
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  # MongoDB
+  mongo:
+    image: mongo:7.0
+    container_name: dxn-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INIT_DB=dxn_store
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  # Frontend (optional - can be served separately)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_API_URL=http://localhost:5000
+  #   restart: unless-stopped
+
+volumes:
+  mongo_data:
