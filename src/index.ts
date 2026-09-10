@@ -31,6 +31,7 @@ const serverlessHandler = async (req: any, res: any) => {
     path === "/api/health" ||
     path === "/robots.txt" ||
     path === "/api/seo/robots.txt" ||
+    path === "/meta/webhook" ||
     path.startsWith("/assets/") ||
     path.startsWith("/uploads/") ||
     path.endsWith(".js") ||
