@@ -64,12 +64,33 @@ const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const corsOptions = {
-  origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
-  credentials: true,
-  optionsSuccessStatus: 204,
-};
-app.use(cors(corsOptions));
+
+// On Vercel the SPA and the API are served from the same origin, so browser
+// calls never need CORS headers. For cross-origin consumers, auto-allow the
+// deployment's own domains (branch + permanent production URLs that Vercel
+// sets as env vars) in addition to any explicit CORS_ORIGIN list.
+const vercelOrigins = [
+  process.env.VERCEL_URL,
+  process.env.VERCEL_BRANCH_URL,
+  process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL ?? ""}`,
+]
+  .filter((u): u is string => !!u)
+  .map((u) => `${u.includes("://") ? "" : "https://"}${u}`);
+
+app.use((req, res, next) => {
+  const allowed = [...corsOrigins, ...vercelOrigins];
+  cors({
+    origin(origin, callback) {
+      // Non-browser clients (curl, server-to-server, webhooks) carry no Origin.
+      if (!origin) return callback(null, true);
+      if (allowed.includes(origin)) return callback(null, true);
+      return callback(null, false);
+    },
+    credentials: true,
+    optionsSuccessStatus: 204,
+  })(req, res, next);
+});
 
 // Meta webhooks require the RAW body for HMAC signature verification, so the
 // raw parser must mount BEFORE the JSON parser consumes the stream.
@@ -98,11 +119,22 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 
 // --- API Routes ---
 
-// Health check
+// Health check — DB state is reported verbosely so operators can tell WHY the
+// database is unavailable (missing env var vs. unreachable host) without the
+// URI itself ever being exposed.
 app.get("/api/health", (req, res) => {
+  const configured = !!process.env.MONGODB_URI;
   res.json({
     status: mongoose.connection.readyState === 1 ? "ok" : "degraded",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    dbConfigured: configured,
+    dbReason:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : configured
+          ? "MONGODB_URI set but connection not established"
+          : "MONGODB_URI not configured in this environment",
+    environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
   });
 });
@@ -179,7 +211,11 @@ app.use((req, res) => {
     // Paths that look like files (have a dot-extension) are never SPA routes:
     // a missing /uploads/..., /assets/..., /favicon.ico etc. must 404 instead
     // of returning index.html (which would mislead crawlers and browsers).
-    !path.extname(req.path)
+    !path.extname(req.path) &&
+    // Dotfiles (/.env, /.git, /.htaccess, ...) must never be served the SPA
+    // shell — they are configuration, not routes, and 404-ing them keeps the
+    // server honest about what exists.
+    !req.path.split("/").some((seg) => seg.startsWith(".") && seg !== ".")
   ) {
     // SPA fallback: serve index.html ONLY for browser/frontend GET routes.
     // API and meta paths are explicitly excluded above, so index.html is

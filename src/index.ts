@@ -45,7 +45,11 @@ const serverlessHandler = async (req: any, res: any) => {
       await ensureDB();
     } catch (err) {
       console.error("Database unavailable:", err instanceof Error ? err.message : String(err));
-      if (path.startsWith("/api/") || path.startsWith("/meta/")) {
+      if (path.startsWith("/api/") || path.startsWith("/meta/") || path === "/sitemap.xml") {
+        // sitemap.xml lists products, so it has the same DB requirement as the
+        // API routes — a 503 (Retry-After) is correct for crawlers when the DB
+        // is down, never a 500 crash or a silently-empty sitemap.
+        if (path === "/sitemap.xml") res.setHeader("Retry-After", "3600");
         if (!res.headersSent) {
           // Raw-Node-safe 503: this branch runs BEFORE Express has handled the
           // request, so `res` is the platform response (no .status/.json yet).

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
@@ -7,45 +7,55 @@ import { AuthProvider } from "./context/AuthContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import Header from "./components/Header";
-import AdminLayout from "./components/AdminLayout";
-import ProductListPage from "./pages/ProductListPage";
-import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import AdminReviewPage from "./pages/AdminReviewPage";
-import ProductDetailPage from "./pages/ProductDetailPage";
+
+// Route-level code splitting: the product catalog (the landing route users see
+// first) stays in the critical path; admin + detail pages load on demand,
+// which keeps the initial JS bundle small on slow connections.
+const AdminLayout = lazy(() => import("./components/AdminLayout"));
+const ProductListPage = lazy(() => import("./pages/ProductListPage"));
+const CartPage = lazy(() => import("./pages/CartPage"));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage"));
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const AdminReviewPage = lazy(() => import("./pages/AdminReviewPage"));
+const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
+
+const PageSuspense = ({ children }: { children: React.ReactNode }) => (
+  <Suspense fallback={<div className="text-center py-5">...</div>}>{children}</Suspense>
+);
 
 const App = () => (
   <BrowserRouter>
     <Header />
-    <Routes>
-      <Route path="/" element={<ProductListPage />} />
-      <Route path="/products" element={<ProductListPage />} />
-      <Route path="/product/:slug" element={<ProductDetailPage />} />
-      <Route path="/cart" element={<CartPage />} />
-      <Route path="/checkout" element={<CheckoutPage />} />
-      <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
-      <Route path="/admin/login" element={<AdminLoginPage />} />
-      <Route
-        path="/admin"
-        element={
-          <AdminLayout>
-            <AdminDashboardPage />
-          </AdminLayout>
-        }
-      />
-      <Route
-        path="/admin/reviews"
-        element={
-          <AdminLayout>
-            <AdminReviewPage />
-          </AdminLayout>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <PageSuspense>
+      <Routes>
+        <Route path="/" element={<ProductListPage />} />
+        <Route path="/products" element={<ProductListPage />} />
+        <Route path="/product/:slug" element={<ProductDetailPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminLayout>
+              <AdminDashboardPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminLayout>
+              <AdminReviewPage />
+            </AdminLayout>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </PageSuspense>
   </BrowserRouter>
 );
 
