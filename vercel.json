@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist/**"
+      "includeFiles": "dist/frontend/build/**"
     }
   },
   "rewrites": [
