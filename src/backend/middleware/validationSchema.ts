@@ -58,6 +58,7 @@ const translationSchema = yup.object({
   title: yup.string(),
   description: yup.string(),
   size: yup.string(),
+  specifications: yup.string().max(5000),
 });
 
 const productCreateFields = {

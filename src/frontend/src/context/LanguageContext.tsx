@@ -1,40 +1,59 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import i18n from "../i18n";
+import {
+  normalizeLanguage,
+  readSavedLanguage,
+  writeSavedLanguage,
+  resolveDirection,
+  type UiLanguage,
+  type DocumentDirection,
+} from "../utils/languageSwitcher";
 
 interface LanguageContextType {
-  language: string;
+  language: UiLanguage;
+  dir: DocumentDirection;
   changeLanguage: (lang: string) => void;
 }
 
 const LanguageContext = createContext<LanguageContextType>({
   language: "ar",
+  dir: "rtl",
   changeLanguage: () => {},
 });
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-  const [language, setLanguage] = useState<string>(() => {
-    const saved = localStorage.getItem("dxn_language");
-    return saved || "ar";
-  });
+  // ROOT-CAUSE FIX: the stored value is normalized (case-insensitively) on
+  // read. Previously the raw string was used verbatim, so any persisted value
+  // other than the exact byte "ar" silently rendered French + LTR while the
+  // AR/FR buttons both appeared inactive — i.e. a "reversed" switcher.
+  const [language, setLanguage] = useState<UiLanguage>(() =>
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+      ? readSavedLanguage(window.localStorage)
+      : "ar"
+  );
 
-  // Keep the HTML dir attribute and i18n language in sync whenever language changes.
-  // Without this the whole page layout stays LTR even when the UI is Arabic.
+  const dir = resolveDirection(language);
+
+  // Keep the HTML dir attribute, i18n language and persisted preference in
+  // sync whenever language changes. Without this the whole page layout stays
+  // LTR even when the UI is Arabic.
   useEffect(() => {
-    const dir = language === "ar" ? "rtl" : "ltr";
     if (typeof document !== "undefined") {
       document.documentElement.dir = dir;
       document.documentElement.lang = language;
     }
     i18n.changeLanguage(language);
-    localStorage.setItem("dxn_language", language);
-  }, [language]);
+    if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+      writeSavedLanguage(window.localStorage, language);
+    }
+  }, [language, dir]);
 
   const changeLanguage = (lang: string) => {
-    setLanguage(lang);
+    setLanguage(normalizeLanguage(lang));
   };
 
   return (
-    <LanguageContext.Provider value={{ language, changeLanguage }}>
+    <LanguageContext.Provider value={{ language, dir, changeLanguage }}>
       {children}
     </LanguageContext.Provider>
   );

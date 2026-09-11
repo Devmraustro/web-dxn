@@ -68,6 +68,7 @@ const productTranslationSchema = new Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   size: { type: String },
+  specifications: { type: String },
   metaTitle: { type: String },
   metaDescription: { type: String },
 }, { timestamps: true });

@@ -42,6 +42,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
             {t("لوحة التحكم", "Tableau de bord")}
           </NavLink>
           <NavLink
+            to="/admin/products"
+            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
+          >
+            {t("المنتجات", "Produits")}
+          </NavLink>
+          <NavLink
             to="/admin/reviews"
             className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
           >

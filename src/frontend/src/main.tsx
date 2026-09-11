@@ -19,6 +19,7 @@ const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage")
 const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminReviewPage = lazy(() => import("./pages/AdminReviewPage"));
+const AdminProductsPage = lazy(() => import("./pages/AdminProductsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
@@ -50,6 +51,14 @@ const App = () => (
           element={
             <AdminLayout>
               <AdminReviewPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <AdminLayout>
+              <AdminProductsPage />
             </AdminLayout>
           }
         />

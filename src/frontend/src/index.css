@@ -311,3 +311,109 @@
     padding: 1rem;
   }
 }
+
+/* ===== Phase 23 UI polish: premium buttons + touch-friendly controls ===== */
+/* Applied to primary CTA controls in Cart, Checkout and Admin. Complements
+   Bootstrap's variants (no redesign). min-height 48px = comfortable on mobile. */
+
+.dxn-btn {
+  min-height: 48px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.6rem 1.35rem;
+  transition: background-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.dxn-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dxn-btn-primary {
+  background: linear-gradient(135deg, #14532d 0%, #1d6b3a 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(20, 83, 45, 0.28);
+}
+
+.dxn-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0f4023 0%, #155e32 100%);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(20, 83, 45, 0.34);
+}
+
+.dxn-btn-primary:focus-visible,
+.dxn-btn:focus-visible {
+  outline: 3px solid rgba(212, 175, 55, 0.55);
+  outline-offset: 2px;
+}
+
+.dxn-btn-secondary {
+  background: #f1f3f0;
+  color: #1b3a24;
+  border: 1px solid #d7dcd5;
+}
+
+.dxn-btn-secondary:hover:not(:disabled) {
+  background: #e6e9e3;
+  color: #1b3a24;
+}
+
+.dxn-btn-outline {
+  background: transparent;
+  border: 1.5px solid #14532d;
+  color: #14532d;
+}
+
+.dxn-btn-outline:hover:not(:disabled) {
+  background: rgba(20, 83, 45, 0.08);
+  color: #0f4023;
+}
+
+.dxn-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Loading state: content left intact (spinner injected by the component). */
+.dxn-btn-loading .dxn-btn-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: dxn-spin 0.7s linear infinite;
+}
+
+@keyframes dxn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Success / error feedback tones used by alerts inside the app. */
+.dxn-feedback-success {
+  background: #e9f7ee;
+  border: 1px solid #a7d9b8;
+  color: #14532d;
+  border-radius: 8px;
+}
+
+.dxn-feedback-error {
+  background: #fdeeee;
+  border: 1px solid #f1b8b8;
+  color: #9b1c1c;
+  border-radius: 8px;
+}
+
+/* Admin product table portrait hints */
+@media (max-width: 767px) {
+  .dxn-btn {
+    min-height: 44px;
+  }
+}

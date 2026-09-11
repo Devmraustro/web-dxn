@@ -78,3 +78,37 @@ export const getAdminCatalog = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+/**
+ * Admin-only single-product detail (owner/admin). Unlike the public
+ * /api/products/:id endpoint this returns the FULL product document and every
+ * translation (active, inactive AND placeholder records), so the admin product
+ * editor can load and manage products that the storefront hides. Mounted under
+ * the admin router which already applies `authenticate` + `adminOnly`.
+ */
+export const getAdminProductById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).select("-__v").lean();
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const translations = await ProductTranslation.find({ productId: product._id })
+      .sort({ language: 1 })
+      .select("-__v -_id")
+      .lean();
+
+    res.json({
+      success: true,
+      data: { ...product, translations, _isPlaceholderSeed: isPlaceholderProduct(product) },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("Cast to ObjectId")) {
+      return res.status(400).json({ message: "Invalid product ID format" });
+    }
+    console.error("Get admin product by ID error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};

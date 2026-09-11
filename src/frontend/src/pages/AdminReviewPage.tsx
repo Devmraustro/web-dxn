@@ -250,7 +250,7 @@ const AdminReviewPage = () => {
       <Container className="mt-4">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h1>{t("إدارة التقييمات", "Gestion des avis")}</h1>
-          <Button variant="primary" onClick={openCreate}>
+          <Button variant="primary" className="dxn-btn dxn-btn-primary" onClick={openCreate}>
             {t("إضافة تقييم", "Ajouter un avis")}
           </Button>
         </div>
@@ -306,7 +306,7 @@ const AdminReviewPage = () => {
                                 src={url}
                                 thumbnail
                                 style={{ width: 80, height: 80, objectFit: "cover" }}
-                                alt={`Screenshot ${i + 1}`}
+                                alt={t("لقطة شاشة", "Screenshot") + ` ${i + 1}`}
                               />
                             ))}
                           </div>
@@ -481,7 +481,7 @@ const AdminReviewPage = () => {
             <Button variant="secondary" onClick={resetForm}>
               {t("إلغاء", "Annuler")}
             </Button>
-            <Button variant="primary" type="submit">
+            <Button variant="primary" type="submit" className="dxn-btn dxn-btn-primary" disabled={uploading}>
               {editingId
                 ? t("حفظ التعديلات", "Enregistrer")
                 : t("إنشاء التقييم", "Créer l'avis")}

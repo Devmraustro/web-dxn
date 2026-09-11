@@ -3,9 +3,10 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import LanguageSelector from "./LanguageSelector";
 
 const Header = () => {
-  const { language, changeLanguage } = useLanguage();
+  const { language } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
   const { items, total } = useCart();
   const navigate = useNavigate();
@@ -76,26 +77,7 @@ const Header = () => {
         </ul>
 
         <div className="dxn-header-actions">
-          <div className="language-selector" role="group" aria-label="Language selector">
-            <button
-              type="button"
-              onClick={() => changeLanguage("ar")}
-              className={language === "ar" ? "selected" : ""}
-              aria-pressed={language === "ar"}
-              aria-label="العربية"
-            >
-              AR
-            </button>
-            <button
-              type="button"
-              onClick={() => changeLanguage("fr")}
-              className={language === "fr" ? "selected" : ""}
-              aria-pressed={language === "fr"}
-              aria-label="Français"
-            >
-              FR
-            </button>
-          </div>
+          <LanguageSelector />
 
           {isAdmin ? (
             <button type="button" className="dxn-logout" onClick={handleLogout}>

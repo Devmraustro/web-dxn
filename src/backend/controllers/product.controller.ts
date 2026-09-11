@@ -5,7 +5,42 @@ import { withPublicReadScope, isPlaceholderProduct } from "../services/placehold
 /** Escape regex metacharacters before a user string is used as a $regex source. */
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const TRANSLATION_CONTENT_KEYS = ["language", "title", "description", "size", "metaTitle", "metaDescription"] as const;
+const TRANSLATION_CONTENT_KEYS = [
+  "language",
+  "title",
+  "description",
+  "size",
+  "specifications",
+  "metaTitle",
+  "metaDescription",
+] as const;
+
+/**
+ * Server-side allowlist of fields an admin may write on a Product. Anything
+ * else in the request body (discounts, client prices, flags, unknown keys) is
+ * dropped here so the database only ever stores authoritative, validated
+ * values. `price`, `stockQuantity` and `isActive` are additionally validated
+ * by the yup schema that runs BEFORE this controller.
+ */
+const ALLOWED_PRODUCT_FIELDS = [
+  "price",
+  "compareAtPrice",
+  "stockQuantity",
+  "isActive",
+  "isFeatured",
+  "sortOrder",
+  "image",
+  "images",
+] as const;
+
+/** Copy only allowlisted product fields from an untrusted request body. */
+function pickAllowedProductFields(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED_PRODUCT_FIELDS) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  return out;
+}
 
 /** Extract only the translatable content fields (never _id / productId). */
 function pickTranslationContent(doc: any): Record<string, unknown> {
@@ -165,6 +200,7 @@ async function ensureTranslations(productId: any, translations?: { ar?: any; fr?
     if (t.title !== undefined) patch.title = String(t.title);
     if (t.description !== undefined) patch.description = String(t.description);
     if (t.size !== undefined) patch.size = String(t.size);
+    if (t.specifications !== undefined) patch.specifications = String(t.specifications);
     await ProductTranslation.findOneAndUpdate(
       { productId, language: lang },
       { $set: patch },
@@ -176,7 +212,7 @@ async function ensureTranslations(productId: any, translations?: { ar?: any; fr?
 // POST /api/products - Create product (admin)
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { sku, slug, translations, ...productData } = req.body;
+    const { sku, slug, translations, ...body } = req.body;
 
     const existingSku = await Product.findOne({ sku });
     if (existingSku) {
@@ -187,6 +223,9 @@ export const createProduct = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Slug already exists" });
     }
 
+    // Only allowlisted, schema-validated fields reach the database. Client
+    // discount/flags/pricing extras are silently dropped.
+    const productData = pickAllowedProductFields(body);
     const product = await Product.create({ sku, slug, ...productData });
 
     await ensureTranslations(product._id, translations);
@@ -202,7 +241,7 @@ export const createProduct = async (req: Request, res: Response) => {
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { sku, slug, translations, ...updateData } = req.body;
+    const { sku, slug, translations, ...body } = req.body;
 
     if (sku) {
       const existingSku = await Product.findOne({ sku, _id: { $ne: id } });
@@ -217,7 +256,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       }
     }
 
-    const update: Record<string, unknown> = { ...updateData };
+    const update: Record<string, unknown> = pickAllowedProductFields(body);
     if (sku !== undefined) update.sku = sku;
     if (slug !== undefined) update.slug = slug;
 

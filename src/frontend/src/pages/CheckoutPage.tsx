@@ -1,6 +1,9 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useCart } from "../context/CartContext";
+import { CatalogEntry } from "../utils/cartReconcile";
+import { resolveOrderOutcome } from "../utils/orderFlow";
+import { pickProductTitle } from "../components/ProductCard";
 import axios from "axios";
 import { Container, Row, Col, Form, Button, Alert, Card } from "react-bootstrap";
 import * as yup from "yup";
@@ -30,17 +33,17 @@ const localize = (language: string) => {
 
 const CheckoutPage = () => {
   const { language } = useLanguage();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, validItems, hasInvalid, subtotal, clearCart, reconcile } = useCart();
   const navigate = useNavigate();
 
   const [deliveryMethod, setDeliveryMethod] = useState<"home" | "office">("home");
   const [shippingFee, setShippingFee] = useState(0);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "baridimob">("cod");
+  const [catalogChecked, setCatalogChecked] = useState(false);
 
   // Stable idempotency key per checkout session so a double-tap / network retry
   // can never create two orders (the server deduplicates on this key).
@@ -52,6 +55,57 @@ const CheckoutPage = () => {
 
   const msg = localize(language);
   const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+
+  // Reconcile the cart against the authoritative public catalog on load so a
+  // stale/inactive/placeholder/out-of-stock item can never silently reach the
+  // server — the backend remains the final boundary.
+  useEffect(() => {
+    if (items.length === 0) {
+      setCatalogChecked(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [productsRes, packsRes] = await Promise.all([
+          axios.get(`/api/products?language=${language}`, { timeout: 8000 }),
+          axios.get("/api/packs", { timeout: 8000 }),
+        ]);
+        if (cancelled) return;
+        const products = new Map<string, CatalogEntry>();
+        const productList: any[] = Array.isArray(productsRes.data?.data) ? productsRes.data.data : [];
+        for (const p of productList) {
+          products.set(String(p._id), {
+            id: String(p._id),
+            price: Number(p.price) || 0,
+            stockQuantity: Number(p.stockQuantity) || 0,
+            name: pickProductTitle(p, language) || p.sku || "Product",
+          });
+        }
+        const packs = new Map<string, CatalogEntry>();
+        const packList: any[] = Array.isArray(packsRes.data?.data) ? packsRes.data.data : [];
+        for (const p of packList) {
+          packs.set(String(p._id), {
+            id: String(p._id),
+            price: Number(p.price) || 0,
+            stockQuantity: 1,
+            name: p.name || "Pack",
+          });
+        }
+        reconcile(products, packs, true);
+      } catch (err) {
+        if (cancelled) return;
+        // Transient failure: keep the cart untouched; the server still guards.
+        console.error("Checkout reconcile error:", err);
+        reconcile(undefined, undefined, false);
+      } finally {
+        if (!cancelled) setCatalogChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [language, items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Wilaya options: canonical 58-wilaya dataset, enriched with live DB ids
   // when available. The VALUE is always the canonical romanized name so order
@@ -184,6 +238,16 @@ const CheckoutPage = () => {
           setIsSubmitting(false);
           return;
         }
+        if (hasInvalid) {
+          setSubmitError(
+            t(
+              "سلتك تحتوي على منتجات غير متوفرة. ارجع إلى السلة واحذفها قبل إتمام الطلب.",
+              "Votre panier contient des articles indisponibles. Retournez au panier et retirez-les avant de commander."
+            )
+          );
+          setIsSubmitting(false);
+          return;
+        }
         const response = await axios.post(
           "/api/orders",
           {
@@ -193,7 +257,7 @@ const CheckoutPage = () => {
               phone: values.phone,
               secondPhone: values.secondPhone || "",
             },
-            cartItems: items.map((i) => ({
+            cartItems: validItems.map((i) => ({
               productId: i.productId,
               packId: i.packId,
               quantity: i.quantity,
@@ -209,12 +273,25 @@ const CheckoutPage = () => {
           },
           { headers: { "Idempotency-Key": idempotencyKey.current } }
         );
-        const orderNumber = response.data?.data?.orderNumber;
-        setShowSuccess(true);
-        clearCart();
-        if (orderNumber) {
-          setTimeout(() => navigate(`/order-confirmation/${orderNumber}`), 800);
+        // Success screen only after a confirmed successful backend creation.
+        const outcome = resolveOrderOutcome(
+          response.status,
+          response.data,
+          language as "ar" | "fr",
+          t("فشل إرسال الطلب. حاول مرة أخرى.", "Échec de l'envoi de la commande. Réessayez.")
+        );
+        if (outcome.showSuccess) {
+          clearCart();
+          const orderNumber = outcome.orderNumber || String(response.data?.data?.orderNumber || "");
+          setIsSubmitting(false);
+          if (orderNumber) {
+            navigate(`/order-confirmation/${encodeURIComponent(orderNumber)}`, { replace: true });
+          } else {
+            navigate("/order-confirmation", { replace: true });
+          }
+          return;
         }
+        setSubmitError(outcome.errorMessage || "Error");
         setIsSubmitting(false);
       } catch (err: any) {
         console.error("Order submission error:", err);
@@ -254,6 +331,24 @@ const CheckoutPage = () => {
       {shippingError && (
         <Alert variant="warning" role="status" aria-live="polite">
           {shippingError}
+        </Alert>
+      )}
+      {hasInvalid && (
+        <Alert variant="warning" role="status" aria-live="polite">
+          {t(
+            "سلتك تحتوي على منتجات غير متوفرة أو ملغاة من المتجر. ارجع إلى السلة واحذفها قبل إتمام الطلب.",
+            "Votre panier contient des articles indisponibles ou retirés de la boutique. Retournez au panier et retirez-les avant de commander."
+          )}
+        </Alert>
+      )}
+      {items.length === 0 && (
+        <Alert variant="info" role="status" aria-live="polite">
+          {t("السلة فارغة — أضف منتجات قبل إتمام الطلب.", "Panier vide — ajoutez des produits avant de commander.")}{" "}
+          <span>
+            <Button as="a" href="/products" variant="link" className="p-0">
+              {t("تصفح المنتجات", "Parcourir les produits")}
+            </Button>
+          </span>
         </Alert>
       )}
 
@@ -476,26 +571,24 @@ const CheckoutPage = () => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSubmitting || !confirmed || items.length === 0}
+              className="w-100 mt-3 dxn-btn dxn-btn-primary"
+              disabled={isSubmitting || !confirmed || items.length === 0 || hasInvalid || !catalogChecked}
               aria-busy={isSubmitting}
-              className="w-100 mt-3"
             >
-              {isSubmitting
-                ? t("جارٍ الإرسال...", "Envoi en cours...")
-                : t("تأكيد الطلب", "Confirmer la commande")}
+              {isSubmitting ? (
+                <>
+                  <span className="dxn-btn-spinner" aria-hidden="true"></span>
+                  {t("جارٍ الإرسال...", "Envoi en cours...")}
+                </>
+              ) : hasInvalid ? (
+                t("احذف المنتجات غير المتوفرة أولاً", "Retirez d'abord les articles indisponibles")
+              ) : (
+                t("تأكيد الطلب", "Confirmer la commande")
+              )}
             </Button>
           </Form>
         </Card.Body>
       </Card>
-
-      {showSuccess && (
-        <div className="mt-4 text-center" role="status" aria-live="polite">
-          <h3>{t("تم تأكيد الطلب", "Commande confirmée")}</h3>
-          <Button onClick={() => (window.location.href = "/")}>
-            {t("متابعة التسوق", "Continuer les achats")}
-          </Button>
-        </div>
-      )}
     </Container>
   );
 };

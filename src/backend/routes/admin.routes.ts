@@ -6,7 +6,7 @@ import {
   getTopProducts,
   getTopWilayas,
 } from "../controllers/admin/dashboard.controller";
-import { getAdminCatalog } from "../controllers/admin/catalog.controller";
+import { getAdminCatalog, getAdminProductById } from "../controllers/admin/catalog.controller";
 import { authenticate, adminOnly } from "../middleware/auth.middleware";
 
 const router = Router();
@@ -27,5 +27,9 @@ router.get("/dashboard/top-wilayas", getTopWilayas);
 // can be renamed, deactivated or cleaned up through the existing admin write
 // endpoints. This route is NEVER public.
 router.get("/catalog", getAdminCatalog);
+
+// Admin single-product detail (full product + all translations, incl. inactive
+// and placeholder records) for the admin product editor. NEVER public.
+router.get("/products/:id", getAdminProductById);
 
 export default router;

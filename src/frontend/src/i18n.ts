@@ -3,6 +3,7 @@ import { initReactI18next } from "react-i18next";
 import arTranslation from "../public/locales/ar.json";
 import frTranslation from "../public/locales/fr.json";
 import LanguageDetector from "i18next-browser-languagedetector";
+import { normalizeLanguage } from "./utils/languageSwitcher";
 
 i18n
   .use(LanguageDetector)
@@ -16,7 +17,10 @@ i18n
         translation: frTranslation,
       },
     },
-    lng: typeof window !== "undefined" ? localStorage.getItem("dxn_language") || "ar" : "ar",
+    lng:
+      typeof window !== "undefined"
+        ? normalizeLanguage(window.localStorage.getItem("dxn_language"))
+        : "ar",
     fallbackLng: "ar",
     interpolation: {
       escapeValue: false, // React already escapes values
