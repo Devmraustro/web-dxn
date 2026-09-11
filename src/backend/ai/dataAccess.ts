@@ -9,6 +9,7 @@ import { DataAccess } from "./core/retrieval";
 import { CatalogItem, OfferInfo, ShippingInfo } from "./core/types";
 import { matchesQuery, queryTerms } from "./core/catalogSearch";
 import { escapeRegex } from "../../utils/regex";
+import { isPlaceholderProduct, isPlaceholderPack, isPlaceholderOffer } from "../services/placeholderCatalog.service";
 
 // Dynamic require so unit tests (which never call this module) do not need a
 // server connection or the models to be loaded.
@@ -49,11 +50,12 @@ export class MongooseDataAccess implements DataAccess {
     })
       .select("productId language title")
       .lean();
+    const visibleProducts = products.filter((p: any) => !isPlaceholderProduct(p));
     const titleById: Record<string, string> = {};
     for (const t of translations) {
       if (!titleById[t.productId] && t.title) titleById[t.productId] = t.title;
     }
-    return products.map((p: any) =>
+    return visibleProducts.map((p: any) =>
       toCatalogItem(p, "product", this.storeUrlBase, titleById[String(p._id)] || p.sku || "Produit")
     );
   }
@@ -61,7 +63,9 @@ export class MongooseDataAccess implements DataAccess {
   async getPacks(): Promise<CatalogItem[]> {
     const m = models();
     const packs = await m.Pack.find({ isActive: true }).lean();
-    return packs.map((p: any) => toCatalogItem(p, "pack", this.storeUrlBase, p.name || "Pack"));
+    return packs
+      .filter((p: any) => !isPlaceholderPack(p))
+      .map((p: any) => toCatalogItem(p, "pack", this.storeUrlBase, p.name || "Pack"));
   }
 
   async searchCatalog(query: string): Promise<CatalogItem[]> {
@@ -84,12 +88,14 @@ export class MongooseDataAccess implements DataAccess {
         },
       ],
     }).lean();
-    return offers.map((o: any) => ({
-      id: String(o._id),
-      title: o.title,
-      type: o.type,
-      value: o.value,
-    }));
+    return offers
+      .filter((o: any) => !isPlaceholderOffer(o))
+      .map((o: any) => ({
+        id: String(o._id),
+        title: o.title,
+        type: o.type,
+        value: o.value,
+      }));
   }
 
   async getShippingInfo(wilaya?: string): Promise<ShippingInfo> {

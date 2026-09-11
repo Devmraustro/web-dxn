@@ -3,6 +3,7 @@ import {
   createReview,
   getProductReviews,
   getAllReviews,
+  getAllReviewsAdmin,
   updateReview,
   deleteReview,
 } from "../controllers/review.controller";
@@ -14,6 +15,7 @@ const router = Router();
 
 // Public read endpoints
 router.get("/", getAllReviews);
+router.get("/all", authenticate, adminOnly, getAllReviewsAdmin);
 router.get("/product/:productId", getProductReviews);
 
 // Admin-only creation

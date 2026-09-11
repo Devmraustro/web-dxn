@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Offer, Product, Pack } from "../../Database/Models";
+import { withPublicOfferReadScope, isPlaceholderProduct, isPlaceholderPack } from "../services/placeholderCatalog.service";
 
 // GET /api/offers - Get all active offers
 export const getOffers = async (req: Request, res: Response) => {
@@ -10,7 +11,7 @@ export const getOffers = async (req: Request, res: Response) => {
     if (featured) query.isFeatured = featured === "true";
     if (type) query.type = type;
     
-    const offers = await Offer.find(query)
+    const offers = await Offer.find(withPublicOfferReadScope(req, query))
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean();
     
@@ -21,12 +22,12 @@ export const getOffers = async (req: Request, res: Response) => {
         
         if (offer.productId) {
           const product = await Product.findById(offer.productId).select("sku price isActive").lean();
-          if (product) {
+          if (product && product.isActive && !isPlaceholderProduct(product)) {
             relatedEntity = { type: "product", ...product };
           }
         } else if (offer.packId) {
           const pack = await Pack.findById(offer.packId).select("price isActive name").lean();
-          if (pack) {
+          if (pack && pack.isActive && !isPlaceholderPack(pack)) {
             relatedEntity = { type: "pack", ...pack };
           }
         }
@@ -53,7 +54,7 @@ export const getOfferById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    const offer = await Offer.findById(id).lean();
+    const offer = await Offer.findOne(withPublicOfferReadScope(req, { _id: id })).lean();
     if (!offer) {
       return res.status(404).json({ message: "Offer not found" });
     }
@@ -61,13 +62,13 @@ export const getOfferById = async (req: Request, res: Response) => {
     let relatedEntity = null;
     
     if (offer.productId) {
-      const product = await Product.findById(offer.productId).select("sku price name descriptions").lean();
-      if (product) {
+      const product = await Product.findById(offer.productId).select("sku price name descriptions isActive").lean();
+      if (product && product.isActive && !isPlaceholderProduct(product)) {
         relatedEntity = { type: "product", ...product };
       }
     } else if (offer.packId) {
-      const pack = await Pack.findById(offer.packId).select("price name description").lean();
-      if (pack) {
+      const pack = await Pack.findById(offer.packId).select("price name description isActive").lean();
+      if (pack && pack.isActive && !isPlaceholderPack(pack)) {
         relatedEntity = { type: "pack", ...pack };
       }
     }

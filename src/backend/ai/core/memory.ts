@@ -24,6 +24,9 @@ export interface ConversationStore {
 
 export const DEFAULT_CONTEXT_LIMIT = 10;
 
+/** Hard cap on stored messages per conversation to bound memory growth. */
+export const MAX_STORED_MESSAGES = DEFAULT_CONTEXT_LIMIT * 4;
+
 /**
  * Build an LLM context from conversation history, applying the context limit
  * and never exceeding it.
@@ -63,7 +66,7 @@ export class InMemoryConversationStore implements ConversationStore {
   async append(id: string, message: MemoryMessage): Promise<void> {
     const h = this.db.get(id) || [];
     h.push({ ...message, timestamp: message.timestamp || Date.now() });
-    this.db.set(id, h);
+    this.db.set(id, h.slice(-MAX_STORED_MESSAGES));
   }
   async clear(id: string): Promise<void> {
     this.db.delete(id);

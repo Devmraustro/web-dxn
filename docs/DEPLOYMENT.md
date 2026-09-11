@@ -52,6 +52,31 @@ npm run dev       # ts-node (dev)
 npm start         # compiled build
 ```
 
+## Admin provisioning & catalog seed
+
+Public registration always creates `staff`; owner/admin accounts are
+provisioned out-of-band with the seed CLI (`docs/EXTERNAL-CONFIGURATION.md`
+required env: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, optional `ADMIN_ROLE`).
+
+```
+npm run seed                # admin + starter catalog
+npm run seed:admin          # admin account only
+npm run seed:catalog        # starter catalog only
+npm run seed -- --admin --reset   # also reset the admin password
+```
+
+Safety of `seed`:
+- The password is bcrypt-hashed before storage and never logged.
+- An existing user's password is never changed unless `--reset` is given.
+- An existing role is never downgraded (owner always stays owner).
+- Products/packs/offers are inserted only when their `sku`/`slug` is new —
+  admin-maintained data is never overwritten.
+
+> The starter catalog (`src/backend/data/dxnCatalog.ts`) ships PLACEHOLDER
+> prices and stock. Confirm every price against the official DXN price list
+> and set real stock before accepting orders — the buyer is charged the
+> server-side price shown in the catalog.
+
 ## Serve Meta webhooks
 
 - Must be reachable at `https://<public-domain>/meta/webhook` over **HTTPS**

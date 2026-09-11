@@ -106,6 +106,30 @@ export const getAllReviews = async (req: Request, res: Response) => {
   }
 };
 
+// GET /api/reviews/all - Admin list including unpublished (draft) reviews.
+// Public callers keep /api/reviews (published-only). This endpoint is mounted
+// behind authenticate+adminOnly so drafts are never exposed anonymously.
+export const getAllReviewsAdmin = async (req: Request, res: Response) => {
+  try {
+    const { productId, rating } = req.query;
+    const filter: any = {};
+
+    if (productId) {
+      if (!OBJECT_ID_RE.test(productId as string)) {
+        return res.status(400).json({ message: "Invalid product ID format" });
+      }
+      filter.productId = productId;
+    }
+    if (rating) filter.rating = parseInt(rating as string);
+
+    const reviews = await Review.find(filter).sort({ createdAt: -1 }).lean();
+    res.json({ success: true, data: reviews });
+  } catch (error) {
+    console.error("Get all reviews (admin) error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 export const updateReview = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -164,6 +188,7 @@ export default {
   createReview,
   getProductReviews,
   getAllReviews,
+  getAllReviewsAdmin,
   updateReview,
   deleteReview,
 };

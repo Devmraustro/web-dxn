@@ -22,10 +22,11 @@ uploads/
 data/
 *.pid
 
-# The canonical wilaya seed is SOURCE data and must be tracked, so re-include
-# this one path under the generic data/ rule above.
+# The canonical wilaya seed and starter catalog are SOURCE data and must be
+# tracked, so re-include these paths under the generic data/ rule above.
 !src/backend/data/
 !src/backend/data/algerianWilayas.ts
+!src/backend/data/dxnCatalog.ts
 
 # OS files
 .DS_Store
@@ -42,3 +43,9 @@ docker-compose.override.yml
 
 # Test artifacts
 *.log.err
+
+# Temporary verification directories (local mongod, smoke-test output)
+.mongo-test/
+tmp-run/
+.vercel
+.env*

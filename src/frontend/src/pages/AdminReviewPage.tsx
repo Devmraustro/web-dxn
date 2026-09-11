@@ -63,7 +63,7 @@ const AdminReviewPage = () => {
 
   const loadReviews = async () => {
     try {
-      const response = await axios.get("/api/reviews");
+      const response = await axios.get("/api/reviews/all");
       setReviews(response.data.data);
     } catch (err) {
       console.error("Error loading reviews:", err);

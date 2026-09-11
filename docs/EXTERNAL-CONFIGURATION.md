@@ -35,7 +35,8 @@ Status vocabulary used throughout this project:
 | Item | Where | Notes |
 |------|-------|-------|
 | Running MongoDB instance | `.env` `MONGODB_URI` | catalog, conversations, orders live here |
-| Data seeded | — | product/pack/pricing must exist for retrieval to answer |
+| Data seeded | `npm run seed:catalog` | starter catalog is idempotent (never overwrites admin data); confirm prices before go-live |
+| Owner/admin account | `npm run seed:admin` | `ADMIN_EMAIL` / `ADMIN_PASSWORD` (optionally `ADMIN_ROLE`) in `.env` |
 
 > The AI module is tested against an in-memory catalog and does **not** require
 > MongoDB to pass tests. In production the `MongooseDataAccess` adapter reads the

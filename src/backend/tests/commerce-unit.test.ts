@@ -14,6 +14,8 @@ import {
 import { defaultShippingFee } from "../services/shipping.service";
 import { offerCreateSchema, cartItemSchema } from "../middleware/validationSchema";
 import { generateSitemap, generateRobotsTxt, ALGERIAN_WILAYAS } from "../seo/utils";
+import { PLACEHOLDER_PRODUCT_IDENTIFIERS } from "../services/placeholderCatalog.service";
+import { InMemoryConversationStore, MAX_STORED_MESSAGES } from "../ai/core/memory";
 
 describe("commerce — money rounding", () => {
   it("roundMoney rounds to 2 decimals", () => {
@@ -157,11 +159,48 @@ describe("seo — canonical wilaya data drives generated output", () => {
     expect(sitemap).not.toContain("?wilaya=");
   });
 
+  it("generateSitemap excludes placeholder (seed-only) products even when isActive", () => {
+    const placeholderSlug = [...PLACEHOLDER_PRODUCT_IDENTIFIERS][0] || "site-user-starter-product-001";
+    const sitemap = generateSitemap(
+      [
+        { slug: "dxn-ganoderma", isActive: true, updatedAt: new Date("2026-01-01") },
+        { slug: placeholderSlug, isActive: true, updatedAt: new Date("2026-01-01") },
+      ],
+      "https://store.example"
+    );
+    expect(sitemap).toContain("/product/dxn-ganoderma");
+    expect(sitemap).not.toContain(`/product/${encodeURIComponent(placeholderSlug)}`);
+  });
+
   it("generateRobotsTxt disallows admin/api/meta and lists the sitemap", () => {
     const robots = generateRobotsTxt();
     expect(robots).toContain("Disallow: /admin");
     expect(robots).toContain("Disallow: /api/");
     expect(robots).toContain("Disallow: /meta/");
     expect(robots).toContain("Sitemap: https://dxn.dz/sitemap.xml");
+  });
+});
+
+describe("ai memory — bounded history store (in-memory, DB-free)", () => {
+  it("caps stored history to MAX_STORED_MESSAGES and keeps the newest tail", async () => {
+    const store = new InMemoryConversationStore();
+    const id = "conv-test-1";
+    for (let i = 0; i < MAX_STORED_MESSAGES + 20; i++) {
+      await store.append(id, { role: i % 2 === 0 ? "user" : "assistant", content: `msg-${i}` });
+    }
+    const history = await store.getHistory(id);
+    expect(history.length).toBe(MAX_STORED_MESSAGES);
+    expect(history[0].content).toBe("msg-20");
+    expect(history[history.length - 1].content).toBe(`msg-${MAX_STORED_MESSAGES + 19}`);
+  });
+
+  it("keeps history under the cap across many independent conversations", async () => {
+    const store = new InMemoryConversationStore();
+    for (let i = 0; i < 10; i++) {
+      for (let j = 0; j < 50; j++) {
+        await store.append(`conv-${i}`, { role: "user", content: `${i}-${j}` });
+      }
+      expect((await store.getHistory(`conv-${i}`)).length).toBeLessThanOrEqual(MAX_STORED_MESSAGES);
+    }
   });
 });

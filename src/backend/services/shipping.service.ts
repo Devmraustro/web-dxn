@@ -53,4 +53,42 @@ export async function resolveShippingFee(
   return defaultShippingFee(method);
 }
 
-export default { resolveShippingFee, defaultShippingFee };
+/**
+ * Verified wilaya-aware shipping resolution for order creation.
+ *
+ * Unlike `resolveShippingFee`, an unrecognized wilaya (not in the 58-wilaya
+ * canonical dataset / Wilaya collection) is a hard failure (`null`) instead of
+ * silently falling back to the default fee. A recognized wilaya with no
+ * configured ShippingRate still falls back to the env default per DXN rules.
+ */
+export async function resolveShippingFeeStrict(
+  wilayaInput: string,
+  method: "home" | "office"
+): Promise<number | null> {
+  const input = typeof wilayaInput === "string" ? wilayaInput.trim() : "";
+  if (!input) return null;
+
+  if (OBJECT_ID_RE.test(input)) {
+    const wilaya = await Wilaya.findOne({ _id: input, isActive: true }).select("_id").lean();
+    if (!wilaya) return null;
+    const rate = await ShippingRate.findOne({ wilayaId: wilaya._id, deliveryMethod: method, isActive: true }).lean();
+    if (rate && typeof rate.price === "number" && rate.price >= 0) return roundMoney(rate.price);
+    return defaultShippingFee(method);
+  }
+
+  const wilaya = await Wilaya.findOne({
+    $or: [
+      { name: { $regex: `^${escapeRegex(input)}$`, $options: "i" } },
+      { nameFr: { $regex: `^${escapeRegex(input)}$`, $options: "i" } },
+      { nameAr: { $regex: `^${escapeRegex(input)}$` } },
+    ],
+    isActive: true,
+  }).select("_id").lean();
+  if (!wilaya) return null;
+
+  const rate = await ShippingRate.findOne({ wilayaId: wilaya._id, deliveryMethod: method, isActive: true }).lean();
+  if (rate && typeof rate.price === "number" && rate.price >= 0) return roundMoney(rate.price);
+  return defaultShippingFee(method);
+}
+
+export default { resolveShippingFee, resolveShippingFeeStrict, defaultShippingFee };

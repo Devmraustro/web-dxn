@@ -28,7 +28,13 @@ export function verifyWebhook(
 ): { ok: boolean; challenge?: string; reason?: string } {
   const mode = query["hub.mode"];
   const token = query["hub.verify_token"];
-  if (mode === "subscribe" && token === config.verifyToken) {
+  if (
+    mode === "subscribe" &&
+    typeof token === "string" &&
+    typeof config.verifyToken === "string" &&
+    token.length === config.verifyToken.length &&
+    crypto.timingSafeEqual(Buffer.from(token), Buffer.from(config.verifyToken))
+  ) {
     return { ok: true, challenge: query["hub.challenge"] };
   }
   return { ok: false, reason: "invalid verification request" };

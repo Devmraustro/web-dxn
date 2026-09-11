@@ -7,6 +7,7 @@ import path from "path";
 import mongoose from "mongoose";
 import { securityHeaders, noSqlInjectionProtection, rateLimiter, validateInput } from "./middleware/security.middleware";
 import { UPLOAD_DIR } from "./config/storage";
+import { waitForReady } from "./utils/readyState";
 
 dotenv.config();
 
@@ -122,18 +123,28 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 // Health check — DB state is reported verbosely so operators can tell WHY the
 // database is unavailable (missing env var vs. unreachable host) without the
 // URI itself ever being exposed.
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
   const configured = !!process.env.MONGODB_URI;
+  // Bounded cold-start wait: on a cold serverless/Vercel function the DB is
+  // often still connecting when the very first request arrives, so a naive
+  // synchronous readyState check reports "degraded" for several seconds even
+  // though everything is fine. Wait a BOUNDED window (2.5s, never unbounded)
+  // for the connection to establish, then report. Warm path (already ready)
+  // returns immediately with no sleep. On timeout we report degraded — we never
+  // crash, never throw, never leak secrets, and never delay past the bound.
+  const ready = await waitForReady(
+    () => mongoose.connection.readyState === 1,
+    { timeoutMs: 2_500 }
+  );
   res.json({
-    status: mongoose.connection.readyState === 1 ? "ok" : "degraded",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    status: ready ? "ok" : "degraded",
+    db: ready ? "connected" : "disconnected",
     dbConfigured: configured,
-    dbReason:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : configured
-          ? "MONGODB_URI set but connection not established"
-          : "MONGODB_URI not configured in this environment",
+    dbReason: ready
+      ? "connected"
+      : configured
+        ? "MONGODB_URI set but connection not established within 2.5s"
+        : "MONGODB_URI not configured in this environment",
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
   });

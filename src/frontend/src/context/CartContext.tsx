@@ -22,6 +22,8 @@ interface CartContextType {
 
 const STORAGE_KEY = "dxn_cart";
 
+const roundMoney = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
 const CartContext = createContext<CartContextType>({
   items: [],
   addItem: () => {},
@@ -57,8 +59,9 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         next[existing] = {
           ...next[existing],
           quantity: next[existing].quantity + item.quantity,
-          totalPrice:
-            (next[existing].quantity + item.quantity) * next[existing].unitPrice,
+          totalPrice: roundMoney(
+            (next[existing].quantity + item.quantity) * next[existing].unitPrice
+          ),
         };
         return next;
       }
@@ -74,7 +77,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     setItems((current) =>
       current.map((i, idx) =>
         idx === index
-          ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice }
+          ? { ...i, quantity: i.quantity + 1, totalPrice: roundMoney((i.quantity + 1) * i.unitPrice) }
           : i
       )
     );
@@ -88,7 +91,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
             ? {
                 ...i,
                 quantity: Math.max(1, i.quantity - 1),
-                totalPrice: Math.max(1, i.quantity - 1) * i.unitPrice,
+                totalPrice: roundMoney(Math.max(1, i.quantity - 1) * i.unitPrice),
               }
             : i
         )
@@ -97,7 +100,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const clearCart = () => setItems([]);
 
-  const subtotal = items.reduce((sum, i) => sum + i.totalPrice, 0);
+  const subtotal = roundMoney(items.reduce((sum, i) => sum + i.totalPrice, 0));
   const total = subtotal;
 
   return (

@@ -1,4 +1,5 @@
 import { ALGERIAN_WILAYAS as WILAYAS_DATA } from "../data/algerianWilayas";
+import { isPlaceholderProduct } from "../services/placeholderCatalog.service";
 
 // Canonical 58-wilaya list (single source of truth, shared with the shipping
 // dataset). Sitemap entries use the romanized name in the query string.
@@ -79,7 +80,7 @@ export const generateSitemap = (products: any[], urlBase: string = "https://dxn.
     .join("\n");
 
   const productEntries = (products || [])
-    .filter((p) => p && p.isActive && p.slug)
+    .filter((p) => p && p.isActive && p.slug && !isPlaceholderProduct(p))
     .map((product) => {
       const lastmod = product.updatedAt ? new Date(product.updatedAt).toISOString().split("T")[0] : today;
       return `    <url>

@@ -24,7 +24,10 @@ export const serveSitemap = async (_req: Request, res: Response): Promise<void> 
       .select("slug updatedAt")
       .lean();
 
-    const sitemap = generateSitemap(products);
+    const sitemap = generateSitemap(
+      products,
+      `${(process.env.BASE_URL || "https://dxn.dz").replace(/\/+$/, "")}`
+    );
 
     res.type("application/xml").send(sitemap);
   } catch (error) {

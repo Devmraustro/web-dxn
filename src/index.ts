@@ -29,6 +29,7 @@ const serverlessHandler = async (req: any, res: any) => {
   // first so mongoose never buffers queries against an unopened connection.
   const needsDb = !(
     path === "/api/health" ||
+    path === "/api/ai/health" ||
     path === "/robots.txt" ||
     path === "/api/seo/robots.txt" ||
     path === "/meta/webhook" ||

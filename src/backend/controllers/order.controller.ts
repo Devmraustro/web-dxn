@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Order, Customer, Product, ProductTranslation, Pack, PackItem, Offer } from "../../Database/Models";
 import { generateOrderNumber } from "../../utils/orderNumber";
+import { isPlaceholderProduct, isPlaceholderPack, isPlaceholderOffer } from "../services/placeholderCatalog.service";
 import {
   lineTotal,
   offerDiscountForLine,
@@ -8,7 +9,7 @@ import {
   normalizeQuantity,
   roundMoney,
 } from "../services/commerce";
-import { resolveShippingFee } from "../services/shipping.service";
+import { resolveShippingFeeStrict } from "../services/shipping.service";
 import { sendNewOrderNotification, sendOrderStatusUpdate, sendBaridiMobVerificationNotice } from "../services/telegram.service";
 import type { AuthRequest } from "../middleware/auth.middleware";
 
@@ -24,7 +25,7 @@ function cleanCustomerInfo(body: any) {
   };
 }
 
-/** Order payload for API responses — strips internal metadata (e.g. the stock
+/** Order payload for API responses ظ¤ strips internal metadata (e.g. the stock
  * claims snapshot used for cancellation restock) from what clients see. */
 function publicOrderPayload(order: any): any {
   const doc = order && typeof order.toObject === "function" ? order.toObject() : order;
@@ -69,7 +70,7 @@ export const getOrders = async (req: Request, res: Response) => {
 };
 
 /**
- * GET /api/orders/:id — order owner or admin only (IDOR protection).
+ * GET /api/orders/:id ظ¤ order owner or admin only (IDOR protection).
  * Owners/admins may view any order. A regular (staff) user may only view an
  * order linked to their own Customer profile. Guest orders are only visible to
  * admins, which is why the order confirmation screen never exposes PII through
@@ -116,7 +117,7 @@ export const getOrderById = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * POST /api/orders — create an order. Everything is computed server-side:
+ * POST /api/orders ظ¤ create an order. Everything is computed server-side:
  * unit prices come from the Product/Pack collection, shipping from the
  * ShippingRate collection (or the DEFAULT_SHIPPING_* env fallback), discounts
  * from active offers, and stock is decremented atomically. Client-supplied
@@ -187,7 +188,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
       if (kind === "product") {
         const product = await Product.findById(id).lean();
-        if (!product || !product.isActive) {
+        if (!product || !product.isActive || isPlaceholderProduct(product)) {
           return res.status(400).json({ message: "Product not found or inactive" });
         }
         const snap = lineTotal(Number(product.price), quantity);
@@ -208,7 +209,7 @@ export const createOrder = async (req: Request, res: Response) => {
           pack = await Pack.findById(id).lean();
           packsById.set(id, pack || null);
         }
-        if (!pack || !pack.isActive) {
+        if (!pack || !pack.isActive || isPlaceholderPack(pack)) {
           return res.status(400).json({ message: "Pack not found or inactive" });
         }
         let components = packComponents.get(id);
@@ -237,7 +238,12 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     // --- Shipping (server-authoritative) ------------------------------------
-    const shippingFee = await resolveShippingFee(wilayaInput, deliveryMethod as "home" | "office");
+    // Strict: unrecognized wilaya (not one of the 58 canonical wilayas) is
+    // rejected instead of silently charging the default fee.
+    const shippingFee = await resolveShippingFeeStrict(wilayaInput, deliveryMethod as "home" | "office");
+    if (shippingFee === null) {
+      return res.status(400).json({ message: "Invalid wilaya" });
+    }
 
     // --- Subtotal (server prices) + active offers discount ------------------
     const subtotal = roundMoney(resolvedItems.reduce((s, it) => s + it.totalPrice, 0));
@@ -283,6 +289,7 @@ export const createOrder = async (req: Request, res: Response) => {
       }).lean();
 
       for (const offer of activeOffers) {
+        if (isPlaceholderOffer(offer)) continue;
         const matched = resolvedItems.find((item: any) =>
           (offer.productId && item.productId && String(item.productId) === String(offer.productId)) ||
           (offer.packId && item.packId && String(item.packId) === String(offer.packId))
@@ -347,7 +354,7 @@ export const createOrder = async (req: Request, res: Response) => {
     // --- Create order (with retry on order-number collision) ----------------
     // Server-computed stock claims snapshot (productId -> units). Used later to
     // restore inventory exactly when an order is cancelled/rejected. It is
-    // ALWAYS overwritten from this server-side map — client-supplied metadata
+    // ALWAYS overwritten from this server-side map ظ¤ client-supplied metadata
     // can never influence what is restored.
     const orderMetadata: Record<string, unknown> =
       body.metadata && typeof body.metadata === "object" ? { ...body.metadata } : {};
@@ -391,7 +398,7 @@ export const createOrder = async (req: Request, res: Response) => {
       } catch (err: any) {
         if (err?.code !== 11000) throw err;
         // Unique-key collision: either a duplicate checkout with the same
-        // Idempotency-Key (concurrent retry — return the existing order) or a
+        // Idempotency-Key (concurrent retry ظ¤ return the existing order) or a
         // (rare) order-number collision (regenerate and retry).
         if (candidate.metadata?.idempotencyKey) {
           const dup = await Order.findOne({ "metadata.idempotencyKey": candidate.metadata.idempotencyKey }).lean();
@@ -409,7 +416,7 @@ export const createOrder = async (req: Request, res: Response) => {
     }
     if (duplicate) {
       // The other request won the race and already claimed the stock for this
-      // checkout — give back the units this attempt decremented.
+      // checkout ظ¤ give back the units this attempt decremented.
       await compensateStock();
       return res.json({
         success: true,
@@ -496,7 +503,7 @@ async function applyRestock(order: any): Promise<{ ok: true } | { ok: false; mes
   }
 }
 
-/** PUT /api/orders/:id/status — admin status transition */
+/** PUT /api/orders/:id/status ظ¤ admin status transition */
 export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;

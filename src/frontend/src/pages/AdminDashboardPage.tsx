@@ -13,7 +13,14 @@ const AdminDashboardPage = () => {
     const loadStats = async () => {
       try {
         const response = await axios.get("/api/admin/dashboard/stats");
-        setStats(response.data.data);
+        const data = response.data.data;
+        setStats(data);
+        try {
+          const tw = await axios.get("/api/admin/dashboard/top-wilayas");
+          setStats((s: any) => ({ ...s, topWilayas: tw.data?.data || [] }));
+        } catch (twErr) {
+          console.error("Error loading top wilayas:", twErr);
+        }
         setLoading(false);
       } catch (err) {
         console.error("Error loading dashboard stats:", err);

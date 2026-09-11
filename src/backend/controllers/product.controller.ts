@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Product, ProductTranslation } from "../../Database/Models";
+import { withPublicReadScope, isPlaceholderProduct } from "../services/placeholderCatalog.service";
 
 /** Escape regex metacharacters before a user string is used as a $regex source. */
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -85,7 +86,13 @@ export const getProducts = async (req: Request, res: Response) => {
       ];
     }
 
-    const products = await Product.find(query)
+    const products = await Product.find(
+      withPublicReadScope(req, {
+        ...query,
+        isFeatured: query.isFeatured,
+        sortOrder: query.sortOrder,
+      })
+    )
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean();
 
@@ -100,8 +107,9 @@ export const getProducts = async (req: Request, res: Response) => {
 
 /** Shared handler for product lookup by _id or by slug. */
 async function findProduct(selector: { _id?: any; slug?: string }, lang?: "ar" | "fr") {
-  const product = await Product.findOne(selector).lean();
+  const product = await Product.findOne({ ...selector, isActive: true }).lean();
   if (!product) return null;
+  if (isPlaceholderProduct(product)) return null;
   const enriched = await enrichWithTranslation(product, lang);
   return enriched;
 }

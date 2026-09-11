@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Pack, PackItem, Product } from "../../Database/Models";
+import { withPublicPackReadScope, isPlaceholderProduct } from "../services/placeholderCatalog.service";
 
 // GET /api/packs - Get all packs
 export const getPacks = async (req: Request, res: Response) => {
@@ -9,7 +10,7 @@ export const getPacks = async (req: Request, res: Response) => {
 
     if (featured) query.isFeatured = featured === "true";
     
-    const packs = await Pack.find(query)
+    const packs = await Pack.find(withPublicPackReadScope(req, query))
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean();
     
@@ -28,7 +29,7 @@ export const getPackById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    const pack = await Pack.findById(id).lean();
+    const pack = await Pack.findOne(withPublicPackReadScope(req, { _id: id })).lean();
     if (!pack) {
       return res.status(404).json({ message: "Pack not found" });
     }
@@ -216,12 +217,19 @@ export const getPackItems = async (req: Request, res: Response) => {
     const { id } = req.params;
     
     const items = await PackItem.find({ packId: id })
-      .populate("productId", "sku slug price translations active")
+      .populate("productId", "sku slug price translations active isActive")
       .lean();
-    
+
+    const visibleItems = items.filter((item: any) => {
+      const product = item.productId as any;
+      if (!product) return false;
+      if (product.isActive === false) return false;
+      return !isPlaceholderProduct(product);
+    });
+
     res.json({
       success: true,
-      data: items,
+      data: visibleItems,
     });
   } catch (error) {
     console.error("Get pack items error:", error);
