@@ -11,6 +11,7 @@ import {
 } from "../services/commerce";
 import { resolveShippingFeeStrict } from "../services/shipping.service";
 import { sendNewOrderNotification, sendOrderStatusUpdate, sendBaridiMobVerificationNotice } from "../services/telegram.service";
+import type { TelegramSendResult } from "../services/telegram.service";
 import type { AuthRequest } from "../middleware/auth.middleware";
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
@@ -23,6 +24,25 @@ function cleanCustomerInfo(body: any) {
     phone: String(ci.phone || "").trim(),
     secondPhone: String(ci.secondPhone || "").trim().slice(0, 20),
   };
+}
+
+/**
+ * Best-effort, sanitized Telegram result logging. Only the order number and
+ * error metadata are emitted — never tokens, headers or customer payloads.
+ * Notification failure must never affect the order itself.
+ */
+function logNotificationResult(orderNumber: string, result: TelegramSendResult): void {
+  if (result.delivered) {
+    console.info(`[telegram] order ${orderNumber} notification delivered`);
+    return;
+  }
+  if (result.skipped) {
+    console.info(`[telegram] order ${orderNumber} notification skipped (Telegram not configured)`);
+    return;
+  }
+  console.warn(
+    `[telegram] order ${orderNumber} notification failed status=${result.status ?? "-"} error=${result.error ?? "unknown"}`
+  );
 }
 
 /** Order payload for API responses ظ¤ strips internal metadata (e.g. the stock
@@ -425,14 +445,19 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Notifications are best-effort and must never fail the checkout.
+    // Notifications are best-effort and must never fail the checkout — the
+    // order itself is already persisted at this point.
     try {
-      await sendNewOrderNotification(order);
+      const newOrderResult = await sendNewOrderNotification(order);
+      logNotificationResult(order.orderNumber, newOrderResult);
       if (paymentMethod === "baridimob") {
-        await sendBaridiMobVerificationNotice(order);
+        const baridiResult = await sendBaridiMobVerificationNotice(order);
+        logNotificationResult(order.orderNumber, baridiResult);
       }
-    } catch {
-      /* notification failures are non-fatal */
+    } catch (error: any) {
+      console.warn(
+        `[telegram] order ${order.orderNumber} unexpected notification error: ${error?.message ?? "unknown"}`
+      );
     }
 
     res.status(201).json({ success: true, data: publicOrderPayload(order), message: "Order created successfully" });
@@ -565,9 +590,12 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
     // Telegram notification is best-effort.
     try {
-      await sendOrderStatusUpdate(updated, status);
-    } catch {
-      /* non-fatal */
+      const result = await sendOrderStatusUpdate(updated, status);
+      logNotificationResult(updated.orderNumber, result);
+    } catch (error: any) {
+      console.warn(
+        `[telegram] order ${updated.orderNumber} unexpected notification error: ${error?.message ?? "unknown"}`
+      );
     }
 
     res.json({ success: true, data: publicOrderPayload(updated) });

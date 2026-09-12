@@ -21,10 +21,35 @@ export interface TelegramSendResult {
   delivered: boolean;
   error?: string;
   skipped?: boolean;
+  /** HTTP status of the last Telegram API response (present only on failure). */
+  status?: number;
 }
 
 function isConfigured(): boolean {
   return !!readToken() && !!readChatId();
+}
+
+const LEGACY_MARKDOWN_SPECIAL = /([_*`\[])/g;
+
+/**
+ * Escape dynamic (user/database-controlled) text for Telegram's legacy
+ * "Markdown" parse mode. Only `_`, `*`, `` ` `` and `[` are reserved outside
+ * of entities in legacy mode (verified against core.telegram.org — the other
+ * documented MarkdownV2-reserved characters pass through literally here), so
+ * escaping exactly those four is both necessary and safe. Formatting markers
+ * on static labels are intentional and are NOT passed through this helper.
+ */
+function escapeMarkdown(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(LEGACY_MARKDOWN_SPECIAL, "\\$1");
+}
+
+const TOKEN_REDACT_RE = /bot\d{6,}:[A-Za-z0-9_-]{20,}/g;
+const MAX_LOGGED_ERROR_LENGTH = 500;
+
+/** Never echo tokens, full URLs or secrets into logs. */
+function sanitizeTelegramError(message: string): string {
+  return message.replace(TOKEN_REDACT_RE, "bot[redacted]").slice(0, MAX_LOGGED_ERROR_LENGTH);
 }
 
 function buildApiUrl(): string {
@@ -59,6 +84,7 @@ function isTransient(err: unknown): boolean {
 
 async function sendMessage(text: string): Promise<TelegramSendResult> {
   if (!isConfigured()) {
+    console.info("[telegram] notification skipped: not configured");
     return { delivered: false, skipped: true };
   }
   const url = `${buildApiUrl()}/sendMessage`;
@@ -80,18 +106,19 @@ async function sendMessage(text: string): Promise<TelegramSendResult> {
       { ...RETRY, shouldRetry: isTransient }
     );
     return { delivered: true };
-  } catch (err) {
-    return {
-      delivered: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+  } catch (err: any) {
+    const status = err?.response?.status as number | undefined;
+    const error = sanitizeTelegramError(err instanceof Error ? err.message : String(err));
+    console.warn(`[telegram] sendMessage failed status=${status ?? "-"} error=${error}`);
+    return { delivered: false, error, ...(status !== undefined ? { status } : {}) };
   }
 }
 
 function buildOrderMessage(order: any): string {
+  const esc = escapeMarkdown;
   const itemsText = (order.items || [])
     .map((item: any) => {
-      const name = item.productName || item.packName || "Product";
+      const name = esc(item.productName || item.packName || "Product");
       return `- ${name} x${item.quantity || 1}`;
     })
     .join("\n");
@@ -102,20 +129,21 @@ function buildOrderMessage(order: any): string {
       : "BaridiMob — payment verification required";
 
   const deliveryText = order.deliveryMethod === "home" ? "Home delivery" : "Office delivery";
+  const customer = order.customerInfo || {};
 
   const lines = [
     "📦 *NEW ORDER*",
     "",
-    `Order: ${order.orderNumber}`,
+    `Order: ${esc(order.orderNumber)}`,
     "",
     "Customer:",
-    `${order.customerInfo.firstName} ${order.customerInfo.lastName}`,
-    `Phone: ${order.customerInfo.phone}`,
-    order.customerInfo.secondPhone ? `Second phone: ${order.customerInfo.secondPhone}` : "",
-    `Wilaya: ${order.customerInfo.wilaya}`,
+    `${esc(customer.firstName)} ${esc(customer.lastName)}`,
+    `Phone: ${esc(customer.phone)}`,
+    customer.secondPhone ? `Second phone: ${esc(customer.secondPhone)}` : "",
+    `Wilaya: ${esc(customer.wilaya)}`,
     `Delivery: ${deliveryText}`,
-    order.deliveryMethod === "home" && order.customerInfo.address
-      ? `Address: ${order.customerInfo.address}`
+    order.deliveryMethod === "home" && order.customerInfo && order.customerInfo.address
+      ? `Address: ${esc(customer.address)}`
       : "",
     "",
     "Products:",
@@ -132,6 +160,7 @@ function buildOrderMessage(order: any): string {
 }
 
 function buildStatusMessage(order: any, statusText: string): string {
+  const esc = escapeMarkdown;
   const statusMap: Record<string, string> = {
     confirmed: "✅ Order confirmed",
     processing: "🔄 Order processing",
@@ -141,25 +170,28 @@ function buildStatusMessage(order: any, statusText: string): string {
     rejected: "❌ Order rejected",
   };
   const head = statusMap[order.status] || "ℹ️ Order status updated";
+  const customer = order.customerInfo || {};
   return [
     `*${head}*`,
     "",
-    `Order: ${order.orderNumber}`,
-    `Status: ${statusText}`,
+    `Order: ${esc(order.orderNumber)}`,
+    `Status: ${esc(statusText)}`,
     "",
-    `Customer: ${order.customerInfo.firstName} ${order.customerInfo.lastName}`,
-    `Phone: ${order.customerInfo.phone}`,
+    `Customer: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
+    `Phone: ${esc(customer.phone)}`,
   ].join("\n");
 }
 
 function buildBaridiMessage(order: any): string {
+  const esc = escapeMarkdown;
+  const customer = order.customerInfo || {};
   return [
     "💳 *BaridiMob Payment Verification Required*",
     "",
-    `Order: ${order.orderNumber}`,
-    `Customer: ${order.customerInfo.firstName} ${order.customerInfo.lastName}`,
-    `Phone: ${order.customerInfo.phone}`,
-    `Total: ${order.total} DA`,
+    `Order: ${esc(order.orderNumber)}`,
+    `Customer: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
+    `Phone: ${esc(customer.phone)}`,
+    `Total: ${esc(order.total)} DA`,
     "",
     "The owner must verify the BaridiMob payment manually.",
     "Contact the customer to confirm payment completion.",
@@ -167,15 +199,17 @@ function buildBaridiMessage(order: any): string {
 }
 
 function buildEscalationMessage(order: any, reason: string, customerInfo: any): string {
+  const esc = escapeMarkdown;
+  const customer = customerInfo || {};
   return [
     "⚠️ *ESCALATION TO OWNER*",
     "",
-    `Order: ${order.orderNumber}`,
-    `Reason: ${reason}`,
+    `Order: ${esc(order.orderNumber)}`,
+    `Reason: ${esc(reason)}`,
     "",
     "Customer:",
-    `Name: ${customerInfo.firstName} ${customerInfo.lastName}`,
-    `Phone: ${customerInfo.phone}`,
+    `Name: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
+    `Phone: ${esc(customer.phone)}`,
     "Platform: Web",
     "",
     "Please review and take appropriate action.",

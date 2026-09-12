@@ -181,3 +181,156 @@ describe("Telegram service — module initialization safety", () => {
     expect(typeof isTelegramConfigured).toBe("function");
   });
 });
+
+describe("Telegram service — Markdown escaping of dynamic text (legacy Markdown mode)", () => {
+  beforeEach(() => { setupConfiguredEnv(); jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  const specialOrder = {
+    orderNumber: "ORD-SPECIAL",
+    customerInfo: {
+      firstName: "John_Doe",
+      lastName: "Ben*Said",
+      phone: "055_12*3",
+      secondPhone: "066`7",
+      wilaya: "Ain_Bessa*m",
+      address: "Rue [des] *Oliviers_",
+    },
+    deliveryMethod: "home",
+    items: [
+      { productName: "Pro*duct (A) [1]_x", quantity: 2 },
+      { packName: "Pack `B`_star", quantity: 1 },
+    ],
+    subtotal: 2000,
+    shippingFee: 500,
+    total: 2500,
+    paymentMethod: "cod",
+  };
+
+  test("dynamic customer/order text containing _ * [ ] backtick is escaped in the payload", async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: { ok: true, result: { message_id: 1 } } });
+    const res = await sendNewOrderNotification(specialOrder);
+    expect(res.delivered).toBe(true);
+    const call = mockedAxios.post.mock.calls[0] as [string, any];
+    const text = call[1].text;
+
+    expect(call[0]).toBe(`https://api.telegram.org/bot${BASE_TOKEN}/sendMessage`);
+    expect(call[1].parse_mode).toBe("Markdown");
+
+    // Escaped dynamic values must appear as literal text.
+    expect(text).toContain("John\\_Doe");
+    expect(text).toContain("Ben\\*Said");
+    expect(text).toContain("055\\_12\\*3");
+    expect(text).toContain("066\\`7");
+    expect(text).toContain("Ain\\_Bessa\\*m");
+    expect(text).toContain("Rue \\[des] \\*Oliviers\\_");
+    expect(text).toContain("Pro\\*duct (A) \\[1]\\_x x2");
+    expect(text).toContain("Pack \\`B\\`\\_star x1");
+
+    // Raw unescaped dynamic characters must NOT reach the payload.
+    expect(text).not.toContain("John_Doe");
+    expect(text).not.toContain("Ben*Said");
+    expect(text).not.toContain("055_12*3");
+    expect(text).not.toContain("066`7");
+    expect(text).not.toContain("Ain_Bessa*m");
+    expect(text).not.toContain("Rue [des] *Oliviers_");
+    expect(text).not.toContain("Pro*duct (A) [1]_x");
+    expect(text).not.toContain("Pack `B`_star");
+
+    // Static formatting markers are preserved.
+    expect(text).toContain("*NEW ORDER*");
+    expect(text).toContain("Order: ORD-SPECIAL");
+  });
+
+  test("status update and escalation messages escape dynamic values too", async () => {
+    mockedAxios.post.mockResolvedValue({ data: { ok: true, result: { message_id: 1 } } });
+    await sendOrderStatusUpdate(
+      { orderNumber: "S-1", status: "confirmed", customerInfo: { firstName: "A_B", lastName: "C", phone: "0*" } },
+      "confirmed_with*note"
+    );
+    const text1 = (mockedAxios.post.mock.calls[0] as [string, any])[1].text;
+    expect(text1).toContain("Status: confirmed\\_with\\*note");
+    expect(text1).toContain("A\\_B");
+    expect(text1).toContain("0\\*");
+    expect(text1).not.toContain("A_B C");
+
+    await sendEscalationNotification(
+      { orderNumber: "E-1" },
+      "reason_[x]*note",
+      { firstName: "X_Y", lastName: "Z", phone: "9`8" }
+    );
+    const text2 = (mockedAxios.post.mock.calls[1] as [string, any])[1].text;
+    // Legacy Markdown escapes `[` but not `]` (verified against core.telegram.org).
+    expect(text2).toContain("Reason: reason\\_\\[x]\\*note");
+    expect(text2).not.toContain("Reason: reason_[x]*note");
+    expect(text2).toContain("X\\_Y");
+    expect(text2).toContain("9\\`8");
+  });
+
+  test("baridimob notice escapes phone/name/total", async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: { ok: true, result: { message_id: 1 } } });
+    await sendBaridiMobVerificationNotice({
+      orderNumber: "B-1",
+      customerInfo: { firstName: "Yas_min", lastName: "K*", phone: "05_5" },
+      total: 2500,
+    });
+    const text = (mockedAxios.post.mock.calls[0] as [string, any])[1].text;
+    expect(text).toContain("Yas\\_min");
+    expect(text).toContain("K\\*");
+    expect(text).toContain("05\\_5");
+  });
+});
+
+describe("Telegram service — failure observability and isolation", () => {
+  beforeEach(() => { setupConfiguredEnv(); jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  test("Telegram API (non-transient) failure returns delivered=false with status and never throws", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    mockedAxios.post.mockRejectedValue(makeAxiosError(400, "Request failed with status code 400"));
+    const res = await sendNewOrderNotification({ orderNumber: "ORD-FAIL", customerInfo: {}, items: [] });
+
+    expect(res.delivered).toBe(false);
+    expect(res.status).toBe(400);
+    expect(typeof res.error).toBe("string");
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+
+    const logged = warnSpy.mock.calls.flat().join("\n");
+    expect(logged).toContain("status=400");
+    expect(logged).not.toContain(BASE_TOKEN);
+    expect(logged).not.toContain("123456:");
+    expect(logged).not.toContain("Authorization");
+  });
+
+  test("token-shaped content is redacted from error results and logs", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const e = new Error(`Request to https://api.telegram.org/bot${BASE_TOKEN}/sendMessage failed`) as AxiosError;
+    e.isAxiosError = true;
+    e.code = "ECONNABORTED";
+    mockedAxios.post.mockRejectedValue(e);
+    const res = await sendNewOrderNotification({ orderNumber: "ORD-REDACT", customerInfo: {}, items: [] });
+
+    expect(JSON.stringify(res)).not.toContain(BASE_TOKEN);
+    expect(JSON.stringify(res)).toContain("bot[redacted]");
+
+    const logged = warnSpy.mock.calls.flat().join("\n");
+    expect(logged).not.toContain(BASE_TOKEN);
+    expect(logged).toContain("bot[redacted]");
+  });
+
+  test("missing configuration produces a safe skipped result and logs it — no HTTP call", async () => {
+    clearEnv();
+    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
+    const res = await sendNewOrderNotification({ orderNumber: "ORD-NOCFG", customerInfo: {}, items: [] });
+
+    expect(res.skipped).toBe(true);
+    expect(res.delivered).toBe(false);
+    expect(res.status).toBeUndefined();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+
+    const logged = infoSpy.mock.calls.flat().join("\n");
+    expect(logged).toContain("skipped");
+    expect(logged).not.toContain(BASE_TOKEN);
+    expect(logged).not.toContain("123456:");
+  });
+});
