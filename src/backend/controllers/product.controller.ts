@@ -90,7 +90,7 @@ export const getProducts = async (req: Request, res: Response) => {
     const { language, featured, search } = req.query;
     const lang = language === "ar" || language === "fr" ? language : undefined;
 
-    const query: any = { isActive: true };
+    const query: Record<string, unknown> = { isActive: true };
     if (featured) query.isFeatured = featured === "true";
 
     if (search && String(search).trim()) {
@@ -121,13 +121,7 @@ export const getProducts = async (req: Request, res: Response) => {
       ];
     }
 
-    const products = await Product.find(
-      withPublicReadScope(req, {
-        ...query,
-        isFeatured: query.isFeatured,
-        sortOrder: query.sortOrder,
-      })
-    )
+    const products = await Product.find(withPublicReadScope(req, query))
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean();
 
