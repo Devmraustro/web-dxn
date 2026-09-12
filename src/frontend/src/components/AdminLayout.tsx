@@ -3,6 +3,12 @@ import { NavLink, useNavigate, Navigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 
+const ShieldIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const { language } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
@@ -17,7 +23,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   if (!isAdmin) {
     return (
       <div className="container mt-5" style={{ maxWidth: 480 }}>
-        <div className="alert alert-danger">
+        <div className="dxn-feedback-error p-3">
           {t("ليس لديك صلاحيات أدمن", "Vous n'avez pas les droits d'administrateur")}
         </div>
       </div>
@@ -32,7 +38,10 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="admin-sidebar-title">{t("لوحة التحكم", "Administration")}</div>
+        <div className="admin-sidebar-title">
+          <ShieldIcon />
+          {t("لوحة التحكم", "Administration")}
+        </div>
         <nav className="admin-sidebar-nav" aria-label="Admin navigation">
           <NavLink
             to="/admin"

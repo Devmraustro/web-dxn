@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import axios from "axios";
-import { Container, Row, Col, Card, Table, Badge, Alert } from "react-bootstrap";
+import { Container, Row, Col, Table, Badge } from "react-bootstrap";
 
 const AdminDashboardPage = () => {
   const { language } = useLanguage();
@@ -32,98 +32,82 @@ const AdminDashboardPage = () => {
     loadStats();
   }, [language]);
 
-  if (loading) return <div>Loading dashboard...</div>;
-  if (error) return <Alert variant="danger">{error}</Alert>;
+  const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+
+  if (loading) {
+    return (
+      <div className="dxn-loading" role="status">
+        <div className="dxn-loading-ring"></div>
+        <div>{t("جارٍ تحميل الإحصائيات...", "Chargement des statistiques...")}</div>
+      </div>
+    );
+  }
+  if (error) return <div className="dxn-feedback-error p-3">{error}</div>;
+
+  const statsCards = [
+    { label: t("إجمالي الطلبات", "Total Orders"), value: stats?.totalOrders || 0, color: "#1a5d3a" },
+    { label: t("في انتظار الدفع", "Pending Orders"), value: stats?.pendingPayment || 0, color: "#d4a017" },
+    { label: t("الطلبات المؤكدة", "Confirmed Orders"), value: stats?.confirmed || 0, color: "#1d7fb8" },
+    { label: t("الطلبات المسلمة", "Delivered Orders"), value: stats?.delivered || 0, color: "#1e7e46" },
+  ];
 
   return (
-    <>
-      <Container>
-        <h1 className="mb-4">{language === "ar" ? "لوحة التحكم" : "Tableau de bord"}</h1>
+    <Container fluid>
+      <div className="dxn-admin-header mb-4">
+        <h1 className="dxn-admin-title h3">{t("لوحة التحكم", "Tableau de bord")}</h1>
+        <p className="dxn-admin-sub">
+          {t("نظرة عامة على الطلبات والإيرادات في المتجر.", "Aperçu des commandes et revenus de la boutique.")}
+        </p>
+      </div>
 
-        {stats && (
-          <Container>
-            {/* Key Stats Row */}
-            <Row className="mb-4">
-              <Col xs={12} sm={6} md={4} xl={3}>
-                <Card style={{ borderLeftColor: "#28a745", borderLeftWidth: "4px" }}>
-                  <Card.Body>
-                    <Card.Title>{language === "ar" ? "إجمالي الطلبات" : "Total Orders"}</Card.Title>
-                    <Card.Text>
-                      <Badge pill bg="secondary">{stats.totalOrders > 0 ? stats.totalOrders : 0}</Badge>
-                    </Card.Text>
-                  </Card.Body>
-                </Card>
+      {stats && (
+        <>
+          {/* Key stats */}
+          <Row className="g-3 mb-4">
+            {statsCards.map((card) => (
+              <Col key={card.label} xs={6} md={4} xl={3}>
+                <div className="dxn-stat-card" style={{ "--stat-color": card.color } as React.CSSProperties}>
+                  <span className="dxn-stat-label">{card.label}</span>
+                  <span className="dxn-stat-value">{card.value}</span>
+                  <div className="dxn-stat-hint">{t("إجمالي", "Total")}</div>
+                </div>
               </Col>
-              <Col xs={12} sm={6} md={4} xl={3}>
-                <Card style={{ borderLeftColor: "#dc3545", borderLeftWidth: "4px" }}>
-                  <Card.Body>
-                    <Card.Title>{language === "ar" ? "في انتظار الدفع" : "Pending Orders"}</Card.Title>
-                    <Card.Text>
-                      <Badge pill bg="warning">{stats.pendingPayment > 0 ? stats.pendingPayment : 0}</Badge>
-                    </Card.Text>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col xs={12} sm={6} md={4} xl={3}>
-                <Card style={{ borderLeftColor: "#ffc107", borderLeftWidth: "4px" }}>
-                  <Card.Body>
-                    <Card.Title>{language === "ar" ? "الطلبات المؤكدة" : "Confirmed Orders"}</Card.Title>
-                    <Card.Text>
-                      <Badge pill bg="info">{stats.confirmed > 0 ? stats.confirmed : 0}</Badge>
-                    </Card.Text>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col xs={12} sm={6} md={4} xl={3}>
-                <Card style={{ borderLeftColor: "#28a745", borderLeftWidth: "4px" }}>
-                  <Card.Body>
-                    <Card.Title>{language === "ar" ? "الطلبات المسلمة" : "Delivered Orders"}</Card.Title>
-                    <Card.Text>
-                      <Badge pill bg="success">{stats.delivered > 0 ? stats.delivered : 0}</Badge>
-                    </Card.Text>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
+            ))}
+          </Row>
 
-            {/* Revenue Card */}
-            <Card className="mt-3">
-              <Card.Header>
-                <Row>
-                  <Col xs={12} sm={6}>
-                    {language === "ar" ? "إجمالي الإيرادات" : "Total Revenue"}
-                  </Col>
-                </Row>
-              </Card.Header>
-              <Card.Body>
-                <Card.Text>
-                  <h3>{stats.totalRevenue > 0 ? stats.totalRevenue.toLocaleString() : "0"} DA</h3>
-                </Card.Text>
-              </Card.Body>
-            </Card>
+          {/* Revenue */}
+          <div className="dxn-admin-card mb-4">
+            <div className="dxn-admin-card-head">
+              {t("إجمالي الإيرادات", "Total Revenue")}
+            </div>
+            <div className="dxn-admin-card-body">
+              <span className="dxn-stat-value" style={{ fontSize: "2rem" }}>
+                {(stats.totalRevenue > 0 ? stats.totalRevenue.toLocaleString("fr-DZ") : "0")} DA
+              </span>
+            </div>
+          </div>
 
-            {/* Recent Orders Table */}
-            <Card className="mt-3">
-              <Card.Header>
-                <Row>
-                  <Col xs={12}>{language === "ar" ? "الطلبات الأخيرة" : "Recent Orders"}</Col>
-                </Row>
-              </Card.Header>
-              <Card.Body>
-                {stats.recentOrders && stats.recentOrders.length > 0 ? (
-                  <Table striped bordered hover>
+          {/* Recent orders */}
+          <div className="dxn-admin-card mb-4">
+            <div className="dxn-admin-card-head">
+              {t("الطلبات الأخيرة", "Recent Orders")}
+            </div>
+            <div className="dxn-admin-card-body">
+              {stats.recentOrders && stats.recentOrders.length > 0 ? (
+                <div className="admin-table-wrap">
+                  <Table striped hover responsive className="mb-0 align-middle">
                     <thead>
                       <tr>
-                        <th>{language === "ar" ? "رقم الطلب" : "Order #"}</th>
-                        <th>{language === "ar" ? "العميل" : "Customer"}</th>
-                        <th>{language === "ar" ? "المجموع" : "Total"}</th>
-                        <th>{language === "ar" ? "الحالة" : "Status"}</th>
+                        <th>{t("رقم الطلب", "Order #")}</th>
+                        <th>{t("العميل", "Customer")}</th>
+                        <th>{t("المجموع", "Total")}</th>
+                        <th>{t("الحالة", "Status")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {stats.recentOrders.slice(0, 5).map((order: any, index: number) => (
                         <tr key={index}>
-                          <td>{order.orderNumber}</td>
+                          <td dir="ltr">{order.orderNumber}</td>
                           <td>{order.customerInfo?.firstName || "-"}</td>
                           <td>{order.total} DA</td>
                           <td>
@@ -135,27 +119,27 @@ const AdminDashboardPage = () => {
                       ))}
                     </tbody>
                   </Table>
-                ) : (
-                  <p>{language === "ar" ? "لا توجد طلبات" : "No orders"}</p>
-                )}
-              </Card.Body>
-            </Card>
+                </div>
+              ) : (
+                <p className="mb-0 text-muted">{t("لا توجد طلبات", "No orders")}</p>
+              )}
+            </div>
+          </div>
 
-            {/* Top Products */}
-            <Card className="mt-3">
-              <Card.Header>
-                <Row>
-                  <Col xs={12}>{language === "ar" ? "المنتجات الأكثر مبيعاً" : "Top Selling Products"}</Col>
-                </Row>
-              </Card.Header>
-              <Card.Body>
-                {stats.topProducts && stats.topProducts.length > 0 ? (
-                  <Table striped bordered hover>
+          {/* Top products */}
+          <div className="dxn-admin-card mb-4">
+            <div className="dxn-admin-card-head">
+              {t("المنتجات الأكثر مبيعاً", "Top Selling Products")}
+            </div>
+            <div className="dxn-admin-card-body">
+              {stats.topProducts && stats.topProducts.length > 0 ? (
+                <div className="admin-table-wrap">
+                  <Table striped hover responsive className="mb-0 align-middle">
                     <thead>
                       <tr>
-                        <th>{language === "ar" ? "اسم المنتج" : "Product Name"}</th>
-                        <th>{language === "ar" ? "الكمية المباعة" : "Quantity Sold"}</th>
-                        <th>{language === "ar" ? "الإيرادات" : "Revenue"}</th>
+                        <th>{t("اسم المنتج", "Product Name")}</th>
+                        <th>{t("الكمية المباعة", "Quantity Sold")}</th>
+                        <th>{t("الإيرادات", "Revenue")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -171,37 +155,37 @@ const AdminDashboardPage = () => {
                               {productName}
                               {product.kind === "pack" && (
                                 <Badge pill bg="dark" className="ms-2">
-                                  {language === "ar" ? "حزمة" : "Pack"}
+                                  {t("حزمة", "Pack")}
                                 </Badge>
                               )}
                             </td>
                             <td>{product.totalSold}</td>
-                            <td>{product.revenue?.toLocaleString() || "0"} DA</td>
+                            <td>{product.revenue?.toLocaleString("fr-DZ") || "0"} DA</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </Table>
-                ) : (
-                  <p>{language === "ar" ? "لا توجد بيانات" : "No data"}</p>
-                )}
-              </Card.Body>
-            </Card>
+                </div>
+              ) : (
+                <p className="mb-0 text-muted">{t("لا توجد بيانات", "No data")}</p>
+              )}
+            </div>
+          </div>
 
-            {/* Top Wilayas */}
-            <Card className="mt-3">
-              <Card.Header>
-                <Row>
-                  <Col xs={12}>{language === "ar" ? "أعلى الولايات" : "Top Wilayas"}</Col>
-                </Row>
-              </Card.Header>
-              <Card.Body>
-                {stats.topWilayas && stats.topWilayas.length > 0 ? (
-                  <Table striped bordered hover>
+          {/* Top wilayas */}
+          <div className="dxn-admin-card mb-4">
+            <div className="dxn-admin-card-head">
+              {t("أعلى الولايات", "Top Wilayas")}
+            </div>
+            <div className="dxn-admin-card-body">
+              {stats.topWilayas && stats.topWilayas.length > 0 ? (
+                <div className="admin-table-wrap">
+                  <Table striped hover responsive className="mb-0 align-middle">
                     <thead>
                       <tr>
-                        <th>{language === "ar" ? "الولاية" : "Wilaya"}</th>
-                        <th>{language === "ar" ? "عدد الطلبات" : "Order Count"}</th>
+                        <th>{t("الولاية", "Wilaya")}</th>
+                        <th>{t("عدد الطلبات", "Order Count")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -213,15 +197,15 @@ const AdminDashboardPage = () => {
                       ))}
                     </tbody>
                   </Table>
-                ) : (
-                  <p>{language === "ar" ? "لا توجد بيانات" : "No data"}</p>
-                )}
-              </Card.Body>
-            </Card>
-          </Container>
-        )}
-      </Container>
-    </>
+                </div>
+              ) : (
+                <p className="mb-0 text-muted">{t("لا توجد بيانات", "No data")}</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </Container>
   );
 };
 

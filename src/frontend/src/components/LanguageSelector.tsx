@@ -13,7 +13,7 @@ const LanguageSelector = () => {
   const { language, changeLanguage } = useLanguage();
 
   return (
-    <div className="language-selector" role="group" aria-label="Language selector">
+    <div className="dxn-lang" role="group" aria-label="Language selector">
       <button
         type="button"
         onClick={() => changeLanguage(resolveTargetLanguage("AR"))}

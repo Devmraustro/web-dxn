@@ -7,6 +7,8 @@ import { AuthProvider } from "./context/AuthContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
+import MobileNav from "./components/MobileNav";
 
 // Route-level code splitting: the product catalog (the landing route users see
 // first) stays in the critical path; admin + detail pages load on demand,
@@ -24,7 +26,16 @@ const AdminProductsPage = lazy(() => import("./pages/AdminProductsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
-  <Suspense fallback={<div className="text-center py-5">...</div>}>{children}</Suspense>
+  <Suspense
+    fallback={
+      <div className="dxn-loading" role="status">
+        <div className="dxn-loading-ring"></div>
+        <div>...</div>
+      </div>
+    }
+  >
+    {children}
+  </Suspense>
 );
 
 const App = () => (
@@ -73,6 +84,8 @@ const App = () => (
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer />
+      <MobileNav />
     </PageSuspense>
   </BrowserRouter>
 );

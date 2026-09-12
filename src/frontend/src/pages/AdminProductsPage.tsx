@@ -310,10 +310,10 @@ const AdminProductsPage = () => {
   return (
     <>
       <Container fluid>
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 dxn-admin-header">
           <div>
-            <h1 className="mb-1">{t("إدارة المنتجات", "Gestion des produits")}</h1>
-            <p className="text-muted mb-0 small">
+            <h1 className="dxn-admin-title h3 mb-1">{t("إدارة المنتجات", "Gestion des produits")}</h1>
+            <p className="dxn-admin-sub mb-0">
               {t(
                 "الأسعار والمخزون والحالة تُحفظ على الخادم وتكون مرجعية أثناء الطلب.",
                 "Prix, stock et statut sont enregistrés côté serveur et restent la référence à la commande."
@@ -346,8 +346,8 @@ const AdminProductsPage = () => {
             {t("لا توجد منتجات بعد. أنشئ أول منتج.", "Aucun produit. Créez le premier.")}
           </Alert>
         ) : (
-          <Card>
-            <div className="admin-table-wrap">
+          <div className="dxn-admin-card">
+            <div className="admin-table-wrap p-3">
               <Table striped hover responsive className="mb-0 align-middle">
                 <thead>
                   <tr>
@@ -426,7 +426,7 @@ const AdminProductsPage = () => {
                 </tbody>
               </Table>
             </div>
-          </Card>
+          </div>
         )}
       </Container>
 

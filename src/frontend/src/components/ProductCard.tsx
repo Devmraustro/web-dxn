@@ -1,6 +1,5 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Button } from "react-bootstrap";
 import { useTranslation } from "react-i18next";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -66,6 +65,24 @@ export const pickProductDescription = (product: any, language: string): string =
   return product.description || product.name || "";
 };
 
+const AddCartIcon = ({ size = 15 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="9" cy="21" r="1" />
+    <circle cx="20" cy="21" r="1" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>
+);
+
 const ProductCard = ({ product, language }: ProductCardProps) => {
   const { t } = useTranslation();
   const { language: lang } = useLanguage();
@@ -74,10 +91,17 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
   const productTitle = pickProductTitle(product, language);
   const description = pickProductDescription(product, language);
   const productSize = product.size || "";
-  const productPrice = product.price || 0;
+  const productPrice = Number(product.price) || 0;
+  const compareAt = Number(product.compareAtPrice) || 0;
   const imageUrl = pickProductImage(product);
   const inStock = typeof product.stockQuantity !== "number" || product.stockQuantity > 0;
   const detailUrl = product.slug ? `/product/${encodeURIComponent(product.slug)}` : "";
+
+  const hasOffer = compareAt > productPrice && productPrice > 0;
+  const offerPercent = hasOffer
+    ? Math.round((1 - productPrice / compareAt) * 100)
+    : 0;
+  const lowStock = inStock && typeof product.stockQuantity === "number" && product.stockQuantity > 0 && product.stockQuantity <= 10;
 
   const handleAddToCart = () => {
     addItem({
@@ -92,23 +116,19 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
   const titleText = productTitle || t("productName", "Product");
 
   return (
-    <article
-      className="product-card"
-      aria-label={titleText}
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
-    >
+    <article className="dxn-pcard" aria-label={titleText}>
       <Link
         to={detailUrl || "/products"}
-        className="product-image"
+        className="dxn-pcard-media"
         aria-label={titleText}
-        style={{ display: "block" }}
+        style={{ display: "block", textDecoration: "none" }}
       >
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={titleText}
             loading="lazy"
-            style={{ width: "100%", height: 200, objectFit: "cover" }}
+            className={inStock ? "dxn-pcard-img" : "dxn-pcard-img oos"}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
@@ -117,12 +137,12 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
           <div
             style={{
               width: "100%",
-              height: 200,
-              backgroundColor: "#f0f0f0",
+              height: "100%",
+              backgroundColor: "#eef1ee",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#8a8a8a",
+              color: "#8a9a90",
               fontSize: "2rem",
               fontWeight: 700,
             }}
@@ -131,49 +151,80 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
             {titleText.substring(0, 1)}
           </div>
         )}
+
+        {hasOffer && inStock && (
+          <span className="dxn-pcard-offer">
+            {lang === "ar" ? "خصم" : "-"}
+            {offerPercent}%
+          </span>
+        )}
+
+        {!inStock && (
+          <div
+            className="d-flex align-items-center justify-content-center position-absolute top-0 bottom-0 start-0 end-0"
+            style={{ background: "rgba(0,0,0,0.42)" }}
+          >
+            <span className="bg-white text-dark px-3 py-1 rounded-pill fw-bold small shadow-lg">
+              {lang === "ar" ? "نفذت الكمية" : "Rupture de stock"}
+            </span>
+          </div>
+        )}
       </Link>
 
-      <div className="product-info">
-        <h2 className="product-name">
+      <div className="dxn-pcard-body">
+        <span className="dxn-pcard-cat">{product.category || product.sku || "DXN"}</span>
+
+        <h3 className="dxn-pcard-name" style={{ fontSize: "1rem" }}>
           {detailUrl ? (
-            <Link to={detailUrl} className="product-name-link">
-              {titleText}
-            </Link>
+            <Link to={detailUrl}>{titleText}</Link>
           ) : (
             titleText
           )}
-        </h2>
-        {description && (
-          <p className="product-description" style={{ color: "#666", fontSize: "0.85rem" }}>
-            {description.length > 110 ? `${description.slice(0, 110)}…` : description}
-          </p>
-        )}
+        </h3>
+
+        {description && <p className="dxn-pcard-desc">{description}</p>}
+
         {productSize && (
-          <p className="product-size">
+          <p className="small mb-2" style={{ color: "#6b7a70" }}>
             {t("productSize")}: {productSize}
           </p>
         )}
-        <p className="product-price" aria-label={`${productPrice} DA`}>
-          {productPrice} DA
-        </p>
-        {!inStock && (
-          <p className="text-danger small" role="status">
-            {lang === "ar" ? "غير متوفر حالياً" : "Rupture de stock"}
-          </p>
-        )}
-      </div>
 
-      <div className="product-action">
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleAddToCart}
-          disabled={!inStock}
-          aria-label={t("addToCart")}
-          style={{ width: "100%" }}
+        <div className="dxn-pcard-price">
+          {hasOffer && <span className="dxn-pcard-price-old">{compareAt.toLocaleString("fr-DZ")} DA</span>}
+          <span className="dxn-pcard-price-now">{productPrice.toLocaleString("fr-DZ")} DA</span>
+        </div>
+
+        <div
+          className={
+            !inStock
+              ? "dxn-pcard-stock oos"
+              : lowStock
+                ? "dxn-pcard-stock warn"
+                : "dxn-pcard-stock ok"
+          }
         >
-          {lang === "ar" ? "أضف إلى السلة" : "Ajouter au panier"}
-        </Button>
+          {!inStock ? (
+            <>{lang === "ar" ? "غير متوفر حالياً" : "Rupture de stock"}</>
+          ) : lowStock ? (
+            <>{lang === "ar" ? `متبقي ${product.stockQuantity} فقط` : `Plus que ${product.stockQuantity} en stock`}</>
+          ) : (
+            <>{lang === "ar" ? "متوفر في المخزن" : "En stock"}</>
+          )}
+        </div>
+
+        <div className="dxn-pcard-cta">
+          <button
+            type="button"
+            className="dxn-btn dxn-btn-gold"
+            onClick={handleAddToCart}
+            disabled={!inStock}
+            aria-label={`${t("addToCart")} — ${titleText}`}
+          >
+            <AddCartIcon />
+            {lang === "ar" ? "أضف إلى السلة" : "Ajouter au panier"}
+          </button>
+        </div>
       </div>
     </article>
   );

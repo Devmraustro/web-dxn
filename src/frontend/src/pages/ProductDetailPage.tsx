@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useCart } from "../context/CartContext";
 import axios from "axios";
-import { Container, Row, Col, Card, Button, Alert, Badge, Spinner } from "react-bootstrap";
+import { Container, Row, Col, Button } from "react-bootstrap";
 import ReviewCard from "../components/ReviewCard";
 import { pickProductTitle, pickProductDescription } from "../components/ProductCard";
 
@@ -62,18 +62,20 @@ const ProductDetailPage = () => {
 
   if (loading) {
     return (
-      <Container className="text-center mt-5 py-5">
-        <Spinner animation="border" />
-        <p className="mt-2">{t("جارٍ التحميل...", "Chargement...")}</p>
-      </Container>
+      <div className="dxn-loading" role="status">
+        <div className="dxn-loading-ring"></div>
+        <div>{t("جارٍ التحميل...", "Chargement...")}</div>
+      </div>
     );
   }
 
   if (error || !product) {
     return (
       <Container className="mt-5" style={{ maxWidth: 560 }}>
-        <Alert variant="danger">{error || t("حدث خطأ", "Une erreur est survenue")}</Alert>
-        <Link to="/products" className="btn btn-primary">
+        <div className="dxn-feedback-error p-3 mb-3" role="alert">
+          {error || t("حدث خطأ", "Une erreur est survenue")}
+        </div>
+        <Link to="/products" className="dxn-btn dxn-btn-primary">
           {t("العودة للمنتجات", "Retour aux produits")}
         </Link>
       </Container>
@@ -87,6 +89,7 @@ const ProductDetailPage = () => {
   const imageUrl = product.image || (Array.isArray(product.images) && product.images.length ? product.images[0] : "");
   const gallery = Array.isArray(product.images) && product.images.length > 1 ? product.images : [];
   const inStock = typeof product.stockQuantity !== "number" || product.stockQuantity > 0;
+  const hasOffer = compareAt > price && price > 0;
 
   const handleAdd = () => {
     addItem({
@@ -100,25 +103,27 @@ const ProductDetailPage = () => {
     setTimeout(() => setAdded(false), 2500);
   };
 
+  const thumbnails = Array.from(new Set([imageUrl, ...gallery].filter(Boolean)));
+
   return (
     <Container className="mt-4">
-      <nav aria-label="breadcrumb" className="mb-3">
-        <Link to="/products" className="text-decoration-none">
-          {t("المنتجات", "Produits")}
-        </Link>
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="dxn-breadcrumb mb-3">
+        <Link to="/products">{t("المنتجات", "Produits")}</Link>
         <span aria-hidden="true" className="mx-2">/</span>
         <span>{title}</span>
       </nav>
 
-      <Row>
+      <Row className="g-4">
+        {/* Gallery */}
         <Col md={6}>
-          <Card className="mb-3">
-            <div className="p-3 text-center bg-light" style={{ minHeight: 260 }}>
+          <div className="dxn-detail-gallery dxn-anim-fade-up">
+            <div className="text-center" style={{ minHeight: 300 }}>
               {activeImage ? (
                 <img
                   src={activeImage}
                   alt={title}
-                  style={{ maxWidth: "100%", maxHeight: 420, objectFit: "contain" }}
+                  className="dxn-detail-main-img"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
@@ -129,74 +134,80 @@ const ProductDetailPage = () => {
                 </div>
               )}
             </div>
-          </Card>
-          {(() => {
-            const thumbnails = Array.from(new Set([imageUrl, ...gallery].filter(Boolean)));
-            return thumbnails.length > 1 ? (
-              <div className="d-flex gap-2 mb-3 flex-wrap">
-                {thumbnails.map((url, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="btn btn-outline-secondary p-1"
-                    style={{ width: 64, height: 64, overflow: "hidden" }}
-                    onClick={() => setActiveImage(url)}
-                    aria-label={t("عرض الصورة", "Voir l'image")}
-                  >
-                    <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </button>
-                ))}
-              </div>
-            ) : null;
-          })()}
+          </div>
+          {thumbnails.length > 1 && (
+            <div className="d-flex gap-2 mt-3 flex-wrap">
+              {thumbnails.map((url, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={"dxn-thumb " + (url === activeImage ? "active" : "")}
+                  onClick={() => setActiveImage(url)}
+                  aria-label={t("عرض الصورة", "Voir l'image")}
+                >
+                  <img src={url} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
         </Col>
 
-        <Col md={6}>
-          <h1 className="mb-2">{title}</h1>
+        {/* Info */}
+        <Col md={6} className="dxn-anim-fade-up">
+          <h1 className="mb-1" style={{ fontWeight: 800, color: "#0b3d1f" }}>{title}</h1>
           {product.sku && (
-            <p className="text-muted small">
+            <p className="text-muted small mb-2">
               {t("المرجع", "Réf")}: {product.sku}
             </p>
           )}
 
-          <div className="mb-3">
-            {compareAt > price && price > 0 ? (
-              <>
-                <span className="text-muted text-decoration-line-through me-2">{compareAt} DA</span>
-                <span className="fs-3 fw-bold text-danger">{price} DA</span>
-              </>
+          <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
+            {inStock ? (
+              <span className="dxn-pcard-stock ok mb-0" style={{ border: 0, padding: 0 }}>
+                {t("متوفر في المخزن", "En stock")}
+              </span>
             ) : (
-              <span className="fs-3 fw-bold">{price} DA</span>
+              <span className="dxn-pcard-stock oos mb-0" style={{ border: 0, padding: 0 }}>
+                {t("غير متوفر حالياً", "Rupture de stock")}
+              </span>
+            )}
+            {product.isFeatured && (
+              <span className="dxn-chip" style={{ marginBottom: 0 }}>
+                {t("مميز", "En vedette")}
+              </span>
             )}
           </div>
 
           <div className="mb-3">
-            {inStock ? (
-              <Badge bg="success" pill>
-                {t("متوفر", "En stock")}
-              </Badge>
+            {hasOffer ? (
+              <div className="d-flex align-items-baseline gap-2 flex-wrap">
+                <span className="dxn-pcard-price-old" style={{ fontSize: "1.1rem" }}>
+                  {compareAt.toLocaleString("fr-DZ")} DA
+                </span>
+                <span className="dxn-detail-price">{price.toLocaleString("fr-DZ")} DA</span>
+                <span className="dxn-pcard-offer" style={{ position: "static" }}>
+                  {t("خصم", "Promo")} {Math.round((1 - price / compareAt) * 100)}%
+                </span>
+              </div>
             ) : (
-              <Badge bg="secondary" pill>
-                {t("غير متوفر حالياً", "Rupture de stock")}
-              </Badge>
-            )}
-            {product.isFeatured && (
-              <Badge bg="warning" pill className="ms-2 text-dark">
-                {t("مميز", "En vedette")}
-              </Badge>
+              <span className="dxn-detail-price">{price.toLocaleString("fr-DZ")} DA</span>
             )}
           </div>
 
           {product.size && (
-            <p className="mb-2">
-              <strong>{t("الحجم", "Taille")}:</strong> {product.size}
+            <p className="mb-3">
+              <span className="dxn-detail-size">
+                {t("الحجم", "Taille")}: {product.size}
+              </span>
             </p>
           )}
 
           {description && (
             <div className="mb-4">
-              <h2 className="h5">{t("الوصف", "Description")}</h2>
-              <p style={{ whiteSpace: "pre-line" }}>{description}</p>
+              <h2 className="h5 fw-bold" style={{ color: "#0b3d1f" }}>
+                {t("الوصف", "Description")}
+              </h2>
+              <p style={{ whiteSpace: "pre-line", color: "#4a5a50" }}>{description}</p>
             </div>
           )}
 
@@ -204,6 +215,7 @@ const ProductDetailPage = () => {
             <Button
               variant="primary"
               size="lg"
+              className="dxn-btn dxn-btn-gold"
               onClick={handleAdd}
               disabled={!inStock}
               aria-busy={added}
@@ -212,16 +224,21 @@ const ProductDetailPage = () => {
                 ? t("تمت الإضافة ✓", "Ajouté ✓")
                 : t("أضف إلى السلة", "Ajouter au panier")}
             </Button>
-            <Link to="/cart" className="btn btn-outline-primary btn-lg">
+            <Link to="/cart" className="dxn-btn dxn-btn-outline">
               {t("الذهاب إلى السلة", "Voir le panier")}
             </Link>
           </div>
 
-          <div className="text-muted small">
-            {t(
-              "الدفع عند الاستلام متاح لجميع الولايات الـ 58. يتم تأكيد الطلب عبر الهاتف.",
-              "Paiement à la livraison disponible pour les 58 wilayas. Commande confirmée par téléphone."
-            )}
+          <div className="dxn-detail-note">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }}>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>
+              {t(
+                "الدفع عند الاستلام متاح لجميع الولايات الـ 58. يتم تأكيد الطلب عبر الهاتف.",
+                "Paiement à la livraison disponible pour les 58 wilayas. Commande confirmée par téléphone."
+              )}
+            </span>
           </div>
         </Col>
       </Row>
@@ -229,7 +246,7 @@ const ProductDetailPage = () => {
       {reviews.length > 0 && (
         <Row className="mt-5">
           <Col>
-            <h2 className="h4 mb-3">{t("تقييمات العملاء", "Avis clients")}</h2>
+            <h2 className="h4 mb-3 dxn-detail-reviews-title">{t("تقييمات العملاء", "Avis clients")}</h2>
             {reviews.map((review: any) => (
               <ReviewCard key={review._id} review={review} />
             ))}

@@ -5,7 +5,7 @@ import { CatalogEntry } from "../utils/cartReconcile";
 import { resolveOrderOutcome } from "../utils/orderFlow";
 import { pickProductTitle } from "../components/ProductCard";
 import axios from "axios";
-import { Container, Row, Col, Form, Button, Alert, Card } from "react-bootstrap";
+import { Container, Row, Col, Form, Button, Alert } from "react-bootstrap";
 import * as yup from "yup";
 import { useFormik } from "formik";
 import { useNavigate } from "react-router-dom";
@@ -320,21 +320,21 @@ const CheckoutPage = () => {
   const total = subtotal + shippingFee;
 
   return (
-    <Container>
-      <h2 className="mb-4">{t("إتمام الطلب", "Commande")}</h2>
+    <Container className="mt-4 mb-5">
+      <h2 className="dxn-section-title h3 mb-4">{t("إتمام الطلب", "Commande")}</h2>
 
       {submitError && (
-        <Alert variant="danger" role="alert" aria-live="assertive" onClose={() => setSubmitError(null)} dismissible>
+        <Alert variant="danger" role="alert" aria-live="assertive" onClose={() => setSubmitError(null)} dismissible className="dxn-feedback-error">
           {submitError}
         </Alert>
       )}
       {shippingError && (
-        <Alert variant="warning" role="status" aria-live="polite">
+        <Alert variant="warning" role="status" aria-live="polite" className="dxn-feedback-error">
           {shippingError}
         </Alert>
       )}
       {hasInvalid && (
-        <Alert variant="warning" role="status" aria-live="polite">
+        <Alert variant="warning" role="status" aria-live="polite" className="dxn-feedback-error">
           {t(
             "سلتك تحتوي على منتجات غير متوفرة أو ملغاة من المتجر. ارجع إلى السلة واحذفها قبل إتمام الطلب.",
             "Votre panier contient des articles indisponibles ou retirés de la boutique. Retournez au panier et retirez-les avant de commander."
@@ -342,253 +342,307 @@ const CheckoutPage = () => {
         </Alert>
       )}
       {items.length === 0 && (
-        <Alert variant="info" role="status" aria-live="polite">
+        <Alert variant="info" role="status" aria-live="polite" className="dxn-feedback-success">
           {t("السلة فارغة — أضف منتجات قبل إتمام الطلب.", "Panier vide — ajoutez des produits avant de commander.")}{" "}
           <span>
-            <Button as="a" href="/products" variant="link" className="p-0">
+            <Button as="a" href="/products" variant="link" className="p-0 fw-bold" style={{ color: "#1a5d3a" }}>
               {t("تصفح المنتجات", "Parcourir les produits")}
             </Button>
           </span>
         </Alert>
       )}
 
-      <Card>
-        <Card.Header>{t("معلومات العميل", "Informations client")}</Card.Header>
-        <Card.Body>
+      <Row className="g-4">
+        <Col lg={8}>
           <Form onSubmit={formik.handleSubmit} noValidate>
-            <Row>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formFirstName" className="mb-3">
-                  <Form.Label>{t("الاسم الأول", "Prénom")} *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="firstName"
-                    value={formik.values.firstName}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    required
-                    aria-required="true"
-                    isInvalid={!!(formik.touched.firstName && formik.errors.firstName)}
-                  />
-                  <Form.Control.Feedback type="invalid">{formik.errors.firstName}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formLastName" className="mb-3">
-                  <Form.Label>{t("اسم العائلة", "Nom")} *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="lastName"
-                    value={formik.values.lastName}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    required
-                    aria-required="true"
-                    isInvalid={!!(formik.touched.lastName && formik.errors.lastName)}
-                  />
-                  <Form.Control.Feedback type="invalid">{formik.errors.lastName}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
-
-            <Row>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formPhone" className="mb-3">
-                  <Form.Label>{t("رقم الهاتف", "Numéro de téléphone")} *</Form.Label>
-                  <Form.Control
-                    type="tel"
-                    name="phone"
-                    value={formik.values.phone}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    placeholder="05/06/07XXXXXXXX"
-                    required
-                    aria-required="true"
-                    isInvalid={!!(formik.touched.phone && formik.errors.phone)}
-                  />
-                  <Form.Control.Feedback type="invalid">{formik.errors.phone}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formSecondPhone" className="mb-3">
-                  <Form.Label>{t("رقم هاتف ثاني (اختياري)", "Deuxième téléphone (optionnel)")}</Form.Label>
-                  <Form.Control
-                    type="tel"
-                    name="secondPhone"
-                    value={formik.values.secondPhone}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    placeholder="05/06/07XXXXXXXX"
-                    isInvalid={!!(formik.touched.secondPhone && formik.errors.secondPhone)}
-                  />
-                  <Form.Control.Feedback type="invalid">{formik.errors.secondPhone}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
-
-            <Row>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formWilaya" className="mb-3">
-                  <Form.Label>{t("الولاية", "Wilaya")} *</Form.Label>
-                  <Form.Select
-                    name="wilaya"
-                    value={formik.values.wilaya}
-                    onChange={handleWilayaChange}
-                    onBlur={formik.handleBlur}
-                    required
-                    aria-required="true"
-                    isInvalid={!!(formik.touched.wilaya && formik.errors.wilaya)}
-                  >
-                    <option value="">{t("اختر الولاية", "Sélectionnez une wilaya")}</option>
-                    {wilayaOptions.map((w) => (
-                      <option key={w.value} value={w.value}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">{formik.errors.wilaya}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col xs={12} sm={6}>
-                <Form.Group controlId="formCommune" className="mb-3">
-                  <Form.Label>{t("البلدية", "Commune")} *</Form.Label>
-                  <Form.Control
-                    name="commune"
-                    value={formik.values.commune}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    required
-                    aria-required="true"
-                    isInvalid={!!(formik.touched.commune && formik.errors.commune)}
-                    placeholder={t("اسم البلدية", "Nom de la commune")}
-                  />
-                  <Form.Control.Feedback type="invalid">{formik.errors.commune}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
-
-            {deliveryMethod === "home" && (
-              <Form.Group controlId="formAddress" className="mb-3">
-                <Form.Label>{t("العنوان الكامل", "Adresse complète")} *</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  name="address"
-                  rows={2}
-                  value={formik.values.address}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  placeholder={t("الشارع ورقم المنزل", "Rue et numéro de maison")}
-                  required
-                  aria-required="true"
-                  isInvalid={!!(formik.touched.address && formik.errors.address)}
-                />
-                <Form.Control.Feedback type="invalid">{formik.errors.address}</Form.Control.Feedback>
-              </Form.Group>
-            )}
-
-            <fieldset className="mb-3">
-              <legend className="fs-6 fw-semibold">{t("طريقة التوصيل", "Méthode de livraison")}</legend>
-              <Row>
-                <Col xs={12} sm={6}>
-                  <Form.Check
-                    type="radio"
-                    label={t("التوصيل للمنزل", "Livraison à domicile")}
-                    name="deliveryMethod"
-                    value="home"
-                    id="delivery-home"
-                    checked={deliveryMethod === "home"}
-                    onChange={() => switchDeliveryMethod("home")}
-                  />
-                </Col>
-                <Col xs={12} sm={6}>
-                  <Form.Check
-                    type="radio"
-                    label={t("التوصيل لمكتب البريد", "Livraison en bureau de poste")}
-                    name="deliveryMethod"
-                    value="office"
-                    id="delivery-office"
-                    checked={deliveryMethod === "office"}
-                    onChange={() => switchDeliveryMethod("office")}
-                  />
-                </Col>
-              </Row>
-            </fieldset>
-
-            <fieldset className="mb-3">
-              <legend className="fs-6 fw-semibold">{t("طريقة الدفع", "Méthode de paiement")}</legend>
-              <Row>
-                <Col xs={12} sm={6}>
-                  <Form.Check
-                    type="radio"
-                    label={t("الدفع عند الاستلام", "Paiement à la livraison")}
-                    name="paymentMethod"
-                    value="cod"
-                    id="payment-cod"
-                    checked={paymentMethod === "cod"}
-                    onChange={() => setPaymentMethod("cod")}
-                  />
-                </Col>
-                <Col xs={12} sm={6}>
-                  <Form.Check
-                    type="radio"
-                    label="BaridiMob"
-                    name="paymentMethod"
-                    value="baridimob"
-                    id="payment-baridimob"
-                    checked={paymentMethod === "baridimob"}
-                    onChange={() => setPaymentMethod("baridimob")}
-                  />
-                </Col>
-              </Row>
-            </fieldset>
-
-            <div className="mt-3 p-3 bg-light rounded" role="status" aria-live="polite">
-              <div>
-                <strong>{t("المجموع الفرعي", "Sous-total")}:</strong> {subtotal} DA
+            {/* Customer info */}
+            <div className="dxn-form-card dxn-anim-fade-up">
+              <div className="dxn-form-card-head">
+                <span className="dxn-step">1</span>
+                {t("معلومات العميل", "Informations client")}
               </div>
-              <div>
-                <strong>{t("رسوم الشحن", "Frais de port")}:</strong> {shippingFee} DA
-              </div>
-              <div className="fs-5">
-                <strong>{t("المجموع", "Total")}:</strong> {total} DA
+              <div className="dxn-form-card-body">
+                <Row>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formFirstName" className="mb-3">
+                      <Form.Label>{t("الاسم الأول", "Prénom")} *</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="firstName"
+                        value={formik.values.firstName}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        required
+                        aria-required="true"
+                        isInvalid={!!(formik.touched.firstName && formik.errors.firstName)}
+                      />
+                      <Form.Control.Feedback type="invalid">{formik.errors.firstName}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formLastName" className="mb-3">
+                      <Form.Label>{t("اسم العائلة", "Nom")} *</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="lastName"
+                        value={formik.values.lastName}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        required
+                        aria-required="true"
+                        isInvalid={!!(formik.touched.lastName && formik.errors.lastName)}
+                      />
+                      <Form.Control.Feedback type="invalid">{formik.errors.lastName}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formPhone" className="mb-3">
+                      <Form.Label>{t("رقم الهاتف", "Numéro de téléphone")} *</Form.Label>
+                      <Form.Control
+                        type="tel"
+                        name="phone"
+                        value={formik.values.phone}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        placeholder="05/06/07XXXXXXXX"
+                        required
+                        aria-required="true"
+                        isInvalid={!!(formik.touched.phone && formik.errors.phone)}
+                      />
+                      <Form.Control.Feedback type="invalid">{formik.errors.phone}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formSecondPhone" className="mb-3">
+                      <Form.Label>{t("رقم هاتف ثاني (اختياري)", "Deuxième téléphone (optionnel)")}</Form.Label>
+                      <Form.Control
+                        type="tel"
+                        name="secondPhone"
+                        value={formik.values.secondPhone}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        placeholder="05/06/07XXXXXXXX"
+                        isInvalid={!!(formik.touched.secondPhone && formik.errors.secondPhone)}
+                      />
+                      <Form.Control.Feedback type="invalid">{formik.errors.secondPhone}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formWilaya" className="mb-3">
+                      <Form.Label>{t("الولاية", "Wilaya")} *</Form.Label>
+                      <Form.Select
+                        name="wilaya"
+                        value={formik.values.wilaya}
+                        onChange={handleWilayaChange}
+                        onBlur={formik.handleBlur}
+                        required
+                        aria-required="true"
+                        isInvalid={!!(formik.touched.wilaya && formik.errors.wilaya)}
+                      >
+                        <option value="">{t("اختر الولاية", "Sélectionnez une wilaya")}</option>
+                        {wilayaOptions.map((w) => (
+                          <option key={w.value} value={w.value}>
+                            {w.label}
+                          </option>
+                        ))}
+                      </Form.Select>
+                      <Form.Control.Feedback type="invalid">{formik.errors.wilaya}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Form.Group controlId="formCommune" className="mb-3">
+                      <Form.Label>{t("البلدية", "Commune")} *</Form.Label>
+                      <Form.Control
+                        name="commune"
+                        value={formik.values.commune}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        required
+                        aria-required="true"
+                        isInvalid={!!(formik.touched.commune && formik.errors.commune)}
+                        placeholder={t("اسم البلدية", "Nom de la commune")}
+                      />
+                      <Form.Control.Feedback type="invalid">{formik.errors.commune}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                {deliveryMethod === "home" && (
+                  <Form.Group controlId="formAddress" className="mb-3">
+                    <Form.Label>{t("العنوان الكامل", "Adresse complète")} *</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      name="address"
+                      rows={2}
+                      value={formik.values.address}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      placeholder={t("الشارع ورقم المنزل", "Rue et numéro de maison")}
+                      required
+                      aria-required="true"
+                      isInvalid={!!(formik.touched.address && formik.errors.address)}
+                    />
+                    <Form.Control.Feedback type="invalid">{formik.errors.address}</Form.Control.Feedback>
+                  </Form.Group>
+                )}
               </div>
             </div>
 
-            <Form.Group className="mt-3" controlId="formConfirm">
-              <Form.Check
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                required
-                aria-required="true"
-                label={t(
-                  "أؤكد أن معلومات الاتصال والعنوان صحيحة",
-                  "Je confirme que les informations de contact et l'adresse saisies sont correctes"
-                )}
-              />
-            </Form.Group>
+            {/* Delivery method */}
+            <div className="dxn-form-card dxn-anim-fade-up">
+              <div className="dxn-form-card-head">
+                <span className="dxn-step">2</span>
+                {t("طريقة التوصيل", "Méthode de livraison")}
+              </div>
+              <div className="dxn-form-card-body">
+                <Row>
+                  <Col xs={12} md={6}>
+                    <div className={"dxn-radio-option" + (deliveryMethod === "home" ? " has-check" : "")}>
+                      <Form.Check
+                        type="radio"
+                        label={t("التوصيل للمنزل", "Livraison à domicile")}
+                        name="deliveryMethod"
+                        value="home"
+                        id="delivery-home"
+                        checked={deliveryMethod === "home"}
+                        onChange={() => switchDeliveryMethod("home")}
+                      />
+                    </div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div className={"dxn-radio-option" + (deliveryMethod === "office" ? " has-check" : "")}>
+                      <Form.Check
+                        type="radio"
+                        label={t("التوصيل لمكتب البريد", "Livraison en bureau de poste")}
+                        name="deliveryMethod"
+                        value="office"
+                        id="delivery-office"
+                        checked={deliveryMethod === "office"}
+                        onChange={() => switchDeliveryMethod("office")}
+                      />
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+            </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-100 mt-3 dxn-btn dxn-btn-primary"
-              disabled={isSubmitting || !confirmed || items.length === 0 || hasInvalid || !catalogChecked}
-              aria-busy={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="dxn-btn-spinner" aria-hidden="true"></span>
-                  {t("جارٍ الإرسال...", "Envoi en cours...")}
-                </>
-              ) : hasInvalid ? (
-                t("احذف المنتجات غير المتوفرة أولاً", "Retirez d'abord les articles indisponibles")
-              ) : (
-                t("تأكيد الطلب", "Confirmer la commande")
-              )}
-            </Button>
+            {/* Payment method */}
+            <div className="dxn-form-card dxn-anim-fade-up">
+              <div className="dxn-form-card-head">
+                <span className="dxn-step">3</span>
+                {t("طريقة الدفع", "Méthode de paiement")}
+              </div>
+              <div className="dxn-form-card-body">
+                <Row>
+                  <Col xs={12} md={6}>
+                    <div className={"dxn-radio-option" + (paymentMethod === "cod" ? " has-check" : "")}>
+                      <Form.Check
+                        type="radio"
+                        label={t("الدفع عند الاستلام", "Paiement à la livraison")}
+                        name="paymentMethod"
+                        value="cod"
+                        id="payment-cod"
+                        checked={paymentMethod === "cod"}
+                        onChange={() => setPaymentMethod("cod")}
+                      />
+                    </div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div className={"dxn-radio-option" + (paymentMethod === "baridimob" ? " has-check" : "")}>
+                      <Form.Check
+                        type="radio"
+                        label="BaridiMob"
+                        name="paymentMethod"
+                        value="baridimob"
+                        id="payment-baridimob"
+                        checked={paymentMethod === "baridimob"}
+                        onChange={() => setPaymentMethod("baridimob")}
+                      />
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+            </div>
+
+            {/* Confirmation */}
+            <div className="dxn-form-card dxn-anim-fade-up">
+              <div className="dxn-form-card-head">
+                <span className="dxn-step">4</span>
+                {t("التأكيد", "Confirmation")}
+              </div>
+              <div className="dxn-form-card-body">
+                <Form.Group className="mb-3" controlId="formConfirm">
+                  <Form.Check
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(e) => setConfirmed(e.target.checked)}
+                    required
+                    aria-required="true"
+                    label={t(
+                      "أؤكد أن معلومات الاتصال والعنوان صحيحة",
+                      "Je confirme que les informations de contact et l'adresse saisies sont correctes"
+                    )}
+                  />
+                </Form.Group>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-100 dxn-btn dxn-btn-gold"
+                  disabled={isSubmitting || !confirmed || items.length === 0 || hasInvalid || !catalogChecked}
+                  aria-busy={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="dxn-btn-spinner" aria-hidden="true"></span>
+                      {t("جارٍ الإرسال...", "Envoi en cours...")}
+                    </>
+                  ) : hasInvalid ? (
+                    t("احذف المنتجات غير المتوفرة أولاً", "Retirez d'abord les articles indisponibles")
+                  ) : (
+                    t("تأكيد الطلب", "Confirmer la commande")
+                  )}
+                </Button>
+              </div>
+            </div>
           </Form>
-        </Card.Body>
-      </Card>
+        </Col>
+
+        {/* Summary */}
+        <Col lg={4}>
+          <div className="dxn-summary dxn-anim-fade-up">
+            <div className="dxn-summary-title">{t("ملخص الطلب", "Récapitulatif")}</div>
+            <div className="dxn-summary-row">
+              <span>{t("عدد المنتجات", "Articles")}</span>
+              <strong>{validItems.length}</strong>
+            </div>
+            <div className="dxn-summary-row">
+              <span>{t("المجموع الفرعي", "Sous-total")}</span>
+              <strong>{subtotal.toLocaleString("fr-DZ")} DA</strong>
+            </div>
+            <div className="dxn-summary-row">
+              <span>{t("رسوم الشحن", "Frais de port")}</span>
+              <strong>{shippingFee > 0 ? `${shippingFee.toLocaleString("fr-DZ")} DA` : t("—", "—")}</strong>
+            </div>
+            <div className="dxn-summary-total">
+              <span>{t("المجموع", "Total")}</span>
+              <span>{total.toLocaleString("fr-DZ")} DA</span>
+            </div>
+            <p className="dxn-subnote mt-3 mb-0">
+              {t(
+                "يتم تأكيد الطلب عبر الهاتف قبل الشحن.",
+                "La commande sera confirmée par téléphone avant l'expédition."
+              )}
+            </p>
+          </div>
+        </Col>
+      </Row>
     </Container>
   );
 };
