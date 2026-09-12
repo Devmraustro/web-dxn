@@ -48,6 +48,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
             {t("المنتجات", "Produits")}
           </NavLink>
           <NavLink
+            to="/admin/orders"
+            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
+          >
+            {t("الطلبات", "Commandes")}
+          </NavLink>
+          <NavLink
             to="/admin/reviews"
             className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
           >

@@ -19,6 +19,7 @@ const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage")
 const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminReviewPage = lazy(() => import("./pages/AdminReviewPage"));
+const AdminOrdersPage = lazy(() => import("./pages/AdminOrdersPage"));
 const AdminProductsPage = lazy(() => import("./pages/AdminProductsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 
@@ -59,6 +60,14 @@ const App = () => (
           element={
             <AdminLayout>
               <AdminProductsPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/orders"
+          element={
+            <AdminLayout>
+              <AdminOrdersPage />
             </AdminLayout>
           }
         />
