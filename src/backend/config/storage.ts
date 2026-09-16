@@ -96,6 +96,37 @@ export class LocalStorageProvider implements StorageProvider {
   }
 }
 
+/**
+ * Cloudinary signature algorithm.
+ *
+ * Create a SHA-1 signature from the request parameters plus the API secret.
+ * The `file`, `cloud_name`, `signature`, and `api_key` fields must be
+ * excluded from the signed string. Null / undefined / empty values are also
+ * excluded. Remaining parameters are sorted alphabetically by key, joined
+ * as key=value pairs with '&' separators, and the api_secret is appended
+ * directly (no separator) before hashing.
+ *
+ * @see https://cloudinary.com/documentation/signatures
+ */
+export function createCloudinarySignature(
+  params: Record<string, string | null | undefined>,
+  apiSecret: string
+): string {
+  const EXCLUDED = new Set(["file", "cloud_name", "signature", "api_key"]);
+
+  const signedStr = Object.keys(params)
+    .filter((k) => {
+      if (EXCLUDED.has(k)) return false;
+      const v = params[k];
+      return v !== undefined && v !== null && v !== "";
+    })
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join("&");
+
+  return crypto.createHash("sha1").update(signedStr + apiSecret).digest("hex");
+}
+
 function cloudinaryPublicIdFromUrl(url: string): string {
   const match = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)$/);
   if (!match) return "";
@@ -162,9 +193,10 @@ export class CloudinaryStorageProvider implements StorageProvider {
 
     try {
       const timestamp = Math.round(Date.now() / 1000);
-      // Cloudinary signs all request parameters EXCEPT `file` and `api_key`.
-      const str = `timestamp=${timestamp}`;
-      const signature = crypto.createHmac("sha256", apiSecret).update(str).digest("hex");
+      const signature = createCloudinarySignature(
+        { timestamp: String(timestamp) },
+        apiSecret
+      );
       const result = await cloudinaryRequest(
         "/image/upload",
         {
@@ -192,8 +224,10 @@ export class CloudinaryStorageProvider implements StorageProvider {
     if (!publicId) return;
     const { apiKey, apiSecret } = requireCloudinaryConfig();
     const timestamp = Math.round(Date.now() / 1000);
-    const str = `public_id=${publicId}&timestamp=${timestamp}`;
-    const signature = crypto.createHmac("sha256", apiSecret).update(str).digest("hex");
+    const signature = createCloudinarySignature(
+      { public_id: publicId, timestamp: String(timestamp) },
+      apiSecret
+    );
     await cloudinaryRequest("/image/destroy", {
       public_id: publicId,
       timestamp: String(timestamp),
