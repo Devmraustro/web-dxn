@@ -13,6 +13,7 @@
  */
 import { Router, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
+import * as crypto from "crypto";
 import {
   verifyWebhook,
   verifySignature,
@@ -32,6 +33,27 @@ const verifyToken = process.env.META_VERIFY_TOKEN || "";
 const appSecret = process.env.META_APP_SECRET || "";
 const pageToken = process.env.META_PAGE_ACCESS_TOKEN || "";
 const graphVersion = process.env.META_GRAPH_VERSION || "v26.0";
+
+/**
+ * Safe diagnostic logging for Meta webhook verification.
+ * NEVER logs actual token values. Only logs safe metadata.
+ */
+function logWebhookDiagnostic(
+  label: string,
+  data: Record<string, unknown>
+): void {
+  // In production, we use console.log which Vercel captures in function logs
+  // The data object contains NO secrets, only safe metadata
+  console.log(`[META-WEBHOOK-DIAGNOSTIC] ${label}`, JSON.stringify(data));
+}
+
+/**
+ * Compute SHA-256 fingerprint of a string for safe comparison logging.
+ * Returns first 16 chars of hex digest - sufficient for equality check without exposing full value.
+ */
+function fingerprint(str: string): string {
+  return crypto.createHash("sha256").update(str).digest("hex").slice(0, 16);
+}
 
 // Endpoint-specific rate limiting (Phase 19V): Meta webhooks and AI endpoints
 // get their own stricter limits so a flood or misconfigured caller cannot
@@ -101,14 +123,68 @@ function getMessenger(): MetaMessenger {
 router.get("/webhook", (req: Request, res: Response) => {
   const query = req.query as Record<string, string | undefined>;
   const config = { verifyToken, appSecret };
-  const result = verifyWebhook(config, {
-    "hub.mode": query["hub.mode"],
-    "hub.verify_token": query["hub.verify_token"],
-    "hub.challenge": query["hub.challenge"],
+  
+  // Extract query parameters as Meta sends them (with dots in names)
+  const receivedMode = query["hub.mode"];
+  const receivedVerifyToken = query["hub.verify_token"];
+  const receivedChallenge = query["hub.challenge"];
+  
+  // SAFE DIAGNOSTIC LOGGING - NO SECRETS EXPOSED
+  const receivedTokenLength = typeof receivedVerifyToken === "string" ? receivedVerifyToken.length : 0;
+  const configuredTokenLength = typeof verifyToken === "string" ? verifyToken.length : 0;
+  const receivedFingerprint = typeof receivedVerifyToken === "string" ? fingerprint(receivedVerifyToken) : "N/A";
+  const configuredFingerprint = typeof verifyToken === "string" ? fingerprint(verifyToken) : "N/A";
+  const fingerprintsMatch = receivedFingerprint === configuredFingerprint && receivedFingerprint !== "N/A";
+  
+  const hasLeadingWhitespace = typeof receivedVerifyToken === "string" && receivedVerifyToken.startsWith(" ");
+  const hasTrailingWhitespace = typeof receivedVerifyToken === "string" && receivedVerifyToken.endsWith(" ");
+  const hasInternalWhitespace = typeof receivedVerifyToken === "string" && /\s/.test(receivedVerifyToken.slice(1, -1));
+  
+  logWebhookDiagnostic("verification_request_received", {
+    requestReachedWebhook: true,
+    httpMethod: req.method,
+    pathname: req.path,
+    hubModePresent: receivedMode !== undefined,
+    hubModeValue: receivedMode,
+    hubVerifyTokenPresent: receivedVerifyToken !== undefined,
+    receivedVerifyTokenLength: receivedTokenLength,
+    configuredVerifyTokenLength: configuredTokenLength,
+    receivedVerifyTokenFingerprint: receivedFingerprint,
+    configuredVerifyTokenFingerprint: configuredFingerprint,
+    fingerprintsMatch: fingerprintsMatch,
+    hasLeadingWhitespace: hasLeadingWhitespace,
+    hasTrailingWhitespace: hasTrailingWhitespace,
+    hasInternalWhitespace: hasInternalWhitespace,
+    hubChallengePresent: receivedChallenge !== undefined,
+    challengeLength: typeof receivedChallenge === "string" ? receivedChallenge.length : 0,
   });
+
+  const result = verifyWebhook(config, {
+    "hub.mode": receivedMode,
+    "hub.verify_token": receivedVerifyToken,
+    "hub.challenge": receivedChallenge,
+  });
+
+  logWebhookDiagnostic("verification_result", {
+    verificationOk: result.ok,
+    reason: result.reason,
+    challengePresent: !!result.challenge,
+    challengeLength: typeof result.challenge === "string" ? result.challenge.length : 0,
+  });
+
   if (result.ok && result.challenge) {
+    logWebhookDiagnostic("verification_success", {
+      finalHttpStatus: 200,
+      responseBodyIsChallenge: true,
+      responseBodyLength: result.challenge.length,
+    });
     return res.status(200).send(result.challenge);
   }
+  
+  logWebhookDiagnostic("verification_failed", {
+    finalHttpStatus: 403,
+    responseBody: "Verification failed",
+  });
   return res.status(403).send("Verification failed");
 });
 
