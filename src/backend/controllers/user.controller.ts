@@ -4,6 +4,7 @@ import { User, Customer } from "../../Database/Models";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from "../config/env";
+import type { AuthRequest } from "../middleware/auth.middleware";
 
 // --- Registration ---
 
@@ -131,7 +132,7 @@ export const loginUser = async (req: Request, res: Response) => {
 
 // --- Get current user ---
 
-export const getCurrentUser = async (req: Request, res: Response) => {
+export const getCurrentUser = async (req: AuthRequest, res: Response) => {
   try {
     const user = await User.findById(req.user?.userId).select("-password");
     if (!user) {
@@ -150,7 +151,7 @@ export const getCurrentUser = async (req: Request, res: Response) => {
 
 // --- Update profile ---
 
-export const updateProfile = async (req: Request, res: Response) => {
+export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     const { firstName, lastName, phone, secondPhone, wilaya, commune, address } = req.body;
     

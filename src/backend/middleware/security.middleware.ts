@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import type { AuthRequest } from "./auth.middleware";
 
 /**
  * Security headers. The default Helmet Content-Security-Policy restricts
@@ -214,7 +215,7 @@ export const fileUploadSecurity = (
   };
 };
 
-export const adminAuth = (req: Request, res: Response, next: NextFunction) => {
+export const adminAuth = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     let token: string | undefined;
 
