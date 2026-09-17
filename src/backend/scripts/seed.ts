@@ -6,6 +6,7 @@
 //   npm run seed -- --admin                # admin only
 //   npm run seed -- --catalog              # catalog only
 //   npm run seed -- --admin --reset        # also reset existing admin password
+//   npm run seed -- --cleanup              # delete placeholder/seed catalog only
 //
 // Environment file precedence (deterministic):
 //   1. `.env.production.local`  (used when present — production provisioning)
@@ -40,6 +41,7 @@
 import path from "path";
 import mongoose from "mongoose";
 import { provisionAdminUser, seedStarterCatalog } from "../services/bootstrap.service";
+import { removePlaceholderCatalog } from "../services/catalogCleanup.service";
 import {
   describeSeedEnvFile,
   loadSeedEnv,
@@ -51,8 +53,9 @@ import {
 /* ---- CLI args -------------------------------------------------------- */
 
 const args = new Set(process.argv.slice(2));
-const wantsAdmin = args.has("--admin") || !args.has("--catalog");
-const wantsCatalog = args.has("--catalog") || !args.has("--admin");
+const wantsCleanup = args.has("--cleanup");
+const wantsAdmin = (args.has("--admin") || !args.has("--catalog")) && !wantsCleanup;
+const wantsCatalog = (args.has("--catalog") || !args.has("--admin")) && !wantsCleanup;
 const wantsReset = args.has("--reset");
 
 /* ---- helpers --------------------------------------------------------- */
@@ -118,6 +121,19 @@ async function main() {
     connectTimeoutMS: 10_000,
   });
   console.log("   Connected.\n");
+
+  // --- placeholder cleanup mode ---
+  if (wantsCleanup) {
+    console.log("🗑️  Removing placeholder/seed catalog records…");
+    const report = await removePlaceholderCatalog();
+    log(`Products:  ${report.productsDeleted} deleted`);
+    log(`Packs:     ${report.packsDeleted} deleted`);
+    log(`Offers:    ${report.offersDeleted} deleted`);
+    log(`Translations: ${report.translationsDeleted} deleted`);
+    log(`Pack items:   ${report.packItemsDeleted} deleted`);
+    if (!report.cleaned) log("(no placeholder records found — already clean)");
+    console.log();
+  }
 
   // --- provision admin ---
   if (wantsAdmin && email && password) {

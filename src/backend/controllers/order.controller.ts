@@ -10,8 +10,9 @@ import {
   roundMoney,
 } from "../services/commerce";
 import { resolveShippingFeeStrict } from "../services/shipping.service";
-import { sendNewOrderNotification, sendOrderStatusUpdate, sendBaridiMobVerificationNotice } from "../services/telegram.service";
+import { sendNewOrderNotification, sendOrderStatusUpdate } from "../services/telegram.service";
 import type { TelegramSendResult } from "../services/telegram.service";
+import { canTransition, isRestockStatus } from "../../shared/orderStatus";
 import type { AuthRequest } from "../middleware/auth.middleware";
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
@@ -173,8 +174,8 @@ export const createOrder = async (req: Request, res: Response) => {
     if (deliveryMethod !== "home" && deliveryMethod !== "office") {
       return res.status(400).json({ message: "Invalid delivery method" });
     }
-    if (paymentMethod !== "cod" && paymentMethod !== "baridimob") {
-      return res.status(400).json({ message: "Invalid payment method" });
+    if (paymentMethod !== "cod") {
+      return res.status(400).json({ message: "Invalid payment method. Only Cash on Delivery is available." });
     }
     if (!wilayaInput) {
       return res.status(400).json({ message: "Wilaya is required" });
@@ -403,7 +404,7 @@ export const createOrder = async (req: Request, res: Response) => {
         commune,
         address,
         paymentMethod,
-        paymentStatus: paymentMethod === "baridimob" ? "pending" : "verified",
+        paymentStatus: "verified",
         status: "new",
         subtotal,
         shippingFee,
@@ -450,10 +451,6 @@ export const createOrder = async (req: Request, res: Response) => {
     try {
       const newOrderResult = await sendNewOrderNotification(order);
       logNotificationResult(order.orderNumber, newOrderResult);
-      if (paymentMethod === "baridimob") {
-        const baridiResult = await sendBaridiMobVerificationNotice(order);
-        logNotificationResult(order.orderNumber, baridiResult);
-      }
     } catch (error: any) {
       console.warn(
         `[telegram] order ${order.orderNumber} unexpected notification error: ${error?.message ?? "unknown"}`
@@ -467,20 +464,6 @@ export const createOrder = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  new: ["pending_payment", "confirmed", "cancelled"],
-  pending_payment: ["confirmed", "rejected", "cancelled"],
-  confirmed: ["processing", "cancelled"],
-  processing: ["shipped", "cancelled"],
-  shipped: ["delivered"],
-  delivered: [],
-  cancelled: [],
-  rejected: [],
-};
-
-/** Terminal statuses that free the reserved inventory again. */
-const RESTOCK_ON_STATUS = new Set(["cancelled", "rejected"]);
 
 /**
  * Build the exact per-product claim list to restore from the order doc.
@@ -540,14 +523,14 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
     }
     const fromStatus = currentOrder.status;
 
-    if (!VALID_TRANSITIONS[fromStatus] || !VALID_TRANSITIONS[fromStatus].includes(status)) {
+    if (!canTransition(fromStatus, status)) {
       return res.status(400).json({ message: `Invalid state transition from ${fromStatus} to ${status}` });
     }
 
     // Atomic compare-and-set transition: only the request that flips the order
     // away from `fromStatus` wins. Concurrent admins (cancel vs ship) resolve
     // here instead of racing two blind writes.
-    const isTerminal = RESTOCK_ON_STATUS.has(status);
+    const isTerminal = isRestockStatus(status);
     const updated = await Order.findOneAndUpdate(
       {
         _id: id,

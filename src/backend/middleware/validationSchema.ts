@@ -188,7 +188,7 @@ export const orderCreateSchema = yup.object({
   address: yup.string().max(500),
   paymentMethod: yup
     .string()
-    .oneOf(["cod", "baridimob"], "Invalid payment method")
+    .oneOf(["cod"], "Invalid payment method. Only Cash on Delivery is accepted.")
     .required("Payment method is required"),
   confirmed: yup.boolean().required("Order must be confirmed").oneOf([true], "Order must be confirmed"),
 });

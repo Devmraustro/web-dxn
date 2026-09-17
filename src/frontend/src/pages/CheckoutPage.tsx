@@ -42,7 +42,7 @@ const CheckoutPage = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "baridimob">("cod");
+  const [paymentMethod, setPaymentMethod] = useState<"cod">("cod");
   const [catalogChecked, setCatalogChecked] = useState(false);
 
   // Stable idempotency key per checkout session so a double-tap / network retry
@@ -540,7 +540,7 @@ const CheckoutPage = () => {
               </div>
               <div className="dxn-form-card-body">
                 <Row>
-                  <Col xs={12} md={6}>
+                  <Col xs={12}>
                     <div className={"dxn-radio-option" + (paymentMethod === "cod" ? " has-check" : "")}>
                       <Form.Check
                         type="radio"
@@ -550,19 +550,6 @@ const CheckoutPage = () => {
                         id="payment-cod"
                         checked={paymentMethod === "cod"}
                         onChange={() => setPaymentMethod("cod")}
-                      />
-                    </div>
-                  </Col>
-                  <Col xs={12} md={6}>
-                    <div className={"dxn-radio-option" + (paymentMethod === "baridimob" ? " has-check" : "")}>
-                      <Form.Check
-                        type="radio"
-                        label="BaridiMob"
-                        name="paymentMethod"
-                        value="baridimob"
-                        id="payment-baridimob"
-                        checked={paymentMethod === "baridimob"}
-                        onChange={() => setPaymentMethod("baridimob")}
                       />
                     </div>
                   </Col>

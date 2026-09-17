@@ -13,49 +13,13 @@ import {
   Spinner,
 } from "react-bootstrap";
 import axios from "axios";
-
-type OrderStatus =
-  | "new"
-  | "pending_payment"
-  | "confirmed"
-  | "processing"
-  | "shipped"
-  | "delivered"
-  | "cancelled"
-  | "rejected";
-
-const STATUS_LABELS: Record<OrderStatus, [string, string]> = {
-  new: ["جديدة", "Nouvelle"],
-  pending_payment: ["بانتظار الدفع", "Paiement en attente"],
-  confirmed: ["مؤكدة", "Confirmée"],
-  processing: ["قيد التجهيز", "En préparation"],
-  shipped: ["تم الشحن", "Expédiée"],
-  delivered: ["تم التسليم", "Livrée"],
-  cancelled: ["ملغاة", "Annulée"],
-  rejected: ["مرفوضة", "Rejetée"],
-};
-
-const STATUS_VARIANTS: Record<OrderStatus, string> = {
-  new: "info",
-  pending_payment: "warning",
-  confirmed: "primary",
-  processing: "secondary",
-  shipped: "dark",
-  delivered: "success",
-  cancelled: "danger",
-  rejected: "danger",
-};
-
-const NEXT_STATUSES: Record<OrderStatus, OrderStatus[]> = {
-  new: ["pending_payment", "confirmed", "cancelled"],
-  pending_payment: ["confirmed", "rejected", "cancelled"],
-  confirmed: ["processing", "cancelled"],
-  processing: ["shipped", "cancelled"],
-  shipped: ["delivered"],
-  delivered: [],
-  cancelled: [],
-  rejected: [],
-};
+import {
+  ORDER_STATUSES,
+  nextStatuses,
+  statusLabel as orderStatusLabel,
+  statusVariant as orderStatusVariant,
+} from "../utils/orderStatus";
+import type { OrderStatus } from "../utils/orderStatus";
 
 const PAYMENT_LABELS: Record<string, [string, string]> = {
   cod: ["الدفع عند الاستلام", "Paiement à la livraison"],
@@ -168,10 +132,8 @@ const AdminOrdersPage = () => {
     void loadOrders();
   }, [loadOrders]);
 
-  const statusLabel = (s: OrderStatus) => {
-    const pair = STATUS_LABELS[s] || ["", ""];
-    return language === "ar" ? pair[0] : pair[1];
-  };
+  const statusLabel = (s: string) => orderStatusLabel(s, language);
+  const statusVariant = (s: string) => orderStatusVariant(s);
 
   const paymentLabel = (m: string) => {
     const pair = PAYMENT_LABELS[m] || [m, m];
@@ -348,7 +310,7 @@ const AdminOrdersPage = () => {
                           <small className="text-muted">{paymentStatusLabel(o.paymentStatus, o.paymentMethod)}</small>
                         </td>
                         <td>
-                          <Badge pill bg={STATUS_VARIANTS[o.status]}>
+                          <Badge pill bg={statusVariant(o.status)}>
                             {statusLabel(o.status)}
                           </Badge>
                         </td>
@@ -422,7 +384,7 @@ const AdminOrdersPage = () => {
           {detail && (
             <>
               <div className="d-flex flex-wrap gap-2 mb-3">
-                <Badge pill bg={STATUS_VARIANTS[detail.status]}>
+                <Badge pill bg={statusVariant(detail.status)}>
                   {statusLabel(detail.status)}
                 </Badge>
                 <Badge pill bg="secondary">
@@ -563,9 +525,9 @@ const RowFilters = ({
         <Form.Label className="small text-muted mb-1">{t("الحالة", "Statut")}</Form.Label>
         <Form.Select value={statusFilter} onChange={(e) => onStatus(e.target.value)}>
           <option value="">{t("الكل", "Tous")}</option>
-          {(Object.keys(STATUS_LABELS) as OrderStatus[]).map((s) => (
+          {ORDER_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {(language === "ar" ? STATUS_LABELS[s][0] : STATUS_LABELS[s][1])}
+              {orderStatusLabel(s, language)}
             </option>
           ))}
         </Form.Select>
@@ -636,7 +598,7 @@ const StatusSelect = ({
   t: (ar: string, fr: string) => string;
   language: string;
 }) => {
-  const allowed = NEXT_STATUSES[order.status] || [];
+  const allowed = nextStatuses(order.status);
   if (allowed.length === 0) {
     return (
       <span className="text-muted small">
@@ -644,7 +606,7 @@ const StatusSelect = ({
       </span>
     );
   }
-  const label = (s: OrderStatus) => (language === "ar" ? STATUS_LABELS[s][0] : STATUS_LABELS[s][1]);
+  const label = (s: OrderStatus) => orderStatusLabel(s, language);
   return (
     <Form.Select
       size="sm"

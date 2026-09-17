@@ -12,7 +12,8 @@
     "test": "jest --config jest.config.js --runInBand",
     "seed": "ts-node -P src/backend/tsconfig.json src/backend/scripts/seed.ts",
     "seed:admin": "ts-node -P src/backend/tsconfig.json src/backend/scripts/seed.ts --admin",
-    "seed:catalog": "ts-node -P src/backend/tsconfig.json src/backend/scripts/seed.ts --catalog"
+    "seed:catalog": "ts-node -P src/backend/tsconfig.json src/backend/scripts/seed.ts --catalog",
+    "cleanup:catalog": "ts-node -P src/backend/tsconfig.json src/backend/scripts/seed.ts --cleanup"
   },
   "keywords": [],
   "author": "",

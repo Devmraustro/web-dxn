@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import axios from "axios";
 import { Container, Row, Col, Table, Badge } from "react-bootstrap";
+import { statusLabel, statusVariant } from "../utils/orderStatus";
 
 const AdminDashboardPage = () => {
   const { language } = useLanguage();
@@ -111,8 +112,8 @@ const AdminDashboardPage = () => {
                           <td>{order.customerInfo?.firstName || "-"}</td>
                           <td>{order.total} DA</td>
                           <td>
-                            <Badge pill bg={getStatusVariant(order.status)}>
-                              {getStatusText(order.status, language)}
+                            <Badge pill bg={statusVariant(order.status)}>
+                              {statusLabel(order.status, language)}
                             </Badge>
                           </td>
                         </tr>
@@ -207,46 +208,6 @@ const AdminDashboardPage = () => {
       )}
     </Container>
   );
-};
-
-// Helper functions
-const getStatusVariant = (status: string): "primary" | "secondary" | "success" | "danger" | "warning" | "info" => {
-  const map: any = {
-    new: "secondary",
-    pending_payment: "warning",
-    confirmed: "info",
-    processing: "primary",
-    shipped: "primary",
-    delivered: "success",
-    cancelled: "danger",
-    rejected: "danger",
-  };
-  return map[status] || "secondary";
-};
-
-const getStatusText = (status: string, language: string) => {
-  const arMap: any = {
-    new: "جديد",
-    pending_payment: "في انتظار الدفع",
-    confirmed: "مؤكد",
-    processing: "قيد المعالجة",
-    shipped: "تم الشحن",
-    delivered: "تم التسليم",
-    cancelled: "ملغي",
-    rejected: "مرفوض",
-  };
-  const frMap: any = {
-    new: "Nouvelle",
-    pending_payment: "En attente de paiement",
-    confirmed: "Confirmée",
-    processing: "En cours",
-    shipped: "Expédiée",
-    delivered: "Livrée",
-    cancelled: "Annulée",
-    rejected: "Rejetée",
-  };
-
-  return language === "ar" ? (arMap[status] || status) : (frMap[status] || status);
 };
 
 export default AdminDashboardPage;
