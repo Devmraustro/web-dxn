@@ -121,6 +121,24 @@ function getMessenger(): MetaMessenger {
  * GET verification handshake.
  */
 router.get("/webhook", (req: Request, res: Response) => {
+  // SAFE DIAGNOSTIC: Log raw request at Express route entry
+  const rawUrl = req?.url || "";
+  const rawOriginalUrl = req?.originalUrl || "";
+  const queryObj = req?.query || {};
+  const queryKeys = Object.keys(queryObj);
+
+  console.log("[META-ROUTE-DIAGNOSTIC] route_entry", JSON.stringify({
+    urlPath: rawUrl.split("?")[0],
+    originalUrlPath: rawOriginalUrl.split("?")[0],
+    urlHasQuery: rawUrl.includes("?"),
+    originalUrlHasQuery: rawOriginalUrl.includes("?"),
+    queryKeys,
+    queryHubMode: queryObj["hub.mode"],
+    queryHubVerifyTokenPresent: !!queryObj["hub.verify_token"],
+    queryHubChallengePresent: !!queryObj["hub.challenge"],
+    method: req.method,
+  }));
+
   const query = req.query as Record<string, string | undefined>;
   const config = { verifyToken, appSecret };
   

@@ -23,6 +23,29 @@ if (require.main === module) {
  * database is unreachable instead of buffering queries for every endpoint.
  */
 const serverlessHandler = async (req: any, res: any) => {
+  // SAFE DIAGNOSTIC: Log raw request at Vercel entrypoint
+  // NEVER log token values - only structural info
+  const rawUrl = req?.url || "";
+  const rawOriginalUrl = req?.originalUrl || "";
+  const hasQueryString = rawUrl.includes("?");
+  const queryStringPart = hasQueryString ? rawUrl.split("?")[1] : "";
+  const queryKeys = queryStringPart
+    ? queryStringPart.split("&").map((p: string) => p.split("=")[0]).filter(Boolean)
+    : [];
+
+  console.log("[VERCEL-ENTRYPOINT-DIAGNOSTIC] request_received", JSON.stringify({
+    rawUrlPath: rawUrl.split("?")[0],
+    hasQueryString,
+    queryKeys,
+    originalUrlPath: rawOriginalUrl.split("?")[0],
+    originalHasQueryString: rawOriginalUrl.includes("?"),
+    method: req?.method,
+    headersHost: req?.headers?.host,
+    headersXForwardedProto: req?.headers?.["x-forwarded-proto"],
+    headersXForwardedHost: req?.headers?.["x-forwarded-host"],
+    headersContentType: req?.headers?.["content-type"],
+  }));
+
   const path = (req?.url || "").split("?")[0] || "";
   // Paths that can be fully served without a database connection. Everything
   // else (including /sitemap.xml, which lists products) awaits ensureDB()
