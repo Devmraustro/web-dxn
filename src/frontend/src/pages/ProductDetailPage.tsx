@@ -124,9 +124,7 @@ const ProductDetailPage = () => {
                   src={activeImage}
                   alt={title}
                   className="dxn-detail-main-img"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                  }}
+                  onError={() => setActiveImage("")}
                 />
               ) : (
                 <div className="py-5 text-secondary">
@@ -235,8 +233,8 @@ const ProductDetailPage = () => {
             </svg>
             <span>
               {t(
-                "الدفع عند الاستلام متاح لجميع الولايات الـ 58. يتم تأكيد الطلب عبر الهاتف.",
-                "Paiement à la livraison disponible pour les 58 wilayas. Commande confirmée par téléphone."
+                "الدفع عند الاستلام متاح لجميع الولايات الـ 69. يتم تأكيد الطلب عبر الهاتف.",
+                "Paiement à la livraison disponible pour les 69 wilayas. Commande confirmée par téléphone."
               )}
             </span>
           </div>

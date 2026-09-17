@@ -14,6 +14,13 @@ export default defineConfig({
   root: frontendRoot,
   plugins: [react()],
   base: "/",
+  // Inject social-profile URLs as build-time literals so the Footer can
+  // conditionally render social buttons. Undefined / empty → button hidden;
+  // real URL → button rendered with target=_blank + noopener+noreferrer.
+  define: {
+    __VITE_FACEBOOK_URL__: JSON.stringify(process.env.VITE_FACEBOOK_URL ?? ""),
+    __VITE_INSTAGRAM_URL__: JSON.stringify(process.env.VITE_INSTAGRAM_URL ?? ""),
+  },
   build: {
     outDir: buildOutDir,
     emptyOutDir: true,

@@ -81,5 +81,10 @@
   "statusCancelled": "Annulée",
   "statusRejected": "Rejetée",
   "promoWas": "était",
-  "currency": "DA"
+  "currency": "DA",
+  "contactUs": "Contactez-nous",
+  "email": "Email",
+  "facebook": "Facebook",
+  "instagram": "Instagram",
+  "paymentOnDelivery": "Paiement à la livraison"
 }

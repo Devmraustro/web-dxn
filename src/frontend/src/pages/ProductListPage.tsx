@@ -68,8 +68,8 @@ const ProductListPage = () => {
           </h1>
           <p className="dxn-hero-text">
             {t(
-              "اكتشف تشكيلة DXN من المكملات الغذائية والمنتجات الصحية. توصيل إلى جميع الولايات الـ 58 مع الدفع عند الاستلام وتأكيد الطلب عبر الهاتف.",
-              "Découvrez la gamme DXN de compléments alimentaires et produits de bien-être. Livraison vers les 58 wilayas, paiement à la livraison et confirmation par téléphone."
+              "اكتشف تشكيلة DXN من المكملات الغذائية والمنتجات الصحية. توصيل إلى جميع الولايات الـ 69 مع الدفع عند الاستلام وتأكيد الطلب عبر الهاتف.",
+              "Découvrez la gamme DXN de compléments alimentaires et produits de bien-être. Livraison vers les 69 wilayas, paiement à la livraison et confirmation par téléphone."
             )}
           </p>
           <div className="dxn-hero-cta">
@@ -93,7 +93,7 @@ const ProductListPage = () => {
             </svg>
           </div>
           <div>
-            <div className="dxn-trust-title">{t("توصيل 58 ولاية", "Livraison 58 wilayas")}</div>
+            <div className="dxn-trust-title">{t("توصيل 69 ولاية", "Livraison 69 wilayas")}</div>
             <div className="dxn-trust-sub">{t("إلى جميع ولايات الجزائر", "Partout en Algérie")}</div>
           </div>
         </div>
@@ -148,12 +148,17 @@ const ProductListPage = () => {
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
               </svg>
             </div>
-            <p className="mb-0">{t("لا توجد منتجات حالياً", "Aucun produit disponible")}</p>
+            <p className="mb-3">
+              {t(
+                "لا توجد منتجات حالياً. نعمل على تحديث الكتالوج.",
+                "Aucun produit disponible. Nous mettons à jour le catalogue."
+              )}
+            </p>
           </div>
         ) : (
           <Row>
             {products.map((product, index) => (
-              <Col key={product._id} xs={12} sm={6} md={4} xl={3} className="mb-4 d-flex">
+              <Col key={product._id} xs={12} sm={6} lg={4} xl={3} className="mb-4 d-flex">
                 <div className={`w-100 dxn-anim-fade-up dxn-stagger-${(index % 6) + 1}`}>
                   <ProductCard product={product} language={language} />
                 </div>

@@ -1,6 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
+import { STORE_EMAIL, STORE_EMAIL_MAILTO, readSiteSocialConfig } from "../config/site";
+
+const site = readSiteSocialConfig();
 
 /**
  * Site footer. Contains only factual store information — no invented phone
@@ -24,7 +27,7 @@ const Footer = () => {
               <span className="dxn-brand-name" style={{ color: "#fff", fontSize: "1.05rem" }}>
                 DXN Store
               </span>
-              <span className="dxn-brand-sub d-block">{t("صحتك أولاً", "Votre santé d'abord")}</span>
+              <span className="dxn-brand-sub d-block">{t("صحتك هي الصح", "Votre santé d'abord")}</span>
             </span>
           </div>
           <p>
@@ -47,9 +50,49 @@ const Footer = () => {
         {/* Delivery */}
         <div className="dxn-footer-col">
           <div className="dxn-footer-title">{t("التوصيل والدفع", "Livraison & paiement")}</div>
-          <p>{t("التوصيل إلى 58 ولاية.", "Livraison vers les 58 wilayas.")}</p>
+          <p>{t("التوصيل إلى 69 ولاية.", "Livraison vers les 69 wilayas.")}</p>
           <p>{t("الدفع عند الاستلام متاح.", "Paiement à la livraison disponible.")}</p>
           <p>{t("تأكيد الطلبات عبر الهاتف.", "Confirmation des commandes par téléphone.")}</p>
+        </div>
+
+        {/* Contact */}
+        <div className="dxn-footer-col">
+          <div className="dxn-footer-title">{t("تواصل معنا", "Contactez-nous")}</div>
+          <p>
+            {t("البريد الإلكتروني", "Email")} :{" "}
+            <a href={STORE_EMAIL_MAILTO} aria-label="Email">
+              {STORE_EMAIL}
+            </a>
+          </p>
+
+          {(site.facebook || site.instagram) && (
+            <div className="d-flex gap-2 mt-2">
+              {site.facebook && (
+                <a
+                  href={site.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="btn btn-sm btn-outline-light"
+                  style={{ width: 36, height: 36, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}
+                >
+                  f
+                </a>
+              )}
+              {site.instagram && (
+                <a
+                  href={site.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="btn btn-sm btn-outline-light"
+                  style={{ width: 36, height: 36, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}
+                >
+                  ig
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Admin */}

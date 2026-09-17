@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useCart } from "../context/CartContext";
@@ -34,7 +34,7 @@ export const pickProductTitle = (product: any, language: string): string => {
   return product.title || product.name || "";
 };
 
-const pickProductImage = (product: any): string => {
+export const pickProductImage = (product: any): string => {
   if (product?.image) return product.image;
   if (Array.isArray(product?.images) && product.images.length > 0) return product.images[0];
   return "";
@@ -94,6 +94,8 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
   const productPrice = Number(product.price) || 0;
   const compareAt = Number(product.compareAtPrice) || 0;
   const imageUrl = pickProductImage(product);
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = !!imageUrl && !imageFailed;
   const inStock = typeof product.stockQuantity !== "number" || product.stockQuantity > 0;
   const detailUrl = product.slug ? `/product/${encodeURIComponent(product.slug)}` : "";
 
@@ -123,15 +125,13 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
         aria-label={titleText}
         style={{ display: "block", textDecoration: "none" }}
       >
-        {imageUrl ? (
+        {showImage ? (
           <img
             src={imageUrl}
             alt={titleText}
             loading="lazy"
             className={inStock ? "dxn-pcard-img" : "dxn-pcard-img oos"}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
+            onError={() => setImageFailed(true)}
           />
         ) : (
           <div

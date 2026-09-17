@@ -81,5 +81,10 @@
   "statusCancelled": "ملغى",
   "statusRejected": "مرفوض",
   "promoWas": "كان",
-  "currency": "دج"
+  "currency": "دج",
+  "contactUs": "تواصل معنا",
+  "email": "البريد الإلكتروني",
+  "facebook": "فيسبوك",
+  "instagram": "انستغرام",
+  "paymentOnDelivery": "الدفع عند الاستلام"
 }

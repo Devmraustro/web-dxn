@@ -14,6 +14,7 @@ import MobileNav from "./components/MobileNav";
 // first) stays in the critical path; admin + detail pages load on demand,
 // which keeps the initial JS bundle small on slow connections.
 const AdminLayout = lazy(() => import("./components/AdminLayout"));
+const HomePage = lazy(() => import("./pages/HomePage"));
 const ProductListPage = lazy(() => import("./pages/ProductListPage"));
 const CartPage = lazy(() => import("./pages/CartPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
@@ -43,7 +44,7 @@ const App = () => (
     <Header />
     <PageSuspense>
       <Routes>
-        <Route path="/" element={<ProductListPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/products" element={<ProductListPage />} />
         <Route path="/product/:slug" element={<ProductDetailPage />} />
         <Route path="/cart" element={<CartPage />} />

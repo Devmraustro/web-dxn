@@ -91,7 +91,7 @@ const Header = () => {
         <div className="dxn-topbar-inner">
           <span className="dxn-topbar-item">
             <PinIcon />
-            {t("توصيل إلى جميع ولايات الجزائر (58 ولاية)", "Livraison vers les 58 wilayas d'Algérie")}
+            {t("توصيل إلى جميع ولايات الجزائر (69 ولاية)", "Livraison vers les 69 wilayas d'Algérie")}
           </span>
           <span className="dxn-topbar-item dxn-topbar-gold">
             {t("الدفع عند الاستلام متاح", "Paiement à la livraison disponible")}
@@ -106,7 +106,7 @@ const Header = () => {
             <span className="dxn-brand-badge">DXN</span>
             <span>
               <span className="dxn-brand-name d-block">DXN Store</span>
-              <span className="dxn-brand-sub">{t("صحتك أولاً", "Votre santé d'abord")}</span>
+              <span className="dxn-brand-sub">{t("صحتك هي الصح", "Votre santé d'abord")}</span>
             </span>
           </Link>
 
