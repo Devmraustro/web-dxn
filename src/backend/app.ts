@@ -96,6 +96,7 @@ app.use((req, res, next) => {
 // Meta webhooks require the RAW body for HMAC signature verification, so the
 // raw parser must mount BEFORE the JSON parser consumes the stream.
 app.use("/meta", express.raw({ type: "*/*", limit: "1mb" }));
+app.use("/api/meta", express.raw({ type: "*/*", limit: "1mb" }));
 
 // Body parsing with bounded size (uploads arrive as multipart via multer).
 app.use(express.json({ limit: "1mb" }));
@@ -182,6 +183,7 @@ app.use("/api/ai", aiRoutes);
 
 // Meta webhooks (Instagram / Facebook) — raw body on POST
 app.use("/meta", metaRoutes);
+app.use("/api/meta", metaRoutes);
 
 // SEO
 app.use("/api/seo", seoRoutes);
