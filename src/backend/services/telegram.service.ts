@@ -114,47 +114,90 @@ async function sendMessage(text: string): Promise<TelegramSendResult> {
   }
 }
 
+/** Stable, human-friendly date formatting for the order notification. */
+function formatTelegramDate(value: unknown): string {
+  if (!value) return "";
+  try {
+    const d = new Date(value as any);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Professional order notification (bilingual AR/FR, legacy Markdown).
+ * Only dynamic (user/database-controlled) values pass through escapeMarkdown;
+ * static labels are literal formatting. Never fabricated data — every field
+ * comes from the persisted order document.
+ */
 function buildOrderMessage(order: any): string {
   const esc = escapeMarkdown;
+  const customer = order.customerInfo || {};
+
   const itemsText = (order.items || [])
     .map((item: any) => {
       const name = esc(item.productName || item.packName || "Product");
-      return `- ${name} x${item.quantity || 1}`;
+      const qty = item.quantity || 1;
+      const unitPrice = item.unitPrice;
+      const totalPrice = item.totalPrice;
+      if (unitPrice != null && totalPrice != null) {
+        return `• ${name} — ${esc(qty)} × ${esc(unitPrice)} DA = ${esc(totalPrice)} DA`;
+      }
+      if (unitPrice != null) {
+        return `• ${name} — ${esc(qty)} × ${esc(unitPrice)} DA`;
+      }
+      return `• ${name} — ${esc(qty)}`;
     })
     .join("\n");
 
   const paymentText =
     order.paymentMethod === "cod"
-      ? "Cash on Delivery"
-      : "BaridiMob — payment verification required";
-
-  const deliveryText = order.deliveryMethod === "home" ? "Home delivery" : "Office delivery";
-  const customer = order.customerInfo || {};
+      ? "الدفع عند الاستلام / Paiement à la livraison"
+      : esc(order.paymentMethod || "—");
+  const deliveryText =
+    order.deliveryMethod === "home"
+      ? "التوصيل إلى المنزل / Livraison à domicile"
+      : order.deliveryMethod === "office"
+      ? "التوصيل إلى مكتب البريد / Livraison au bureau de poste"
+      : esc(order.deliveryMethod || "—");
 
   const lines = [
-    "📦 *NEW ORDER*",
+    "🛒 *NEW ORDER*",
     "",
     `Order: ${esc(order.orderNumber)}`,
+  ];
+
+  const dateText = formatTelegramDate(order.createdAt);
+  if (dateText) lines.push(`Date: ${esc(dateText)}`);
+
+  lines.push(
     "",
-    "Customer:",
-    `${esc(customer.firstName)} ${esc(customer.lastName)}`,
-    `Phone: ${esc(customer.phone)}`,
-    customer.secondPhone ? `Second phone: ${esc(customer.secondPhone)}` : "",
-    `Wilaya: ${esc(customer.wilaya)}`,
-    `Delivery: ${deliveryText}`,
-    order.deliveryMethod === "home" && order.customerInfo && order.customerInfo.address
-      ? `Address: ${esc(customer.address)}`
-      : "",
+    "👤 *Customer / Client*",
+    `Name: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
+    `Phone: ${esc(customer.phone)}`
+  );
+  if (customer.secondPhone) lines.push(`Second phone: ${esc(customer.secondPhone)}`);
+  if (customer.wilaya) lines.push(`Wilaya: ${esc(customer.wilaya)}`);
+  if (order.deliveryMethod === "home" && customer.address) {
+    lines.push(`Address: ${esc(customer.address)}`);
+  }
+
+  lines.push(
     "",
-    "Products:",
-    itemsText,
-    "",
-    `Subtotal: ${order.subtotal} DA`,
-    `Shipping: ${order.shippingFee} DA`,
-    `Total: ${order.total} DA`,
-    "",
+    "🚚 *Delivery / Livraison*",
+    `Method: ${deliveryText}`,
     `Payment: ${paymentText}`,
-  ].filter((l) => l !== "");
+    "",
+    "🛍️ *Items / Articles*",
+    itemsText || "• —",
+    "",
+    "💰 *Summary / Récapitulatif*",
+    `Subtotal: ${esc(order.subtotal ?? 0)} DA`,
+    `Shipping: ${esc(order.shippingFee ?? 0)} DA`,
+    `Total: ${esc(order.total ?? 0)} DA`
+  );
 
   return lines.join("\n");
 }
@@ -179,22 +222,6 @@ function buildStatusMessage(order: any, statusText: string): string {
     "",
     `Customer: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
     `Phone: ${esc(customer.phone)}`,
-  ].join("\n");
-}
-
-function buildBaridiMessage(order: any): string {
-  const esc = escapeMarkdown;
-  const customer = order.customerInfo || {};
-  return [
-    "💳 *BaridiMob Payment Verification Required*",
-    "",
-    `Order: ${esc(order.orderNumber)}`,
-    `Customer: ${esc(customer.firstName)} ${esc(customer.lastName)}`,
-    `Phone: ${esc(customer.phone)}`,
-    `Total: ${esc(order.total)} DA`,
-    "",
-    "The owner must verify the BaridiMob payment manually.",
-    "Contact the customer to confirm payment completion.",
   ].join("\n");
 }
 
@@ -229,10 +256,6 @@ export async function sendOrderStatusUpdate(order: any, statusText: string): Pro
   return sendMessage(buildStatusMessage(order, statusText));
 }
 
-export async function sendBaridiMobVerificationNotice(order: any): Promise<TelegramSendResult> {
-  return sendMessage(buildBaridiMessage(order));
-}
-
 export async function sendEscalationNotification(
   order: any,
   reason: string,
@@ -263,7 +286,6 @@ export function isTelegramConfigured(): boolean {
 export default {
   sendNewOrderNotification,
   sendOrderStatusUpdate,
-  sendBaridiMobVerificationNotice,
   sendEscalationNotification,
   telegramSinkAdapter,
   isTelegramConfigured,

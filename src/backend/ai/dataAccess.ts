@@ -149,7 +149,7 @@ export class MongooseDataAccess implements DataAccess {
     return {
       name: "DXN Store",
       currency: "DA",
-      paymentMethods: ["cod", "baridimob"],
+      paymentMethods: ["cod"],
     };
   }
 }

@@ -12,7 +12,7 @@ export class InMemoryDataAccess implements DataAccess {
   packs: CatalogItem[];
   offers: OfferInfo[];
   shipping: ShippingInfo;
-  storeSettings = { name: "DXN Store", currency: "DA", paymentMethods: ["cod", "baridimob"] };
+  storeSettings = { name: "DXN Store", currency: "DA", paymentMethods: ["cod"] };
 
   constructor(opts?: {
     catalog?: CatalogItem[];

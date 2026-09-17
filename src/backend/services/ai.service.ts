@@ -97,8 +97,8 @@ export const processCustomerMessage = async (
   if (pricePatterns.test(cleanedMessage)) {
     return {
       answer: userLanguage === "ar"
-        ? "يمكنك العثور على أسعار المنتجات في صفحة كل منتج. أسعار BaridiMob والشحن محددة من قبل owner."
-        : "You can find product prices on each product page. BaridiMob and shipping prices are set by the owner.",
+        ? "يمكنك العثور على أسعار المنتجات في صفحة كل منتج. أسعار الشحن محددة من قبل owner."
+        : "You can find product prices on each product page. Shipping prices are set by the owner.",
       confidence: 85,
       needsHumanHandoff: false,
     };
@@ -133,8 +133,8 @@ export const processCustomerMessage = async (
   if (paymentPatterns.test(cleanedMessage)) {
     return {
       answer: userLanguage === "ar"
-        ? "طرق الدفع المتاحة: الدفع عند الاستلام أو BaridiMob. BaridiMob يتطلب تحقق من owner."
-        : "Available payment methods: Cash on Delivery or BaridiMob. BaridiMob requires owner verification.",
+        ? "طرق الدفع المتاحة: الدفع عند الاستلام فقط (كاش عند التسليم)."
+        : "Available payment method: Cash on Delivery only (cash when you receive the order).",
       confidence: 92,
       needsHumanHandoff: false,
     };

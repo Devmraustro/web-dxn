@@ -8,7 +8,7 @@
  *  - the TelegramSink adapter never throws on transient failure and never
  *    leaks the bot token to the error message;
  *  - large order payloads are truncated to a safe size;
- *  - status / baridimob / escalation messages contain the required fields;
+ *  - status / escalation messages contain the required fields;
  *  - valid configuration constructs correct request;
  *  - Telegram failure never throws into order creation;
  *  - module initialization does not crash when configuration is absent.
@@ -17,7 +17,6 @@ import axios, { AxiosError } from "axios";
 import {
   sendNewOrderNotification,
   sendOrderStatusUpdate,
-  sendBaridiMobVerificationNotice,
   sendEscalationNotification,
   telegramSinkAdapter,
   isTelegramConfigured,
@@ -67,18 +66,16 @@ describe("Telegram service — safe configuration behaviour", () => {
   test("all helpers return skipped result when env is missing — no HTTP call", async () => {
     clearEnv();
     const order = { orderNumber: "X", customerInfo: {}, items: [], subtotal: 0, shippingFee: 0, total: 0 };
-    const [res1, res2, res3, res4, res5] = await Promise.all([
+    const [res1, res2, res3, res4] = await Promise.all([
       sendNewOrderNotification(order),
       sendOrderStatusUpdate(order, "confirmed"),
-      sendBaridiMobVerificationNotice(order),
       sendEscalationNotification(order, "r", { firstName: "A", lastName: "B" }),
       telegramSinkAdapter.send("hello"),
     ]);
     expect(res1.skipped).toBe(true); expect(res1.delivered).toBe(false);
     expect(res2.skipped).toBe(true); expect(res2.delivered).toBe(false);
     expect(res3.skipped).toBe(true); expect(res3.delivered).toBe(false);
-    expect(res4.skipped).toBe(true); expect(res4.delivered).toBe(false);
-    expect((res5 as any).skipped).toBe(true); expect((res5 as any).delivered).toBe(false);
+    expect((res4 as any).skipped).toBe(true); expect((res4 as any).delivered).toBe(false);
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
@@ -109,9 +106,9 @@ describe("Telegram service — valid configuration with mocked axios", () => {
     expect(call[1]).toMatchObject({ chat_id: BASE_CHAT, parse_mode: "Markdown", disable_web_page_preview: true });
     expect(call[1].text).toContain("ORD-123");
     expect(call[1].text).toContain("John Doe");
-    expect(call[1].text).toContain("Product A x2");
-    expect(call[1].text).toContain("Pack B x1");
-    expect(call[1].text).toContain("Cash on Delivery");
+    expect(call[1].text).toContain("• Product A — 2");
+    expect(call[1].text).toContain("• Pack B — 1");
+    expect(call[1].text).toContain("الدفع عند الاستلام");
   });
 
   test("sendOrderStatusUpdate constructs correct request", async () => {
@@ -124,14 +121,6 @@ describe("Telegram service — valid configuration with mocked axios", () => {
     const call = mockedAxios.post.mock.calls[0] as [string, any];
     expect(call[1].text).toContain("✅ Order confirmed");
     expect(call[1].text).toContain("ORD-123");
-  });
-
-  test("sendBaridiMobVerificationNotice constructs correct request", async () => {
-    mockedAxios.post.mockResolvedValueOnce({ data: { ok: true } });
-    const res = await sendBaridiMobVerificationNotice({ orderNumber: "ORD-456", customerInfo: { firstName: "Jane", lastName: "Smith", phone: "0771234567" }, total: 3000 });
-    expect(res.delivered).toBe(true);
-    const call = mockedAxios.post.mock.calls[0] as [string, any];
-    expect(call[1].text).toContain("BaridiMob Payment Verification Required");
   });
 
   test("sendEscalationNotification constructs correct request", async () => {
@@ -224,8 +213,8 @@ describe("Telegram service — Markdown escaping of dynamic text (legacy Markdow
     expect(text).toContain("066\\`7");
     expect(text).toContain("Ain\\_Bessa\\*m");
     expect(text).toContain("Rue \\[des] \\*Oliviers\\_");
-    expect(text).toContain("Pro\\*duct (A) \\[1]\\_x x2");
-    expect(text).toContain("Pack \\`B\\`\\_star x1");
+    expect(text).toContain("• Pro\\*duct (A) \\[1]\\_x — 2");
+    expect(text).toContain("• Pack \\`B\\`\\_star — 1");
 
     // Raw unescaped dynamic characters must NOT reach the payload.
     expect(text).not.toContain("John_Doe");
@@ -265,19 +254,6 @@ describe("Telegram service — Markdown escaping of dynamic text (legacy Markdow
     expect(text2).not.toContain("Reason: reason_[x]*note");
     expect(text2).toContain("X\\_Y");
     expect(text2).toContain("9\\`8");
-  });
-
-  test("baridimob notice escapes phone/name/total", async () => {
-    mockedAxios.post.mockResolvedValueOnce({ data: { ok: true, result: { message_id: 1 } } });
-    await sendBaridiMobVerificationNotice({
-      orderNumber: "B-1",
-      customerInfo: { firstName: "Yas_min", lastName: "K*", phone: "05_5" },
-      total: 2500,
-    });
-    const text = (mockedAxios.post.mock.calls[0] as [string, any])[1].text;
-    expect(text).toContain("Yas\\_min");
-    expect(text).toContain("K\\*");
-    expect(text).toContain("05\\_5");
   });
 });
 

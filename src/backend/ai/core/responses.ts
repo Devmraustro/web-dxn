@@ -146,8 +146,8 @@ export function offersResponse(offers: any[], lang: LanguageCode): string {
 
 export function paymentResponse(lang: LanguageCode): string {
   return lang === "ar"
-    ? "طرق الدفع المتاحة: الدفع عند الاستلام (كاش) أو BaridiMob. BaridiMob يتطلب تحققًا من طرف صاحب المتجر."
-    : "Moyens de paiement disponibles : paiement à la livraison (espèces) ou BaridiMob. BaridiMob nécessite une vérification par le propriétaire.";
+    ? "طرق الدفع المتاحة: الدفع عند الاستلام فقط (كاش عند التسليم)."
+    : "Moyens de paiement disponibles : paiement à la livraison uniquement (espèces à la réception).";
 }
 
 export function orderHelpResponse(lang: LanguageCode): string {

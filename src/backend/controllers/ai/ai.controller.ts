@@ -72,14 +72,14 @@ export const initializeAIMiddleware = async () => {
         key: "payment_baridimob",
         category: "payment",
         question: "payment baridimob",
-        answer: "BaridiMob payment requires owner verification. The order will be created with pending payment status.",
+        answer: "BaridiMob is no longer accepted. The only payment method is Cash on Delivery.",
         language: "ar",
       },
       {
         key: "payment_baridimob",
         category: "payment",
         question: "paiement BaridiMob",
-        answer: "Le paiement BaridiMob nécessite une vérification par le propriétaire. La commande sera créée avec un statut en attente de paiement.",
+        answer: "BaridiMob n'est plus accepté. Le seul moyen de paiement est le paiement à la livraison.",
         language: "fr",
       },
       // Delivery questions
