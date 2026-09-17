@@ -121,31 +121,31 @@ function getMessenger(): MetaMessenger {
  * GET verification handshake.
  */
 router.get("/webhook", (req: Request, res: Response) => {
-  // SAFE DIAGNOSTIC: Log raw request at Express route entry
-  const rawUrl = req?.url || "";
-  const rawOriginalUrl = req?.originalUrl || "";
-  const queryObj = req?.query || {};
-  const queryKeys = Object.keys(queryObj);
+  // ROBUST QUERY PARSING: Use WHATWG URL API to parse query string directly
+  // from req.originalUrl (or req.url) because Express's built-in query parser
+  // may not correctly populate req.query in all Vercel/serverless environments.
+  // This handles dotted keys like "hub.mode", "hub.verify_token", "hub.challenge"
+  // reliably regardless of middleware or query parser configuration.
+  const requestUrl = new URL(
+    req.originalUrl || req.url,
+    `${req.protocol}://${req.get("host")}`
+  );
 
-  console.log("[META-ROUTE-DIAGNOSTIC] route_entry", JSON.stringify({
-    urlPath: rawUrl.split("?")[0],
-    originalUrlPath: rawOriginalUrl.split("?")[0],
-    urlHasQuery: rawUrl.includes("?"),
-    originalUrlHasQuery: rawOriginalUrl.includes("?"),
-    queryKeys,
-    queryHubMode: queryObj["hub.mode"],
-    queryHubVerifyTokenPresent: !!queryObj["hub.verify_token"],
-    queryHubChallengePresent: !!queryObj["hub.challenge"],
-    method: req.method,
+  const receivedMode = requestUrl.searchParams.get("hub.mode") ?? undefined;
+  const receivedVerifyToken = requestUrl.searchParams.get("hub.verify_token") ?? undefined;
+  const receivedChallenge = requestUrl.searchParams.get("hub.challenge") ?? undefined;
+
+  // SAFE DIAGNOSTIC: Log what WHATWG URL parser extracted (no secrets)
+  console.log("[META-ROUTE-DIAGNOSTIC] whatwg_parsed", JSON.stringify({
+    urlPath: (req.originalUrl || req.url).split("?")[0],
+    searchParamsKeys: Array.from(requestUrl.searchParams.keys()),
+    hubModePresent: receivedMode !== null,
+    hubModeValue: receivedMode,
+    hubVerifyTokenPresent: receivedVerifyToken !== null,
+    hubChallengePresent: receivedChallenge !== null,
   }));
 
-  const query = req.query as Record<string, string | undefined>;
   const config = { verifyToken, appSecret };
-  
-  // Extract query parameters as Meta sends them (with dots in names)
-  const receivedMode = query["hub.mode"];
-  const receivedVerifyToken = query["hub.verify_token"];
-  const receivedChallenge = query["hub.challenge"];
   
   // SAFE DIAGNOSTIC LOGGING - NO SECRETS EXPOSED
   const receivedTokenLength = typeof receivedVerifyToken === "string" ? receivedVerifyToken.length : 0;
@@ -162,9 +162,9 @@ router.get("/webhook", (req: Request, res: Response) => {
     requestReachedWebhook: true,
     httpMethod: req.method,
     pathname: req.path,
-    hubModePresent: receivedMode !== undefined,
+    hubModePresent: receivedMode !== null,
     hubModeValue: receivedMode,
-    hubVerifyTokenPresent: receivedVerifyToken !== undefined,
+    hubVerifyTokenPresent: receivedVerifyToken !== null,
     receivedVerifyTokenLength: receivedTokenLength,
     configuredVerifyTokenLength: configuredTokenLength,
     receivedVerifyTokenFingerprint: receivedFingerprint,
@@ -173,7 +173,7 @@ router.get("/webhook", (req: Request, res: Response) => {
     hasLeadingWhitespace: hasLeadingWhitespace,
     hasTrailingWhitespace: hasTrailingWhitespace,
     hasInternalWhitespace: hasInternalWhitespace,
-    hubChallengePresent: receivedChallenge !== undefined,
+    hubChallengePresent: receivedChallenge !== null,
     challengeLength: typeof receivedChallenge === "string" ? receivedChallenge.length : 0,
   });
 
