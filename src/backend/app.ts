@@ -146,13 +146,14 @@ app.get("/api/health", async (req, res) => {
   // Bounded cold-start wait: on a cold serverless/Vercel function the DB is
   // often still connecting when the very first request arrives, so a naive
   // synchronous readyState check reports "degraded" for several seconds even
-  // though everything is fine. Wait a BOUNDED window (2.5s, never unbounded)
-  // for the connection to establish, then report. Warm path (already ready)
-  // returns immediately with no sleep. On timeout we report degraded — we never
+  // though everything is fine. Wait a BOUNDED window (matching MongoDB's
+  // 10s serverSelectionTimeoutMS/connectTimeoutMS, never unbounded) for the
+  // connection to establish, then report. Warm path (already ready) returns
+  // immediately with no sleep. On timeout we report degraded — we never
   // crash, never throw, never leak secrets, and never delay past the bound.
   const ready = await waitForReady(
     () => mongoose.connection.readyState === 1,
-    { timeoutMs: 2_500 }
+    { timeoutMs: 10_000 }
   );
   res.json({
     status: ready ? "ok" : "degraded",
@@ -161,11 +162,11 @@ app.get("/api/health", async (req, res) => {
     dbReason: ready
       ? "connected"
       : configured
-        ? "MONGODB_URI set but connection not established within 2.5s"
+        ? "MONGODB_URI set but connection not established within 10s"
         : "MONGODB_URI not configured in this environment",
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
-  });
+});
 });
 
 // Products
