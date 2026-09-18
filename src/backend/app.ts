@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import { securityHeaders, noSqlInjectionProtection, rateLimiter, validateInput } from "./middleware/security.middleware";
 import { UPLOAD_DIR } from "./config/storage";
 import { waitForReady } from "./utils/readyState";
+import { ensureDB } from "./db";
 
 dotenv.config();
 
@@ -143,18 +144,14 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 // URI itself ever being exposed.
 app.get("/api/health", async (req, res) => {
   const configured = !!process.env.MONGODB_URI;
-  // Bounded cold-start wait: on a cold serverless/Vercel function the DB is
-  // often still connecting when the very first request arrives, so a naive
-  // synchronous readyState check reports "degraded" for several seconds even
-  // though everything is fine. Wait a BOUNDED window (matching MongoDB's
-  // 10s serverSelectionTimeoutMS/connectTimeoutMS, never unbounded) for the
-  // connection to establish, then report. Warm path (already ready) returns
-  // immediately with no sleep. On timeout we report degraded — we never
-  // crash, never throw, never leak secrets, and never delay past the bound.
-  const ready = await waitForReady(
-    () => mongoose.connection.readyState === 1,
-    { timeoutMs: 10_000 }
-  );
+  // Ensure a connection attempt is made (serverless-safe: reuses cached promise).
+  // Then wait a BOUNDED window for the connection to establish.
+  const ready = await ensureDB()
+    .then(() => waitForReady(
+      () => mongoose.connection.readyState === 1,
+      { timeoutMs: 10_000 }
+    ))
+    .catch(() => false);
   res.json({
     status: ready ? "ok" : "degraded",
     db: ready ? "connected" : "disconnected",
@@ -166,7 +163,7 @@ app.get("/api/health", async (req, res) => {
         : "MONGODB_URI not configured in this environment",
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
-});
+  });
 });
 
 // Products
