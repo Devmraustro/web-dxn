@@ -95,14 +95,31 @@ app.use((req, res, next) => {
 
 // Meta webhooks require the RAW body for HMAC signature verification, so the
 // raw parser must mount BEFORE the JSON parser consumes the stream.
-app.use("/meta", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/meta", express.raw({ type: "*/*", limit: "1mb" }));
+app.use("/meta", express.raw({ type: "application/json", limit: "1mb" }));
+app.use("/api/meta", express.raw({ type: "application/json", limit: "1mb" }));
 
-// Body parsing with bounded size (uploads arrive as multipart via multer).
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+// Mount Meta webhook routes IMMEDIATELY after raw parser — they receive raw Buffer
+app.use("/meta", metaRoutes);
+app.use("/api/meta", metaRoutes);
 
-// Input validation (body complexity bound)
+// Body parsing with bounded size for NON-META routes only.
+// This prevents express.json() from ever touching Meta webhook raw bodies.
+app.use((req, res, next) => {
+  if (!/^\/api\/meta\//.test(req.originalUrl) && !/^\/meta\//.test(req.originalUrl)) {
+    express.json({ limit: "1mb" })(req, res, next);
+  } else {
+    next();
+  }
+});
+app.use((req, res, next) => {
+  if (!/^\/api\/meta\//.test(req.originalUrl) && !/^\/meta\//.test(req.originalUrl)) {
+    express.urlencoded({ extended: true, limit: "1mb" })(req, res, next);
+  } else {
+    next();
+  }
+});
+
+// Input validation (body complexity bound) — runs AFTER body parsers on non-Meta routes
 app.use(validateInput);
 
 // HTTP request logging: dev format in development; combined in production
@@ -180,10 +197,6 @@ app.use("/api/upload", uploadRoutes);
 
 // AI chat + health
 app.use("/api/ai", aiRoutes);
-
-// Meta webhooks (Instagram / Facebook) — raw body on POST
-app.use("/meta", metaRoutes);
-app.use("/api/meta", metaRoutes);
 
 // SEO
 app.use("/api/seo", seoRoutes);

@@ -210,6 +210,17 @@ router.get("/webhook", (req: Request, res: Response) => {
  * POST event delivery.
  */
 router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
+  // DIAGNOSTIC: Log raw body at route entry
+  console.log("[DIAGNOSTIC-ROUTE] post_webhook_entry", JSON.stringify({
+    path: req.path,
+    method: req.method,
+    contentType: req.headers["content-type"],
+    contentLength: req.headers["content-length"],
+    isBuffer: Buffer.isBuffer(req.body),
+    bodyType: typeof req.body,
+    bodyLength: Buffer.isBuffer(req.body) ? req.body.length : (req.body ? Object.keys(req.body).length : 0),
+  }));
+
   // express.raw() (mounted on /meta in app.ts) sets req.body to a Buffer of the
   // exact bytes Meta transmitted, so we can verify the signature over them.
   const rawBody = req.body;
