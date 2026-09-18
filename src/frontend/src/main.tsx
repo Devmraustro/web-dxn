@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { LanguageProvider } from "./context/LanguageContext";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -25,6 +26,7 @@ const AdminReviewPage = lazy(() => import("./pages/AdminReviewPage"));
 const AdminOrdersPage = lazy(() => import("./pages/AdminOrdersPage"));
 const AdminProductsPage = lazy(() => import("./pages/AdminProductsPage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
 
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
   <Suspense
@@ -40,55 +42,58 @@ const PageSuspense = ({ children }: { children: React.ReactNode }) => (
 );
 
 const App = () => (
-  <BrowserRouter>
-    <Header />
-    <PageSuspense>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/products" element={<ProductListPage />} />
-        <Route path="/product/:slug" element={<ProductDetailPage />} />
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/checkout" element={<CheckoutPage />} />
-        <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route
-          path="/admin"
-          element={
-            <AdminLayout>
-              <AdminDashboardPage />
-            </AdminLayout>
-          }
-        />
-        <Route
-          path="/admin/reviews"
-          element={
-            <AdminLayout>
-              <AdminReviewPage />
-            </AdminLayout>
-          }
-        />
-        <Route
-          path="/admin/products"
-          element={
-            <AdminLayout>
-              <AdminProductsPage />
-            </AdminLayout>
-          }
-        />
-        <Route
-          path="/admin/orders"
-          element={
-            <AdminLayout>
-              <AdminOrdersPage />
-            </AdminLayout>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <Footer />
-      <MobileNav />
-    </PageSuspense>
-  </BrowserRouter>
+  <HelmetProvider>
+    <BrowserRouter>
+      <Header />
+      <PageSuspense>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/products" element={<ProductListPage />} />
+          <Route path="/product/:slug" element={<ProductDetailPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminLayout>
+                <AdminDashboardPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/reviews"
+            element={
+              <AdminLayout>
+                <AdminReviewPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/products"
+            element={
+              <AdminLayout>
+                <AdminProductsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/orders"
+            element={
+              <AdminLayout>
+                <AdminOrdersPage />
+              </AdminLayout>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <Footer />
+        <MobileNav />
+      </PageSuspense>
+    </BrowserRouter>
+  </HelmetProvider>
 );
 
 const rootElement = document.getElementById("root");

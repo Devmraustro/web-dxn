@@ -45,6 +45,7 @@ const Footer = () => {
           <Link to="/products">{t("المنتجات", "Produits")}</Link>
           <Link to="/cart">{t("سلة التسوق", "Panier")}</Link>
           <Link to="/checkout">{t("إتمام الطلب", "Commande")}</Link>
+          <Link to="/privacy">{t("footerPrivacy", "footerPrivacyFr")}</Link>
         </div>
 
         {/* Delivery */}
