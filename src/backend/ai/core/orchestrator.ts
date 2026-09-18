@@ -73,8 +73,21 @@ export class Orchestrator {
     rawMessage: string,
     previousLanguage?: LanguageCode
   ): Promise<OrchestratorResult> {
+    console.log("[DIAGNOSTIC-ORCHESTRATOR] handleMessage_start", JSON.stringify({
+      conversationIdLength: conversationId?.length || 0,
+      rawMessageLength: rawMessage?.length || 0,
+      rawMessagePreview: rawMessage?.slice(0, 50),
+      previousLanguage,
+      providerName: this.provider?.name,
+    }));
+
     const normalized = normalizeMessage(rawMessage);
     const history = await this.store.getHistory(conversationId);
+
+    console.log("[DIAGNOSTIC-ORCHESTRATOR] normalized_message", JSON.stringify({
+      normalizedLength: normalized?.length || 0,
+      normalizedPreview: normalized?.slice(0, 50),
+    }));
 
     // 1. Intent + language (language prefers the conversation's last lang).
     const intentResult = classifyIntent(normalized, previousLanguage);

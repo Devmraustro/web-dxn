@@ -69,8 +69,24 @@ export async function processWebhookEvent(
   body: unknown,
   opts: SocialProcessorOptions
 ): Promise<AppEventResult> {
+  console.log("[DIAGNOSTIC-PROCESSOR] processWebhookEvent_start", JSON.stringify({
+    bodyKeys: Object.keys(body as object),
+    objectType: (body as any)?.object,
+    hasEntry: Array.isArray((body as any)?.entry),
+  }));
+
   const normalized = toNormalizedMessage(body as any);
+  console.log("[DIAGNOSTIC-PROCESSOR] normalized_message", JSON.stringify({
+    hasNormalized: !!normalized,
+    platform: normalized?.platform,
+    senderId: normalized?.senderId,
+    messageId: normalized?.messageId,
+    textLength: normalized?.text?.length || 0,
+    textPreview: normalized?.text?.slice(0, 50),
+  }));
+
   if (!normalized) {
+    console.log("[DIAGNOSTIC-PROCESSOR] no_normalized_message_returning");
     return { handled: false, duplicate: false, replySent: false };
   }
 
@@ -82,19 +98,38 @@ export async function processWebhookEvent(
   // this event (or Meta redelivered it), the claim returns false and we must
   // NOT answer again (durable idempotency, at-most-once).
   const claimed = await dedup.add(key);
+  console.log("[DIAGNOSTIC-PROCESSOR] dedup_check", JSON.stringify({
+    key,
+    claimed,
+  }));
   if (!claimed) {
+    console.log("[DIAGNOSTIC-PROCESSOR] duplicate_detected_returning");
     return { handled: true, duplicate: true, replySent: false, platform: normalized.platform };
   }
 
+  console.log("[DIAGNOSTIC-PROCESSOR] calling_orchestrator_handleMessage");
   const result = await opts.orchestrator.handleMessage(
     convId,
     normalized.text,
     undefined
   );
 
+  console.log("[DIAGNOSTIC-PROCESSOR] orchestrator_result", JSON.stringify({
+    hasResponse: !!result.response,
+    responseLength: result.response?.length || 0,
+    responsePreview: result.response?.slice(0, 50),
+    needsHumanHandoff: result.needsHumanHandoff,
+    intent: result.intent,
+    language: result.language,
+    confidence: result.confidence,
+    performedRetrieval: result.performedRetrieval,
+    validation: result.validation,
+  }));
+
   let replySent = false;
   let humanEscalated = false;
   if (result.needsHumanHandoff) {
+    console.log("[DIAGNOSTIC-PROCESSOR] human_handoff_required");
     // Human handoff: never auto-reply (correctness). Notify the owner through
     // the existing escalation pipeline when a Telegram sink is wired in.
     if (opts.telegramSink) {
@@ -106,16 +141,35 @@ export async function processWebhookEvent(
         recentContext: `${normalized.platform}: ${normalized.text}`.slice(0, 400),
       });
       humanEscalated = esc.delivered;
+      console.log("[DIAGNOSTIC-PROCESSOR] telegram_notification_sent", JSON.stringify({
+        delivered: esc.delivered,
+      }));
     }
   } else {
     try {
+      console.log("[DIAGNOSTIC-PROCESSOR] calling_messenger_sendText");
       const out = await opts.messenger.sendText(normalized.platform, normalized.senderId, result.response);
+      console.log("[DIAGNOSTIC-PROCESSOR] messenger_sendText_result", JSON.stringify({
+        recipientId: out?.recipientId,
+        messageId: out?.messageId,
+        replySent: !!out,
+      }));
       replySent = !!out;
-    } catch {
+    } catch (err) {
       // Sending is best-effort; the orchestrator already decided not to escalate.
+      console.error("[DIAGNOSTIC-PROCESSOR] messenger_sendText_error", err instanceof Error ? err.message : String(err));
       replySent = false;
     }
   }
+
+  console.log("[DIAGNOSTIC-PROCESSOR] processWebhookEvent_complete", JSON.stringify({
+    handled: true,
+    duplicate: false,
+    replySent,
+    humanEscalated,
+    platform: normalized.platform,
+    textLength: result.response?.length || 0,
+  }));
 
   return {
     handled: true,

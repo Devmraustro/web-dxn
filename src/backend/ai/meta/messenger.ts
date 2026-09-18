@@ -96,14 +96,26 @@ export class MetaMessenger {
     recipientId: string,
     text: string
   ): Promise<{ recipientId?: string; messageId?: string }> {
+    console.log("[DIAGNOSTIC-MESSENGER] sendText_start", JSON.stringify({
+      platform,
+      recipientIdLength: recipientId?.length || 0,
+      textLength: text?.length || 0,
+      textPreview: text?.slice(0, 50),
+      hasToken: !!this.token,
+      graphVersion: this.graphVersion,
+    }));
+
     if (!this.token) {
+      console.error("[DIAGNOSTIC-MESSENGER] no_token_configured");
       throw new Error("MetaMessenger: page access token not configured");
     }
     // Validate inputs
     if (!recipientId || typeof recipientId !== "string") {
+      console.error("[DIAGNOSTIC-MESSENGER] invalid_recipientId");
       throw new Error("MetaMessenger: recipientId is required");
     }
     if (!text || typeof text !== "string") {
+      console.error("[DIAGNOSTIC-MESSENGER] invalid_text");
       throw new Error("MetaMessenger: text is required");
     }
     if (text.length > 4096) {
@@ -126,6 +138,10 @@ export class MetaMessenger {
       this.transport(url, body, { Authorization: `Bearer ${this.token}` }),
       this.retry
     );
+    console.log("[DIAGNOSTIC-MESSENGER] sendText_success", JSON.stringify({
+      recipientId: data?.recipient_id,
+      messageId: data?.message_id,
+    }));
     return {
       recipientId: data?.recipient_id,
       messageId: data?.message_id,

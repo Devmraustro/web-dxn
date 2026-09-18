@@ -227,14 +227,30 @@ router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
 
   const signature = req.header("x-hub-signature-256");
   if (!verifySignature({ verifyToken, appSecret }, signature, rawBody)) {
-    // Never reveal whether the secret or signature had a problem.
+    console.log("[DIAGNOSTIC-ROUTE] signature_verification_failed", JSON.stringify({
+      hasSignature: !!signature,
+      hasAppSecret: !!appSecret,
+      rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+    }));
     return res.status(401).json({ status: "invalid signature" });
   }
+
+  console.log("[DIAGNOSTIC-ROUTE] signature_verification_passed", JSON.stringify({
+    rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+  }));
 
   let body: any;
   try {
     body = JSON.parse(rawBody.toString("utf8"));
-  } catch {
+    console.log("[DIAGNOSTIC-ROUTE] json_parse_success", JSON.stringify({
+      bodyKeys: Object.keys(body),
+      objectType: body?.object,
+      entryCount: Array.isArray(body?.entry) ? body.entry.length : 0,
+    }));
+  } catch (e) {
+    console.log("[DIAGNOSTIC-ROUTE] json_parse_failed", JSON.stringify({
+      error: e instanceof Error ? e.message : String(e),
+    }));
     return res.status(400).json({ status: "invalid json" });
   }
 
@@ -242,20 +258,33 @@ router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
 
   // If Meta integration is not configured externally (EXTERNAL CONFIGURATION
   // REQUIRED), acknowledge the event loudly but do not attempt to connect.
+  console.log("[DIAGNOSTIC-ROUTE] meta_config_check", JSON.stringify({
+    verifyTokenPresent: !!cfg.verifyToken,
+    appSecretPresent: !!cfg.appSecret,
+    pageAccessTokenPresent: !!cfg.pageAccessToken,
+    graphVersion: cfg.graphVersion,
+    isMetaConfigured: isMetaConfigured(cfg),
+  }));
+
   if (!isMetaConfigured(cfg)) {
+    console.log("[DIAGNOSTIC-ROUTE] meta_not_configured_returning_200");
     return res.status(200).json({ status: "not_configured" });
   }
+
+  console.log("[DIAGNOSTIC-ROUTE] meta_configured_proceeding_to_process");
 
   // Wrap in try/catch so we ALWAYS acknowledge Meta quickly (HTTP 200) even
   // when processing throws. Without this, an unhandled rejection would produce
   // a 500 and Meta would retry indefinitely, causing a storm of duplicate events.
   try {
+    console.log("[DIAGNOSTIC-ROUTE] calling_processWebhookEvent");
     await processWebhookEvent(body, {
       orchestrator: getOrchestrator(),
       messenger: getMessenger(),
       dedup: getDedup(),
       telegramSink: getTelegramSink() || undefined,
     });
+    console.log("[DIAGNOSTIC-ROUTE] processWebhookEvent_completed");
   } catch (err) {
     // Log without propagating so Meta gets a clean 200 ack
     console.error("processWebhookEvent threw:", err instanceof Error ? err.message : String(err));
