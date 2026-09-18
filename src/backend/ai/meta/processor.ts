@@ -73,6 +73,18 @@ export async function processWebhookEvent(
     bodyKeys: Object.keys(body as object),
     objectType: (body as any)?.object,
     hasEntry: Array.isArray((body as any)?.entry),
+    entryCount: Array.isArray((body as any)?.entry) ? (body as any).entry.length : 0,
+    firstEntryKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? Object.keys((body as any).entry[0]) : [],
+    messagingCount: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? ((body as any).entry[0]?.messaging?.length || 0) : 0,
+    firstMessagingKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 ? Object.keys((body as any).entry[0].messaging[0]) : [],
+    changesCount: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? ((body as any).entry[0]?.changes?.length || 0) : 0,
+    firstChangeKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.changes) && (body as any).entry[0].changes.length > 0 ? Object.keys((body as any).entry[0].changes[0]) : [],
+    firstChangeField: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.changes) && (body as any).entry[0].changes.length > 0 ? (body as any).entry[0].changes[0]?.field : null,
+    hasMessageObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.message,
+    hasMessageText: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.message?.text,
+    hasSenderObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.sender,
+    hasRecipientObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.recipient,
+    hasTimestamp: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.timestamp,
   }));
 
   const normalized = toNormalizedMessage(body as any);
