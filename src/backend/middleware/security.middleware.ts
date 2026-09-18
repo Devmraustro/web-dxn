@@ -80,6 +80,11 @@ export const validateInput = (req: Request, res: Response, next: NextFunction) =
       return obj.reduce((sum, item) => sum + countKeys(item, depth + 1), 0);
     }
     if (obj && typeof obj === "object") {
+      // Skip Buffer objects - they are used for raw body parsing (e.g., Meta webhook HMAC verification)
+      // and their byte indexes would incorrectly trigger the key limit.
+      if (Buffer.isBuffer(obj)) {
+        return 0;
+      }
       const keys = Object.keys(obj as Record<string, unknown>);
       if (keys.length > MAX_KEYS) return MAX_KEYS + 1;
       return keys.reduce((sum, key) => sum + countKeys((obj as Record<string, unknown>)[key], depth + 1), 0);
