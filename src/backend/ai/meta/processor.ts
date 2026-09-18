@@ -106,6 +106,16 @@ export async function processWebhookEvent(
   const convId = conversationIdFor(normalized.platform, normalized.senderId);
   const key = `${normalized.platform}:${normalized.senderId}:${normalized.messageId}`;
 
+  console.log("[DIAGNOSTIC-PROCESSOR] dedup_key_generated", JSON.stringify({
+    platform: normalized.platform,
+    senderIdLength: normalized.senderId?.length || 0,
+    senderIdPrefix: normalized.senderId?.slice(0, 10),
+    messageId: normalized.messageId,
+    messageIdLength: normalized.messageId?.length || 0,
+    keyLength: key.length,
+    keyPrefix: key.split(":")[0],
+  }));
+
   // Atomically claim the event key. If another worker/restart already processed
   // this event (or Meta redelivered it), the claim returns false and we must
   // NOT answer again (durable idempotency, at-most-once).

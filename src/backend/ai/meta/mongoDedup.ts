@@ -46,6 +46,10 @@ export class MongoDedupRegistry implements DedupRegistry {
    * key was already claimed (a redelivered event).
    */
   async add(key: string): Promise<boolean> {
+    console.log("[DIAGNOSTIC-DEDUP] add_start", JSON.stringify({
+      keyLength: key.length,
+      keyPrefix: key.split(":")[0],
+    }));
     try {
       const res = await WebhookEvent.updateOne(
         { dedupKey: key },
@@ -60,12 +64,15 @@ export class MongoDedupRegistry implements DedupRegistry {
         },
         { upsert: true }
       );
-      // upserted === true means this call created the row and therefore "won"
-      // the claim. Otherwise the key already existed (duplicate).
+      console.log("[DIAGNOSTIC-DEDUP] add_result", JSON.stringify({
+        upsertedCount: res.upsertedCount,
+        matchedCount: res.matchedCount,
+        modifiedCount: res.modifiedCount,
+        upsertedCount_gt_0: res.upsertedCount > 0,
+      }));
       return res.upsertedCount > 0;
-    } catch {
-      // Duplicate-key race or Mongo error: assume already claimed so we never
-      // reply twice. This is safe (at-most-once) by construction.
+    } catch (err) {
+      console.error("[DIAGNOSTIC-DEDUP] add_error", err instanceof Error ? err.message : String(err));
       return false;
     }
   }
