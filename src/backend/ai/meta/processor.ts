@@ -119,7 +119,14 @@ export async function processWebhookEvent(
   // Atomically claim the event key. If another worker/restart already processed
   // this event (or Meta redelivered it), the claim returns false and we must
   // NOT answer again (durable idempotency, at-most-once).
-  const claimed = await dedup.add(key);
+  let claimed: boolean;
+  try {
+    claimed = await dedup.add(key);
+  } catch (err) {
+    console.error("[DIAGNOSTIC-PROCESSOR] dedup_add_error", err instanceof Error ? err.message : String(err));
+    // Re-throw to let the webhook return 500 so Meta can retry
+    throw err;
+  }
   console.log("[DIAGNOSTIC-PROCESSOR] dedup_check", JSON.stringify({
     key,
     claimed,

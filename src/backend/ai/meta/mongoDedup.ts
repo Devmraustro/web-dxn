@@ -14,6 +14,7 @@
  */
 import { WebhookEvent } from "../../../Database/Models";
 import { DedupRegistry } from "./processor";
+import { ensureDB } from "../../db";
 
 export interface MongoDedupRegistryOptions {
   /** Webhook source label recorded on the dedup row. Defaults to "meta". */
@@ -29,23 +30,25 @@ export class MongoDedupRegistry implements DedupRegistry {
 
   async has(key: string): Promise<boolean> {
     try {
+      await ensureDB();
       const doc = await WebhookEvent.findOne({ dedupKey: key })
         .select({ _id: 1 })
         .lean()
         .exec();
       return !!doc;
-    } catch {
-      // If Mongo is unavailable, be safe and force a re-check that will fail
-      // closed later rather than risk a duplicate automated reply.
-      return false;
+    } catch (err) {
+      console.error("[DIAGNOSTIC-DEDUP] has_error", err instanceof Error ? err.message : String(err));
+      throw err;
     }
   }
 
   /**
    * Atomically claim the event key. Returns true the first time; false when the
    * key was already claimed (a redelivered event).
+   * Throws on database errors so callers can handle them appropriately.
    */
   async add(key: string): Promise<boolean> {
+    await ensureDB();
     console.log("[DIAGNOSTIC-DEDUP] add_start", JSON.stringify({
       keyLength: key.length,
       keyPrefix: key.split(":")[0],
@@ -73,7 +76,7 @@ export class MongoDedupRegistry implements DedupRegistry {
       return res.upsertedCount > 0;
     } catch (err) {
       console.error("[DIAGNOSTIC-DEDUP] add_error", err instanceof Error ? err.message : String(err));
-      return false;
+      throw err;
     }
   }
 }
