@@ -26,6 +26,7 @@ import { MongoDedupRegistry } from "../ai/meta/mongoDedup";
 import { TelegramSink } from "../ai/core/escalation";
 import { getMetaConfig, isMetaConfigured, getMetaHealth } from "../ai/meta/config";
 import { MongooseDataAccess } from "../ai/dataAccess";
+import { MongooseConversationStore } from "../ai/core/memory";
 import axios from "axios";
 
 const router = Router();
@@ -101,9 +102,16 @@ function getTelegramSink(): TelegramSink | null {
 let orchestrator: Orchestrator | null = null;
 function getOrchestrator(): Orchestrator {
   if (!orchestrator) {
+    // Use MongooseConversationStore in production for durable conversation persistence
+    // InMemoryConversationStore is used by default in tests/development
+    const store = process.env.NODE_ENV === "production"
+      ? new MongooseConversationStore()
+      : undefined;
+    
     orchestrator = new Orchestrator({
       dataAccess: new MongooseDataAccess(),
       provider: createProvider(),
+      store,
     });
   }
   return orchestrator;

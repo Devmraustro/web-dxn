@@ -171,9 +171,10 @@ function cloudinaryRequest(
 }
 
 function requireCloudinaryConfig(): { cloudName: string; apiKey: string; apiSecret: string } {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
-  const apiKey = process.env.CLOUDINARY_API_KEY || "";
-  const apiSecret = process.env.CLOUDINARY_API_SECRET || "";
+  // Trim whitespace from credentials to prevent signature mismatches due to env var formatting
+  const cloudName = (process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+  const apiKey = (process.env.CLOUDINARY_API_KEY || "").trim();
+  const apiSecret = (process.env.CLOUDINARY_API_SECRET || "").trim();
   if (!cloudName || !apiKey || !apiSecret) {
     throw new Error(
       "Cloudinary credentials not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET."

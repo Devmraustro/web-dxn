@@ -4,8 +4,8 @@
  * items, offers, and shipping rates.
  */
 import { DataAccess } from "./retrieval";
-import { CatalogItem, OfferInfo, ShippingInfo } from "./types";
-import { matchesQuery, queryTerms } from "./catalogSearch";
+import { CatalogItem, OfferInfo, ShippingInfo, StockState } from "./types";
+import { matchesQuery, queryTerms, findBestMatches } from "./catalogSearch";
 
 export class InMemoryDataAccess implements DataAccess {
   catalog: CatalogItem[];
@@ -24,14 +24,13 @@ export class InMemoryDataAccess implements DataAccess {
     this.packs = opts?.packs || [];
     this.offers = opts?.offers || [];
     this.shipping =
-      opts?.shipping || { homeDelivery: true, officeDelivery: true, homePriceDA: 600, officePriceDA: 300 };
+      opts?.shipping || { homeDelivery: true, officeDelivery: true, homePriceDA: 600, officePriceDA: 300, shippingConfigured: true };
   }
 
   async searchCatalog(query: string): Promise<CatalogItem[]> {
     if (!queryTerms(query).length) return this.catalog;
-    return this.catalog.filter((it) =>
-      matchesQuery([it.title, it.slug, it.category || ""], query)
-    );
+    const matches = findBestMatches(this.catalog, query, { minScore: 0.3, maxResults: 5 });
+    return matches.map(m => m.item);
   }
   async getCatalog(): Promise<CatalogItem[]> {
     return this.catalog;
@@ -63,6 +62,7 @@ export const sampleCatalog: CatalogItem[] = [
     compareAtPriceDA: 3600,
     available: true,
     stock: 15,
+    stockState: "IN_STOCK",
     category: "coffee",
     storeUrl: "https://dxn.dz/cafe-lingzhi",
   },
@@ -74,6 +74,7 @@ export const sampleCatalog: CatalogItem[] = [
     priceDA: 4500,
     available: true,
     stock: 8,
+    stockState: "IN_STOCK",
     category: "tea",
     storeUrl: "https://dxn.dz/the-g3",
   },
@@ -85,6 +86,7 @@ export const sampleCatalog: CatalogItem[] = [
     priceDA: 5500,
     available: false,
     stock: 0,
+    stockState: "OUT_OF_STOCK",
     category: "spirulina",
     storeUrl: "https://dxn.dz/spiruline",
   },

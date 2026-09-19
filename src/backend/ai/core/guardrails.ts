@@ -111,6 +111,10 @@ function priceAllowlisted(snippet: string, allowedFacts: string[]): boolean {
  * keeps the deterministic path (which already emits verified templates) and any
  * retrieval-less answer stable. The LLM path passes these so fabricated
  * availability/stock, shipping fees, and discounts are rejected.
+ * 
+ * When context is provided but empty (no products retrieved), we still want to
+ * block fabricated claims. Use `hasRetrievalContext: false` to indicate no
+ * products were found, which should trigger stricter checking.
  */
 export interface OutputContext {
   /** Product titles that ARE in stock (positive availability claim allowed). */
@@ -121,6 +125,8 @@ export interface OutputContext {
   shippingPricesDA?: number[];
   /** Authoritative discount labels/values the output may repeat. */
   discounts?: string[];
+  /** Whether retrieval was performed but found no products. */
+  hasRetrievalContext?: boolean;
 }
 
 // Positive availability assertions (cross-language). "نفذت الكمية" / "Rupture
@@ -143,86 +149,143 @@ function checkStockInvention(
   ctx: OutputContext | undefined,
   violations: GuardResult["violations"]
 ): void {
-  if (!ctx) return;
-  const available = (ctx.stockAvailable || []).map((s) => s.toLowerCase());
-  const out = (ctx.stockOut || []).map((s) => s.toLowerCase());
-  const hasOut = out.length > 0;
   const lower = proposed.toLowerCase();
 
   for (const re of STOCK_POSITIVE) {
     if (!re.test(lower)) continue;
     const claimedWord = STOCK_POSITIVE_WORDS.find((w) => lower.includes(w));
-    // The claim is legitimate only if it clearly coincides with an in-stock
-    // item the retrieval actually returned.
-    const namesToCheck = [...out, ...available];
-    const namesPresent = namesToCheck.some((n) => n && lower.includes(n));
-    if (namesPresent) {
-      // Still reject if the named product is actually out of stock.
-      const namedOut = out.some((n) => n && lower.includes(n));
-      if (namedOut) {
-        violations.push({ type: "stock_invention", snippet: proposed.match(re)?.[0] || "" });
+
+    // First check: if retrieval was performed but found nothing, block positive claims
+    if (ctx && ctx.hasRetrievalContext === false) {
+      violations.push({ type: "stock_invention", snippet: claimedWord || proposed.match(re)?.[0] || "" });
+      continue;
+    }
+
+    if (ctx) {
+      const available = (ctx.stockAvailable || []).map((s) => s.toLowerCase());
+      const out = (ctx.stockOut || []).map((s) => s.toLowerCase());
+      const hasOut = out.length > 0;
+      const namesToCheck = [...out, ...available];
+      const namesPresent = namesToCheck.some((n) => n && lower.includes(n));
+
+      if (namesPresent) {
+        // Still reject if the named product is actually out of stock.
+        const namedOut = out.some((n) => n && lower.includes(n));
+        if (namedOut) {
+          violations.push({ type: "stock_invention", snippet: proposed.match(re)?.[0] || "" });
+        }
+        return;
+      }
+      if (hasOut || available.length === 0) {
+        // No authoritative in-stock item is named — a bare "available" claim is
+        // unsupported. Flag when we have stock context to compare.
+        if (ctx.stockAvailable !== undefined || ctx.stockOut !== undefined) {
+          violations.push({ type: "stock_invention", snippet: claimedWord || proposed.match(re)?.[0] || "" });
+        }
       }
       return;
     }
-    if (hasOut || available.length === 0) {
-      // No authoritative in-stock item is named — a bare "available" claim is
-      // unsupported. Only flag when we actually have stock context to compare,
-      // otherwise we cannot know.
-      if (ctx.stockAvailable !== undefined || ctx.stockOut !== undefined) {
-        violations.push({ type: "stock_invention", snippet: claimedWord || proposed.match(re)?.[0] || "" });
-      }
-    }
-    return;
   }
 }
 
 // A shipping fee figure that is not among the retrieved fees is an invention.
+// Note: \b (word boundary) does not work with Arabic characters in JavaScript regex.
+// For Arabic terms, we use simple substring matching without word boundaries.
 const SHIPPING_TERMS_FR = /\b(livraison|frais de livraison|port|shipping)\b/i;
-const SHIPPING_TERMS_AR = /\b(التوصيل|الشحن|الطاكسي|الديليفري|livraison)\b/i;
+const SHIPPING_TERMS_AR = /(التوصيل|الشحن|الطاكسي|الديليفري|livraison)/i;
+const FREE_SHIPPING_TERMS_FR = /\b(gratuit|gratuite|offert|offerte|free)\b/i;
+const FREE_SHIPPING_TERMS_AR = /(مجاني|مجانا|مجانية|مجانية|بلاش)/i;
 function checkShippingInvention(
   proposed: string,
   ctx: OutputContext | undefined,
   violations: GuardResult["violations"]
 ): void {
-  if (!ctx || !ctx.shippingPricesDA || ctx.shippingPricesDA.length === 0) return;
   const lower = proposed.toLowerCase();
   const hasShippingTerm = SHIPPING_TERMS_FR.test(lower) || SHIPPING_TERMS_AR.test(lower);
   if (!hasShippingTerm) return;
+
+  // Check for "free shipping" claims when authoritative shipping prices exist and are non-zero,
+  // OR when retrieval was performed but no shipping data is available.
+  const hasFreeShippingClaim = FREE_SHIPPING_TERMS_FR.test(lower) || FREE_SHIPPING_TERMS_AR.test(lower);
+  if (hasFreeShippingClaim) {
+    if (ctx && ctx.shippingPricesDA && ctx.shippingPricesDA.length > 0) {
+      // Authoritative shipping prices exist - if any is non-zero, "free" is an invention
+      const hasNonZeroPrice = ctx.shippingPricesDA.some((p) => p > 0);
+      if (hasNonZeroPrice) {
+        violations.push({ type: "shipping_invention", snippet: "free shipping claim" });
+        return;
+      }
+    } else if (ctx && ctx.hasRetrievalContext === false) {
+      // Retrieval performed but no shipping configured - "free" claim is invention
+      violations.push({ type: "shipping_invention", snippet: "free shipping claim" });
+      return;
+    }
+  }
+
   const numbers = proposed.match(/\d[\d,.]*/g) || [];
   for (const n of numbers) {
     const value = Number(n.replace(/[.,\s]/g, ""));
-    if (Number.isFinite(value) && !ctx.shippingPricesDA.includes(value)) {
-      const idx = proposed.indexOf(n);
-      const snippet = proposed.slice(Math.max(0, idx - 20), idx + n.length + 6).trim();
-      violations.push({ type: "shipping_invention", snippet });
-      return;
+
+    if (ctx && ctx.shippingPricesDA && ctx.shippingPricesDA.length > 0) {
+      // Has authoritative shipping prices - check against them
+      if (Number.isFinite(value) && !ctx.shippingPricesDA.includes(value)) {
+        const idx = proposed.indexOf(n);
+        const snippet = proposed.slice(Math.max(0, idx - 20), idx + n.length + 6).trim();
+        violations.push({ type: "shipping_invention", snippet });
+        return;
+      }
+    } else if (ctx && ctx.hasRetrievalContext === false) {
+      // Retrieval performed but no shipping configured - any numeric claim is invention
+      if (Number.isFinite(value)) {
+        const idx = proposed.indexOf(n);
+        const snippet = proposed.slice(Math.max(0, idx - 20), idx + n.length + 6).trim();
+        violations.push({ type: "shipping_invention", snippet });
+        return;
+      }
     }
+    // If no context and no retrieval context, we can't verify - allow but log
   }
 }
 
 // A discount/promotion that is not among the retrieved discounts is invented.
+// Note: \b (word boundary) does not work with Arabic characters in JavaScript regex.
+// For Arabic terms, we use simple substring matching without word boundaries.
 const DISCOUNT_TERMS = [
   /\b(réduction|reduction|remise|promo|promotion|rabais|soldes|discount)\b/i,
-  /\b(خصم|تخفيض|تخفيضات|عرض|برومو|عروض خاصة|تخفيض في الثمن)\b/i,
+  /(خصم|تخفيض|تخفيضات|عرض|برومو|عروض خاصة|تخفيض في الثمن)/i,
 ];
 function checkDiscountInvention(
   proposed: string,
   ctx: OutputContext | undefined,
   violations: GuardResult["violations"]
 ): void {
-  if (!ctx || !ctx.discounts || ctx.discounts.length === 0) return;
   const lower = proposed.toLowerCase();
-  if (!DISCOUNT_TERMS.some((re) => re.test(lower))) return;
-  // Any percentage or amount claim near a discount term is only allowed if it
-  // equals an authoritative discount string.
-  const authoritative = ctx.discounts.map((d) => d.toLowerCase().replace(/[^0-9%]/g, ""));
-  const numbers = proposed.match(/\d{1,3}([\.,]\d+)?\s*%/g) || [];
-  for (const num of numbers) {
-    if (!authoritative.includes(num.toLowerCase().replace(/\s/g, ""))) {
+  const hasDiscountTerm = DISCOUNT_TERMS.some((re) => re.test(lower));
+
+  // If there's a discount term, or if we have retrieval context but no authoritative discounts,
+  // check for percentage claims
+  const shouldCheckPercentages = hasDiscountTerm || (ctx && ctx.hasRetrievalContext === false);
+
+  if (ctx && ctx.discounts && ctx.discounts.length > 0) {
+    // Has authoritative discounts - check against them
+    const authoritative = ctx.discounts.map((d) => d.toLowerCase().replace(/[^0-9%]/g, ""));
+    const numbers = proposed.match(/\d{1,3}([\.,]\d+)?\s*%/g) || [];
+    for (const num of numbers) {
+      if (!authoritative.includes(num.toLowerCase().replace(/\s/g, ""))) {
+        violations.push({ type: "discount_invention", snippet: num.trim() });
+        return;
+      }
+    }
+  } else if (shouldCheckPercentages) {
+    // No authoritative discounts but discount term present, or retrieval found no discounts
+    // Any percentage claim is an invention
+    const numbers = proposed.match(/\d{1,3}([\.,]\d+)?\s*%/g) || [];
+    for (const num of numbers) {
       violations.push({ type: "discount_invention", snippet: num.trim() });
       return;
     }
   }
+  // If no context and no retrieval context, we can't verify
 }
 
 /**

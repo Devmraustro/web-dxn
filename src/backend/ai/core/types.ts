@@ -49,6 +49,8 @@ export interface AiProvider {
   healthCheck(): Promise<boolean>;
 }
 
+export type StockState = "IN_STOCK" | "OUT_OF_STOCK" | "UNKNOWN";
+
 export interface CatalogItem {
   id: string;
   slug: string;
@@ -58,6 +60,7 @@ export interface CatalogItem {
   compareAtPriceDA?: number;
   available: boolean;
   stock?: number;
+  stockState?: StockState;
   category?: string;
   storeUrl: string;
 }
@@ -76,6 +79,7 @@ export interface ShippingInfo {
   officeDelivery: boolean;
   homePriceDA?: number;
   officePriceDA?: number;
+  shippingConfigured?: boolean;
 }
 
 export interface BusinessContext {

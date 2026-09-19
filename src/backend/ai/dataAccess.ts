@@ -6,8 +6,8 @@
  * so the AI pipeline can be verified without a database or credentials.
  */
 import { DataAccess } from "./core/retrieval";
-import { CatalogItem, OfferInfo, ShippingInfo } from "./core/types";
-import { matchesQuery, queryTerms } from "./core/catalogSearch";
+import { CatalogItem, OfferInfo, ShippingInfo, StockState } from "./core/types";
+import { matchesQuery, queryTerms, findBestMatches } from "./core/catalogSearch";
 import { escapeRegex } from "../../utils/regex";
 import { isPlaceholderProduct, isPlaceholderPack, isPlaceholderOffer } from "../services/placeholderCatalog.service";
 
@@ -21,7 +21,14 @@ function models(): any {
   return MODELS;
 }
 
+function deriveStockState(stockQuantity: number | undefined): StockState {
+  if (stockQuantity === undefined || stockQuantity === null) return "UNKNOWN";
+  if (stockQuantity > 0) return "IN_STOCK";
+  return "OUT_OF_STOCK";
+}
+
 function toCatalogItem(raw: any, kind: "product" | "pack", storeUrlBase: string, title: string): CatalogItem {
+  const stockQty = raw.stockQuantity;
   return {
     id: String(raw._id),
     slug: raw.slug || "",
@@ -29,8 +36,9 @@ function toCatalogItem(raw: any, kind: "product" | "pack", storeUrlBase: string,
     title,
     priceDA: raw.price ?? raw.priceDA ?? 0,
     compareAtPriceDA: raw.compareAtPrice,
-    available: (raw.stockQuantity ?? Infinity) > 0,
-    stock: raw.stockQuantity,
+    available: (stockQty ?? 0) > 0,
+    stock: stockQty,
+    stockState: deriveStockState(stockQty),
     category: raw.category,
     storeUrl: `${storeUrlBase}/${raw.slug || ""}`,
   };
@@ -71,9 +79,9 @@ export class MongooseDataAccess implements DataAccess {
   async searchCatalog(query: string): Promise<CatalogItem[]> {
     const catalog = await this.getCatalog();
     if (!queryTerms(query).length) return catalog.slice(0, 5);
-    return catalog.filter((it) =>
-      matchesQuery([it.title, it.slug, it.category || ""], query)
-    );
+    // Use findBestMatches for better scoring and alias support
+    const matches = findBestMatches(catalog, query, { minScore: 0.3, maxResults: 5 });
+    return matches.map(m => m.item);
   }
 
   async getActiveOffers(): Promise<OfferInfo[]> {
@@ -104,7 +112,11 @@ export class MongooseDataAccess implements DataAccess {
       wilaya,
       homeDelivery: true,
       officeDelivery: true,
+      homePriceDA: undefined,
+      officePriceDA: undefined,
+      shippingConfigured: false,
     };
+    let foundRate = false;
     if (wilaya) {
       // Exact canonical-spelling match on any of the three spellings; the
       // input is regex-escaped so chat text can never inject regex/ReDoS.
@@ -120,20 +132,50 @@ export class MongooseDataAccess implements DataAccess {
       if (wil) {
         const rates = await m.ShippingRate.find({ wilayaId: wil._id, isActive: true }).lean();
         for (const r of rates as any[]) {
-          if (r.deliveryMethod === "home") info.homePriceDA = r.price;
-          if (r.deliveryMethod === "office") info.officePriceDA = r.price;
+          if (r.deliveryMethod === "home" && typeof r.price === "number" && r.price >= 0) {
+            info.homePriceDA = r.price;
+            info.shippingConfigured = true;
+            foundRate = true;
+          }
+          if (r.deliveryMethod === "office" && typeof r.price === "number" && r.price >= 0) {
+            info.officePriceDA = r.price;
+            info.shippingConfigured = true;
+            foundRate = true;
+          }
         }
       }
     } else {
       const home = await m.ShippingRate.findOne({ deliveryMethod: "home", isActive: true }).lean();
       const office = await m.ShippingRate.findOne({ deliveryMethod: "office", isActive: true }).lean();
-      if (home) info.homePriceDA = home.price;
-      if (office) info.officePriceDA = office.price;
-      if (!home && !office) {
-        const dh = Number(process.env.DEFAULT_SHIPPING_HOME || 0);
-        const dof = Number(process.env.DEFAULT_SHIPPING_OFFICE || 0);
-        info.homePriceDA = dh;
-        info.officePriceDA = dof;
+      if (home && typeof home.price === "number" && home.price >= 0) {
+        info.homePriceDA = home.price;
+        info.shippingConfigured = true;
+        foundRate = true;
+      }
+      if (office && typeof office.price === "number" && office.price >= 0) {
+        info.officePriceDA = office.price;
+        info.shippingConfigured = true;
+        foundRate = true;
+      }
+    }
+    // If no rate found in DB, check env vars but ONLY if explicitly set (not defaulting to 0)
+    if (!foundRate) {
+      const homeEnv = process.env.DEFAULT_SHIPPING_HOME;
+      const officeEnv = process.env.DEFAULT_SHIPPING_OFFICE;
+      // Only use env if explicitly set to a non-negative number
+      if (homeEnv !== undefined && homeEnv !== "") {
+        const n = Number(homeEnv);
+        if (Number.isFinite(n) && n >= 0) {
+          info.homePriceDA = n;
+          info.shippingConfigured = true;
+        }
+      }
+      if (officeEnv !== undefined && officeEnv !== "") {
+        const n = Number(officeEnv);
+        if (Number.isFinite(n) && n >= 0) {
+          info.officePriceDA = n;
+          info.shippingConfigured = true;
+        }
       }
     }
     return info;

@@ -8,7 +8,7 @@
  *
  * Personality: professional, friendly, Algerian, concise, non-annoying.
  */
-import { CatalogItem, Intent, LanguageCode, ShippingInfo } from "./types";
+import { CatalogItem, Intent, LanguageCode, ShippingInfo, StockState } from "./types";
 
 const SAFE_MEDICAL = {
   ar: "منتجات DXN مكملات غذائية و ليست أدوية. لا يمكننا الإدلاء بمعلومات طبية عن الأمراض. للأسئلة الصحية، ننصحك بمراجعة مختص صحي. هل تريد معلومات عن المنتج، التوصيل أو الدفع؟",
@@ -47,9 +47,21 @@ function fmtDA(amount: number): string {
   return `${amount.toLocaleString("fr-FR")} DA`;
 }
 
+function formatStock(state: StockState | undefined, lang: LanguageCode): string {
+  switch (state) {
+    case "IN_STOCK":
+      return lang === "ar" ? "متوفر" : "En stock";
+    case "OUT_OF_STOCK":
+      return lang === "ar" ? "نفذت الكمية" : "Rupture de stock";
+    case "UNKNOWN":
+    default:
+      return lang === "ar" ? "لا أستطيع تأكيد المخزون حاليًا" : "Je ne peux pas confirmer le stock pour le moment";
+  }
+}
+
 function card(item: CatalogItem, lang: LanguageCode, link: boolean): string {
-  const note = item.available ? "" : lang === "ar" ? " (نفذت الكمية)" : " (Rupture de stock)";
-  const base = `${item.title}${note}`;
+  const stockNote = item.stockState ? formatStock(item.stockState, lang) : (item.available ? (lang === "ar" ? "متوفر" : "En stock") : (lang === "ar" ? "نفذت الكمية" : "Rupture de stock"));
+  const base = `${item.title} (${stockNote})`;
   const price = item.compareAtPriceDA && item.compareAtPriceDA > item.priceDA
     ? `${fmtDA(item.compareAtPriceDA)} → ${fmtDA(item.priceDA)}`
     : fmtDA(item.priceDA);
@@ -106,20 +118,58 @@ export function shippingResponse(shipping: ShippingInfo | undefined, lang: Langu
   }
   const lines: string[] = [];
   if (shipping.homeDelivery) {
-    lines.push(
-      lang === "ar"
-        ? `• للمنزل: ${shipping.homePriceDA !== undefined ? fmtDA(shipping.homePriceDA) : "حسب الولاية"}`
-        : `• Domicile : ${shipping.homePriceDA !== undefined ? fmtDA(shipping.homePriceDA) : "selon wilaya"}`
-    );
+    // Show price if explicitly configured (including 0 as valid configured value)
+    // Only show "not configured" when shippingConfigured is explicitly false
+    const homePrice = shipping.homePriceDA;
+    if (homePrice !== undefined) {
+      lines.push(
+        lang === "ar"
+          ? `• للمنزل: ${fmtDA(homePrice)}`
+          : `• Domicile : ${fmtDA(homePrice)}`
+      );
+    } else if (shipping.shippingConfigured === false) {
+      lines.push(
+        lang === "ar"
+          ? "• للمنزل: غير محدد (تواصل معنا للتأكيد)"
+          : "• Domicile : non défini (contactez-nous pour confirmation)"
+      );
+    } else {
+      lines.push(
+        lang === "ar"
+          ? "• للمنزل: حسب الولاية"
+          : "• Domicile : selon wilaya"
+      );
+    }
   }
   if (shipping.officeDelivery) {
-    lines.push(
-      lang === "ar"
-        ? `• لمكتب البريد: ${shipping.officePriceDA !== undefined ? fmtDA(shipping.officePriceDA) : "حسب الولاية"}`
-        : `• Bureau de poste : ${shipping.officePriceDA !== undefined ? fmtDA(shipping.officePriceDA) : "selon wilaya"}`
-    );
+    const officePrice = shipping.officePriceDA;
+    if (officePrice !== undefined) {
+      lines.push(
+        lang === "ar"
+          ? `• لمكتب البريد: ${fmtDA(officePrice)}`
+          : `• Bureau de poste : ${fmtDA(officePrice)}`
+      );
+    } else if (shipping.shippingConfigured === false) {
+      lines.push(
+        lang === "ar"
+          ? "• لمكتب البريد: غير محدد (تواصل معنا للتأكيد)"
+          : "• Bureau de poste : non défini (contactez-nous pour confirmation)"
+      );
+    } else {
+      lines.push(
+        lang === "ar"
+          ? "• لمكتب البريد: حسب الولاية"
+          : "• Bureau de poste : selon wilaya"
+      );
+    }
   }
   if (lines.length) parts.push(lines.join("\n"));
+  // If no lines (no delivery methods or no prices), show generic message
+  if (parts.length === (shipping.wilaya ? 1 : 0)) {
+    return lang === "ar"
+      ? "التوصيل متوفر، لكن الرسوم غير محددة حاليًا. تواصل معنا للتأكيد."
+      : "La livraison est disponible, mais les frais ne sont pas définis pour le moment. Contactez-nous pour confirmation.";
+  }
   return parts.join("\n");
 }
 

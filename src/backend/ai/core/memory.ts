@@ -72,3 +72,66 @@ export class InMemoryConversationStore implements ConversationStore {
     this.db.delete(id);
   }
 }
+
+/**
+ * Mongoose-backed conversation store for production.
+ * Uses the existing Conversation/Message models for durable persistence.
+ */
+export class MongooseConversationStore implements ConversationStore {
+  async getHistory(conversationId: string): Promise<MemoryMessage[]> {
+    // Dynamic require to avoid loading mongoose models at import time in tests
+    const { Conversation, Message } = require("../../Database/Models");
+    
+    const conv = await Conversation.findOne({ platformId: conversationId, isActive: true }).lean();
+    if (!conv) return [];
+    
+    const messages = await Message.find({ conversationId: conv._id })
+      .sort({ createdAt: 1 })
+      .limit(DEFAULT_CONTEXT_LIMIT * 4)
+      .lean();
+    
+    return (messages as any[]).map(m => ({
+      role: m.role,
+      content: m.content,
+      timestamp: m.createdAt?.getTime(),
+    }));
+  }
+
+  async append(conversationId: string, message: MemoryMessage): Promise<void> {
+    const { Conversation, Message } = require("../../Database/Models");
+    
+    // Find or create conversation
+    let conv = await Conversation.findOne({ platformId: conversationId, isActive: true });
+    if (!conv) {
+      const [platform, platformId] = conversationId.split(":");
+      conv = await Conversation.create({
+        platform: platform as "instagram" | "facebook",
+        platformId,
+        isActive: true,
+        lastMessage: message.content.slice(0, 200),
+        lastActivity: new Date(),
+      });
+    }
+    
+    // Update conversation metadata
+    conv.lastMessage = message.content.slice(0, 200);
+    conv.lastActivity = new Date();
+    await conv.save();
+    
+    // Append message
+    await Message.create({
+      conversationId: conv._id,
+      role: message.role,
+      content: message.content,
+    });
+  }
+
+  async clear(conversationId: string): Promise<void> {
+    const { Conversation, Message } = require("../../Database/Models");
+    const conv = await Conversation.findOne({ platformId: conversationId });
+    if (conv) {
+      await Message.deleteMany({ conversationId: conv._id });
+      await Conversation.deleteOne({ _id: conv._id });
+    }
+  }
+}

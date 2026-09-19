@@ -30,6 +30,7 @@ import {
 } from "./guardrails";
 import { DataAccess, retrieve, recommend } from "./retrieval";
 import { buildContext, ConversationStore, InMemoryConversationStore } from "./memory";
+import { PRODUCT_ALIASES, normalizeText, stripArticle } from "./catalogSearch";
 import {
   escalatedResponse,
   greetingResponse,
@@ -89,8 +90,12 @@ export class Orchestrator {
       normalizedPreview: normalized?.slice(0, 50),
     }));
 
+    // Extract context from conversation history for entity resolution
+    const contextProduct = this.extractContextProduct(history);
+    const enhancedQuery = this.enhanceQueryWithContext(normalized, contextProduct);
+
     // 1. Intent + language (language prefers the conversation's last lang).
-    const intentResult = classifyIntent(normalized, previousLanguage);
+    const intentResult = classifyIntent(enhancedQuery, previousLanguage);
     const lang = intentResult.language;
 
     // 2. Input guardrails: prompt injection / medical-risk.
@@ -178,7 +183,7 @@ export class Orchestrator {
     // 4. Retrieve current data (source of truth).
     let result: OrchestratorResultBuilder;
     try {
-      result = await this.routeRetrieval(intentResult.intent, normalized, lang);
+      result = await this.routeRetrieval(intentResult.intent, enhancedQuery, lang);
     } catch {
       const response = safeFallbackResponse(lang);
       await this.remember(conversationId, "user", normalized);
@@ -261,6 +266,24 @@ export class Orchestrator {
             validation: "safe",
           };
         }
+        // Empty LLM response → treat as provider failure, fall back (not blocked)
+        if (!llm.text.trim().length) {
+          throw new Error("Empty LLM response");
+        }
+        // LLM output failed validation — block it and escalate
+        await this.store.append(conversationId, { role: "user", content: normalized });
+        const blockedResponse = escalatedResponse(lang);
+        await this.store.append(conversationId, { role: "assistant", content: blockedResponse });
+        return {
+          response: blockedResponse,
+          needsHumanHandoff: true,
+          escalationReason: `output validation blocked (${v.violations.map((x) => x.type).join(", ")})`,
+          intent: intentResult.intent,
+          language: lang,
+          confidence: 0.85,
+          performedRetrieval: true,
+          validation: "blocked",
+        };
       } catch {
         // Provider failure → failsafe (Phase 19AC)
       }
@@ -305,6 +328,14 @@ export class Orchestrator {
         base.retrievedItems = lo.products.map((p) => ({ title: p.title, available: p.available }));
         base.retrievedContext = formatCatalog(lo.products, lo.packs);
         if (lo.products.length === 0) {
+          // If we have a real LLM provider, let it handle the "not found" case
+          // so output guardrails can validate its response. Deterministic provider
+          // gets a safe fallback draft.
+          if (this.provider.name !== "deterministic") {
+            base.requiresLLM = true;
+            base.confidence = 0.4;
+            return base;
+          }
           base.draft = lang === "ar"
             ? "لم أجد هذا المنتج في كتالوجنا الحالي. هل تريد قائمة منتجاتنا؟"
             : "Je ne trouve pas ce produit dans notre catalogue actuel. Souhaitez-vous voir nos produits ?";
@@ -352,9 +383,20 @@ export class Orchestrator {
       case Intent.OFFER_INFO: {
         const offers = await this.dataAccess.getActiveOffers();
         base.performedRetrieval = true;
+        base.discounts = offers.map((o) => (o.type === "percentage" ? `${o.value}%` : `${o.value}`));
+        if (offers.length === 0) {
+          if (this.provider.name !== "deterministic") {
+            base.requiresLLM = true;
+            base.confidence = 0.4;
+            return base;
+          }
+          base.draft = offersResponse(offers, lang);
+          base.requiresLLM = false;
+          base.confidence = 0.8;
+          return base;
+        }
         base.draft = offersResponse(offers, lang);
         base.allowedFacts = offers.map((o) => `${o.value}`);
-        base.discounts = offers.map((o) => (o.type === "percentage" ? `${o.value}%` : `${o.value}`));
         base.requiresLLM = false;
         base.confidence = 0.8;
         return base;
@@ -364,12 +406,24 @@ export class Orchestrator {
         base.performedRetrieval = true;
         const h = shipping.homePriceDA;
         const o = shipping.officePriceDA;
-        if (h !== undefined) base.allowedFacts.push(`${h}`);
-        if (o !== undefined) base.allowedFacts.push(`${o}`);
-        base.shippingPricesDA = [h, o].filter((x): x is number => x !== undefined);
-        base.draft = shippingResponse(shipping, lang);
-        base.requiresLLM = false;
-        base.confidence = 0.9;
+        const hasAuthoritativeShipping = (h !== undefined) || (o !== undefined);
+        if (hasAuthoritativeShipping) {
+          if (h !== undefined) base.allowedFacts.push(`${h}`);
+          if (o !== undefined) base.allowedFacts.push(`${o}`);
+          base.shippingPricesDA = [h, o].filter((x): x is number => x !== undefined);
+          base.draft = shippingResponse(shipping, lang);
+          base.requiresLLM = false;
+          base.confidence = 0.9;
+        } else if (this.provider.name !== "deterministic") {
+          // No authoritative shipping data - let LLM handle with guardrails
+          base.shippingPricesDA = []; // Explicitly set empty to signal no authoritative data
+          base.requiresLLM = true;
+          base.confidence = 0.4;
+        } else {
+          base.draft = shippingResponse(shipping, lang);
+          base.requiresLLM = false;
+          base.confidence = 0.9;
+        }
         return base;
       }
       case Intent.PAYMENT: {
@@ -399,8 +453,24 @@ export class Orchestrator {
         base.confidence = 0.8;
         return base;
       }
-      default:
+      default: {
+        // Fallback: try product search for short queries that might be product names/aliases
+        // This handles cases like "GANO", "reishi", etc. that don't match intent patterns
+        const isShortQuery = query.trim().length <= 30 && !/\d/.test(query);
+        if (isShortQuery) {
+          const products = await this.dataAccess.searchCatalog(query);
+          if (products.length > 0) {
+            base.performedRetrieval = true;
+            base.retrievedItems = products.map((p) => ({ title: p.title, available: p.available }));
+            base.retrievedContext = formatCatalog(products, []);
+            base.allowedFacts = products.flatMap((p) => priceFacts(p));
+            base.draft = productInfoResponse(products, Intent.PRODUCT_INFO, lang, true);
+            if (base.draft) { base.requiresLLM = false; base.confidence = 0.7; }
+            return base;
+          }
+        }
         return base;
+      }
     }
   }
 
@@ -462,7 +532,9 @@ export class Orchestrator {
    */
   private buildOutputContext(result: OrchestratorResultBuilder): OutputContext | undefined {
     const ctx: OutputContext = {};
-    if (result.retrievedItems) {
+    let hasAnyItems = false;
+    if (result.retrievedItems && result.retrievedItems.length > 0) {
+      hasAnyItems = true;
       ctx.stockAvailable = result.retrievedItems
         .filter((i) => i.available)
         .map((i) => i.title);
@@ -472,11 +544,18 @@ export class Orchestrator {
     }
     ctx.shippingPricesDA = result.shippingPricesDA;
     ctx.discounts = result.discounts;
+
+    // If retrieval was performed but no authoritative data found, signal this for stricter guardrails
+    const hasAuthoritativeData = hasAnyItems || (result.shippingPricesDA && result.shippingPricesDA.length > 0) || (result.discounts && result.discounts.length > 0);
+    if (result.performedRetrieval && !hasAuthoritativeData) {
+      ctx.hasRetrievalContext = false;
+    }
+
     if (
       Object.keys(ctx).length === 0 ||
       ((!ctx.stockAvailable?.length || !ctx.stockOut?.length) &&
         !ctx.shippingPricesDA?.length &&
-        !ctx.discounts?.length)
+        !ctx.discounts?.length && !ctx.hasRetrievalContext)
     ) {
       return ctx;
     }
@@ -505,6 +584,68 @@ export class Orchestrator {
     } catch {
       /* memory persistence must not break the conversation */
     }
+  }
+
+  /**
+   * Extract the last explicitly mentioned product title from conversation history.
+   * Looks at assistant messages that contain product cards.
+   */
+  private extractContextProduct(history: { role: string; content: string }[]): string | undefined {
+    // Look at recent assistant messages (last 4) for product mentions
+    const assistantMessages = history
+      .filter((m) => m.role === "assistant")
+      .slice(-4);
+
+    for (const msg of assistantMessages.reverse()) {
+      // Product cards look like: "• Product Name (متوفر) — 3 200 DA 🔗 URL"
+      // or "• Product Name (OUT OF STOCK) — 3 200 DA"
+      const lines = msg.content.split("\n");
+      for (const line of lines) {
+        const match = line.match(/^•\s+([^(]+?)\s*\(/);
+        if (match && match[1].trim().length > 2) {
+          return match[1].trim();
+        }
+      }
+    }
+    return undefined;
+  }
+
+/**
+   * Enhance an ambiguous query with context from previous conversation.
+   * Only enhances when the query is short and doesn't contain clear product identifiers.
+   */
+  private enhanceQueryWithContext(query: string, contextProduct: string | undefined): string {
+    if (!contextProduct) return query;
+
+    const trimmed = query.trim();
+    const normalized = normalizeText(trimmed);
+    const normalizedNoArticle = stripArticle(normalized);
+    
+    // Meaningful product terms that WOULD indicate a specific product was named
+    // (specific product names, aliases, category keywords)
+    const MEANINGFUL_PRODUCT_TERMS = [
+      "قهوة", "شاي", "سبيرولينا", "غانون", "غانو", 
+      "reishi", "gano", "ganozhi", "lingzhi", "coffee", "tea", "spirulina",
+      "pack", "باك"
+      // Note: "منتج", "product", "produit" are deliberately EXCLUDED
+    ];
+
+    // Check if query contains a MEANINGFUL product term
+    const hasMeaningfulProductTerm = MEANINGFUL_PRODUCT_TERMS.some(term => normalizedNoArticle.includes(term));
+    if (hasMeaningfulProductTerm) return query;
+
+    // Check if query matches a known alias (would resolve on its own)
+    const aliasTerms = normalized.split(/\s+/);
+    const hasAlias = aliasTerms.some(term => term in PRODUCT_ALIASES);
+    if (hasAlias) return query;
+
+    // Enhance short ambiguous queries (like "كم السعر؟", "متوفر؟", "هل متوفر المنتج؟")
+    // If query is short (<=20 chars) and doesn't contain numbers, enhance with context
+    const isShortAmbiguous = trimmed.length <= 20 && !/\d/.test(trimmed);
+    if (isShortAmbiguous) {
+      return `${trimmed} ${contextProduct}`;
+    }
+    return query;
   }
 }
 
