@@ -122,7 +122,12 @@ export class MetaMessenger {
       // Meta's text message cap; truncate safely to avoid permanent 4xx.
       text = text.substring(0, 4096);
     }
-    const base = `https://graph.facebook.com/${this.graphVersion}/me/messages`;
+    const pageId = process.env.META_PAGE_ID;
+    if (!pageId) {
+      console.error("[DIAGNOSTIC-MESSENGER] no_page_id_configured");
+      throw new Error("MetaMessenger: META_PAGE_ID not configured");
+    }
+    const base = `https://graph.facebook.com/${this.graphVersion}/${pageId}/messages`;
     // Use the Authorization header (Bearer) instead of putting the access
     // token in the URL query string. Tokens in query strings get logged by
     // intermediate proxies, server access logs, and CDN edge nodes.
@@ -134,10 +139,30 @@ export class MetaMessenger {
     };
     // Transient-only bounded retry: a 5xx/429/timed-out send is retried, but a
     // permanent 4xx fails immediately so we never duplicate side effects.
-    const data: any = await withRetry(() =>
-      this.transport(url, body, { Authorization: `Bearer ${this.token}` }),
-      this.retry
-    );
+    let data: any;
+    try {
+      data = await withRetry(() =>
+        this.transport(url, body, { Authorization: `Bearer ${this.token}` }),
+        this.retry
+      );
+    } catch (err: any) {
+      // Log detailed error from Meta Graph API
+      if (err.response) {
+        console.error("[DIAGNOSTIC-MESSENGER] sendText_error_response", JSON.stringify({
+          status: err.response.status,
+          statusText: err.response.statusText,
+          errorCode: err.response.data?.error?.code,
+          errorType: err.response.data?.error?.type,
+          errorMessage: err.response.data?.error?.message,
+          errorSubcode: err.response.data?.error?.error_subcode,
+          fbtrace_id: err.response.data?.error?.fbtrace_id,
+          requestUrl: url,
+        }));
+      } else {
+        console.error("[DIAGNOSTIC-MESSENGER] sendText_error_no_response", err instanceof Error ? err.message : String(err));
+      }
+      throw err;
+    }
     console.log("[DIAGNOSTIC-MESSENGER] sendText_success", JSON.stringify({
       recipientId: data?.recipient_id,
       messageId: data?.message_id,
