@@ -5,7 +5,7 @@
   "outputDirectory": "dist/frontend/build",
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist/frontend/build/**",
+      "includeFiles": ["dist/frontend/build/**", "dist/backend/**", "dist/Database/**"],
       "maxDuration": 60
     }
   },
