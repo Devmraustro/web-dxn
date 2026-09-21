@@ -73,15 +73,16 @@ export class InMemoryConversationStore implements ConversationStore {
   }
 }
 
+// Import models statically so Vercel's bundler can trace the dependency.
+// Only import what MongooseConversationStore actually uses: Conversation and Message.
+import { Conversation, Message } from "../../../Database/Models";
+
 /**
  * Mongoose-backed conversation store for production.
  * Uses the existing Conversation/Message models for durable persistence.
  */
 export class MongooseConversationStore implements ConversationStore {
   async getHistory(conversationId: string): Promise<MemoryMessage[]> {
-    // Dynamic require to avoid loading mongoose models at import time in tests
-    const { Conversation, Message } = require("../../Database/Models");
-    
     const conv = await Conversation.findOne({ platformId: conversationId, isActive: true }).lean();
     if (!conv) return [];
     
@@ -98,8 +99,6 @@ export class MongooseConversationStore implements ConversationStore {
   }
 
   async append(conversationId: string, message: MemoryMessage): Promise<void> {
-    const { Conversation, Message } = require("../../Database/Models");
-    
     // Find or create conversation
     let conv = await Conversation.findOne({ platformId: conversationId, isActive: true });
     if (!conv) {
@@ -127,7 +126,6 @@ export class MongooseConversationStore implements ConversationStore {
   }
 
   async clear(conversationId: string): Promise<void> {
-    const { Conversation, Message } = require("../../Database/Models");
     const conv = await Conversation.findOne({ platformId: conversationId });
     if (conv) {
       await Message.deleteMany({ conversationId: conv._id });
