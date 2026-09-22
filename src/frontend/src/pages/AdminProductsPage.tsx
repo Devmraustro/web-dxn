@@ -45,24 +45,29 @@ interface ProductForm {
   stockQuantity: string;
   isActive: boolean;
   image: string;
+  points: string;
   translations: {
     ar: { title: string; description: string; specifications: string };
     fr: { title: string; description: string; specifications: string };
   };
 }
 
-const EMPTY_FORM: ProductForm = {
-  sku: "",
-  slug: "",
-  price: "",
-  stockQuantity: "",
-  isActive: true,
-  image: "",
-  translations: {
-    ar: { title: "", description: "", specifications: "" },
-    fr: { title: "", description: "", specifications: "" },
-  },
-};
+/** Returns a fresh empty form object to avoid mutating a shared constant. */
+function createEmptyForm(): ProductForm {
+  return {
+    sku: "",
+    slug: "",
+    price: "",
+    stockQuantity: "",
+    isActive: true,
+    image: "",
+    points: "",
+    translations: {
+      ar: { title: "", description: "", specifications: "" },
+      fr: { title: "", description: "", specifications: "" },
+    },
+  };
+}
 
 const AdminProductsPage = () => {
   const { language } = useLanguage();
@@ -76,7 +81,7 @@ const AdminProductsPage = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<AdminProductRow | null>(null);
-  const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
+  const [form, setForm] = useState<ProductForm>(() => createEmptyForm());
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -124,7 +129,7 @@ const AdminProductsPage = () => {
   const openCreate = () => {
     setEditing(null);
     setForm({
-      ...EMPTY_FORM,
+      ...createEmptyForm(),
       sku: `DXN-${Date.now().toString(36).toUpperCase()}`,
     });
     setFormError(null);
@@ -145,6 +150,7 @@ const AdminProductsPage = () => {
         slug: data?.slug || "",
         price: String(Number(data?.price) || 0),
         stockQuantity: String(Number(data?.stockQuantity) || 0),
+        points: String(Number(data?.points) || 0),
         isActive: data?.isActive !== false,
         image: data?.image || (Array.isArray(data?.images) ? data.images[0] || "" : ""),
         translations: {
@@ -171,7 +177,7 @@ const AdminProductsPage = () => {
   const closeModal = () => {
     setShowModal(false);
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm(createEmptyForm());
     setFormError(null);
   };
 
@@ -234,6 +240,12 @@ const AdminProductsPage = () => {
     if (stock > 1_000_000) {
       return t("كمية المخزون كبيرة جداً", "Stock trop élevé");
     }
+    if (form.points !== "") {
+      const points = Number(form.points);
+      if (!Number.isFinite(points) || points < 0) {
+        return t("نقاط DXN يجب أن تكون رقماً غير سالب", "Les points DXN doivent être un nombre positif ou nul");
+      }
+    }
     return null;
   };
 
@@ -252,6 +264,7 @@ const AdminProductsPage = () => {
       slug: form.slug.trim(),
       price: Number(form.price),
       stockQuantity: Number(form.stockQuantity),
+      points: form.points !== "" ? Number(form.points) : 0,
       isActive: form.isActive,
       image: form.image || undefined,
       translations: {
@@ -514,6 +527,30 @@ const AdminProductsPage = () => {
                   />
                 </Form.Group>
               </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>
+                    {t("نقاط DXN", "Points DXN")}
+                  </Form.Label>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    inputMode="decimal"
+                    value={form.points}
+                    onChange={(e) => updateField("points", e.target.value)}
+                    isInvalid={
+                      form.points !== "" && !(Number(form.points) >= 0)
+                    }
+                  />
+                  <Form.Text className="text-muted">
+                    {t("نقاط DXN الرسمية للمنتج", "Points DXN officiels du produit")}
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>{t("الحالة", "Statut")}</Form.Label>

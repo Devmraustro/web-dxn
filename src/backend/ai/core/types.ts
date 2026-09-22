@@ -63,6 +63,7 @@ export interface CatalogItem {
   stockState?: StockState;
   category?: string;
   storeUrl: string;
+  points?: number;
 }
 
 export interface OfferInfo {

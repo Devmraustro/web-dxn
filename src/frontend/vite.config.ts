@@ -10,7 +10,7 @@ import path from "path";
 const frontendRoot = __dirname;
 const buildOutDir = path.resolve(__dirname, "../../dist/frontend/build");
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: frontendRoot,
   plugins: [react()],
   base: "/",
@@ -25,6 +25,24 @@ export default defineConfig({
     outDir: buildOutDir,
     emptyOutDir: true,
     sourcemap: false,
+    rollupOptions: command === "build" ? {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor-react';
+            }
+            if (id.includes('bootstrap')) {
+              return 'vendor-bootstrap';
+            }
+            if (id.includes('clsx') || id.includes('date-fns')) {
+              return 'vendor-utils';
+            }
+            return 'vendor-other';
+          }
+        },
+      },
+    } : {},
   },
   server: {
     port: 3000,
@@ -34,4 +52,4 @@ export default defineConfig({
       "/meta": "http://localhost:5000",
     },
   },
-});
+}));

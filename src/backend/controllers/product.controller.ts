@@ -26,6 +26,7 @@ const ALLOWED_PRODUCT_FIELDS = [
   "price",
   "compareAtPrice",
   "stockQuantity",
+  "points",
   "isActive",
   "isFeatured",
   "sortOrder",

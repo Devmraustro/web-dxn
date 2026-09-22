@@ -174,6 +174,14 @@ const ProductDetailPage = () => {
                 {t("مميز", "En vedette")}
               </span>
             )}
+            {(typeof product.points === "number" && product.points > 0) && (
+              <span className="dxn-chip" style={{ backgroundColor: "#f0f4f1", color: "#0b3d1f" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 1.18 14.14 6.91 9.27 2 9.27 6.91 2.98 17.77 6.91" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+                {t("نقاط DXN: {points}", "Points DXN: {points}").replace("{points}", product.points.toString())}
+              </span>
+            )}
           </div>
 
           <div className="mb-3">

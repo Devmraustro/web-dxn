@@ -690,13 +690,14 @@ function priceFacts(p: { priceDA: number; compareAtPriceDA?: number }): string[]
  * the model may cite these facts but must never invent new ones.
  */
 function formatCatalog(
-  products: { title: string; priceDA: number; available: boolean; stock?: number; storeUrl: string }[],
+  products: { title: string; priceDA: number; available: boolean; stock?: number; storeUrl: string; points?: number }[],
   packs: { title: string; priceDA: number; available: boolean }[]
 ): string {
   const rows: string[] = [];
   for (const p of products) {
+    const pointsStr = typeof p.points === "number" && p.points > 0 ? ` | DXN Points: ${p.points}` : "";
     rows.push(
-      `- ${p.title}: ${p.priceDA} DA|${p.available ? "in stock" : "OUT OF STOCK"}${p.stock !== undefined && p.stock > 0 ? ` (${p.stock} units)` : ""}|${p.storeUrl}`
+      `- ${p.title}: ${p.priceDA} DA${pointsStr}|${p.available ? "in stock" : "OUT OF STOCK"}${p.stock !== undefined && p.stock > 0 ? ` (${p.stock} units)` : ""}|${p.storeUrl}`
     );
   }
   for (const pk of packs) {

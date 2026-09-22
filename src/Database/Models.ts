@@ -58,6 +58,7 @@ const productSchema = new Schema({
   isFeatured: { type: Boolean, default: false },
   sortOrder: { type: Number, default: 0 },
   stockQuantity: { type: Number, default: 0, min: 0 }, // Server-authoritative stock
+  points: { type: Number, default: 0, min: 0 }, // DXN product points
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });

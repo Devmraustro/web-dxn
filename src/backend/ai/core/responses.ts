@@ -65,8 +65,11 @@ function card(item: CatalogItem, lang: LanguageCode, link: boolean): string {
   const price = item.compareAtPriceDA && item.compareAtPriceDA > item.priceDA
     ? `${fmtDA(item.compareAtPriceDA)} → ${fmtDA(item.priceDA)}`
     : fmtDA(item.priceDA);
+  const points = typeof item.points === "number" && item.points > 0
+    ? (lang === "ar" ? ` | نقاط DXN: ${item.points}` : ` | Points DXN: ${item.points}`)
+    : "";
   const url = link ? ` 🔗 ${item.storeUrl}` : "";
-  return `• ${base} — ${price}${url}`;
+  return `• ${base} — ${price}${points}${url}`;
 }
 
 export function productInfoResponse(

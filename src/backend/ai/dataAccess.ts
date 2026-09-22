@@ -41,6 +41,7 @@ function toCatalogItem(raw: any, kind: "product" | "pack", storeUrlBase: string,
     stockState: deriveStockState(stockQty),
     category: raw.category,
     storeUrl: `${storeUrlBase}/${raw.slug || ""}`,
+    points: typeof raw.points === "number" ? raw.points : 0,
   };
 }
 
