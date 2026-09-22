@@ -10,6 +10,7 @@ import "./index.css";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import MobileNav from "./components/MobileNav";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 // Route-level code splitting: the product catalog (the landing route users see
 // first) stays in the critical path; admin + detail pages load on demand,
@@ -47,6 +48,7 @@ const App = () => (
       <Header />
       <PageSuspense>
         <Routes>
+          <ScrollToTop />
           <Route path="/" element={<HomePage />} />
           <Route path="/products" element={<ProductListPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
