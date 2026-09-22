@@ -15,6 +15,7 @@ import { Orchestrator } from "../core/orchestrator";
 import { MetaMessenger } from "../meta/messenger";
 import { toNormalizedMessage, conversationIdFor } from "../meta/webhook";
 import { notifyHumanHandoff, TelegramSink } from "../core/escalation";
+import { AI_SALES_MODE } from "../../config/env";
 
 export interface DedupRegistry {
   has(key: string): boolean | Promise<boolean>;
@@ -154,6 +155,46 @@ export async function processWebhookEvent(
     performedRetrieval: result.performedRetrieval,
     validation: result.validation,
   }));
+
+  // AI Sales Mode Pause Check - if paused, do not send AI response to customer
+  // but still process human handoffs if needed
+  if (AI_SALES_MODE === "PAUSED") {
+    console.log("[DIAGNOSTIC-PROCESSOR] AI_SALES_MODE=PAUSED - suppressing outbound AI response");
+    // Still log the response for debugging but don't send it
+    console.log("[DIAGNOSTIC-PROCESSOR] suppressed_response", JSON.stringify({
+      responsePreview: result.response?.slice(0, 100),
+      needsHumanHandoff: result.needsHumanHandoff,
+      intent: result.intent,
+    }));
+
+    // Still process human handoff if needed, but don't send AI response to customer
+    let humanEscalated = false;
+    if (result.needsHumanHandoff) {
+      console.log("[DIAGNOSTIC-PROCESSOR] human_handoff_required (paused mode)");
+      if (opts.telegramSink) {
+        const esc = await notifyHumanHandoff(opts.telegramSink, {
+          platform: normalized.platform,
+          conversationId: convId,
+          customerIdentifier: normalized.senderId,
+          reason: result.intent || "needs human assistance",
+          recentContext: `${normalized.platform}: ${normalized.text}`.slice(0, 400),
+        });
+        humanEscalated = esc.delivered;
+        console.log("[DIAGNOSTIC-PROCESSOR] telegram_notification_sent", JSON.stringify({
+          delivered: esc.delivered,
+        }));
+      }
+    }
+
+    return {
+      handled: true,
+      duplicate: false,
+      replySent: false,
+      humanEscalated,
+      platform: normalized.platform,
+      text: "", // No response sent to customer
+    };
+  }
 
   let replySent = false;
   let humanEscalated = false;

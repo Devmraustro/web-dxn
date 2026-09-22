@@ -42,3 +42,6 @@ export const DEFAULT_SHIPPING_OFFICE = (() => {
   const n = Number(process.env.DEFAULT_SHIPPING_OFFICE);
   return Number.isFinite(n) && n >= 0 ? n : 0;
 })();
+
+/** AI Sales Assistant mode: "ACTIVE" | "PAUSED" — controls whether the AI replies to customers */
+export const AI_SALES_MODE = (process.env.AI_SALES_MODE || "PAUSED").toUpperCase() as "ACTIVE" | "PAUSED";

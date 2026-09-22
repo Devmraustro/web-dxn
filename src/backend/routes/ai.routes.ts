@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import { Orchestrator } from "../ai/core/orchestrator";
 import { createProvider } from "../ai/provider/AIProvider";
 import { MongooseDataAccess } from "../ai/dataAccess";
+import { AI_SALES_MODE } from "../config/env";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -50,6 +51,16 @@ router.post("/message", aiMessageLimiter, async (req: Request, res: Response) =>
     }
     if (message.length > MAX_MESSAGE_LENGTH) {
       return res.status(400).json({ error: "message is too long" });
+    }
+
+    // AI Sales Mode Pause Check
+    if (AI_SALES_MODE === "PAUSED") {
+      return res.json({
+        response: "",
+        needsHumanHandoff: false,
+        intent: "PAUSED",
+        language: "ar",
+      });
     }
     const id =
       typeof conversationId === "string" && conversationId && conversationId.length <= 200
