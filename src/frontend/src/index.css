@@ -1622,7 +1622,7 @@ input[type="number"] {
 
 .dxn-btn-outline-light {
   background: transparent;
-  border: 1.5px solid rgba(255, 255, 255, 0.72);
+  border: 1.5px solid #fff;
   color: #fff;
 }
 .dxn-btn-outline-light:hover:not(:disabled) {

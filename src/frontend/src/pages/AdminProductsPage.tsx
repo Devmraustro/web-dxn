@@ -28,6 +28,7 @@ interface AdminProductRow {
   images?: string[];
   _titles?: Record<string, string>;
   _isPlaceholderSeed?: boolean;
+  points?: number;
 }
 
 interface TranslationDoc {
@@ -368,6 +369,7 @@ const AdminProductsPage = () => {
                     <th>{t("المنتج", "Produit")}</th>
                     <th>SKU</th>
                     <th>{t("السعر (دج)", "Prix (DA)")}</th>
+                    <th>{t("نقاط DXN", "Points DXN")}</th>
                     <th>{t("المخزون", "Stock")}</th>
                     <th>{t("الحالة", "Statut")}</th>
                     <th style={{ minWidth: 180 }}>{t("إجراءات", "Actions")}</th>
@@ -405,6 +407,9 @@ const AdminProductsPage = () => {
                       </td>
                       <td>{p.sku}</td>
                       <td>{p.price.toLocaleString()} DA</td>
+                      <td>
+                        {typeof p.points === "number" ? p.points.toLocaleString(language === "ar" ? "ar-DZ" : "fr-FR") : "0"}
+                      </td>
                       <td>
                         <span className={p.stockQuantity <= 0 ? "text-danger" : undefined}>
                           {p.stockQuantity}

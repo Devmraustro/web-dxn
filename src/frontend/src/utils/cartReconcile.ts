@@ -30,11 +30,13 @@ export interface CatalogEntry {
   price: number;
   stockQuantity: number;
   name?: string;
+  points?: number;
 }
 
 export interface ReconcileItem extends CartItem {
   status: CartItemStatus;
   reasons: CartItemReason[];
+  points?: number;
 }
 
 export interface ReconcileResult {
@@ -45,6 +47,35 @@ export interface ReconcileResult {
 }
 
 export const roundMoney = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Sanitize a blob of JSON-as-parsed-from-localStorage into well-formed cart
+ * rows. Rows without any identifier or with an unusable quantity are dropped
+ * instead of being silently carried into the live cart.
+ */
+export function sanitizeCartItems(raw: unknown): CartItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CartItem[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const it = entry as Partial<CartItem>;
+    const productId = typeof it.productId === "string" ? it.productId : "";
+    const packId = typeof it.packId === "string" ? it.packId : "";
+    if (!productId && !packId) continue;
+    const quantity = Number(it.quantity);
+    const qty = Number.isFinite(quantity) && quantity >= 1 ? Math.floor(quantity) : 1;
+    const unitPrice = Number.isFinite(Number(it.unitPrice)) && Number(it.unitPrice) >= 0 ? Number(it.unitPrice) : 0;
+    out.push({
+      ...(productId ? { productId } : {}),
+      ...(packId ? { packId } : {}),
+      name: typeof it.name === "string" && it.name.trim() ? it.name : "Product",
+      unitPrice,
+      quantity: qty,
+      totalPrice: roundMoney(Number.isFinite(Number(it.totalPrice)) ? Number(it.totalPrice) : unitPrice * qty),
+    });
+  }
+  return out;
+}
 
 const isProductEntry = (item: CartItem): item is CartItem & { productId: string } =>
   typeof item.productId === "string" && item.productId.length > 0;
@@ -71,6 +102,7 @@ export function reconcileCart(
       ...item,
       status: "ok" as const,
       reasons: [],
+      points: 0,
     }));
     return {
       items: neutral,
@@ -104,6 +136,7 @@ export function reconcileCart(
         totalPrice: roundMoney(Number(entry.price) * quantity),
         status: reasons.length > 0 ? "unavailable" : "ok",
         reasons,
+        points: typeof entry.points === "number" ? entry.points : 0,
       });
       continue;
     }
@@ -121,12 +154,13 @@ export function reconcileCart(
         totalPrice: roundMoney(Number(entry.price) * Number(item.quantity)),
         status: "ok",
         reasons: [],
+        points: typeof entry.points === "number" ? entry.points : 0,
       });
       continue;
     }
 
-    // Malformed line without any identifier — cannot be checked, keep as stale.
-    items.push({ ...item, status: "stale", reasons: ["missing"] });
+// Malformed line without any identifier — cannot be checked, keep as stale.
+  items.push({ ...item, status: "stale", reasons: ["missing"], points: 0 });
   }
 
   const valid = items.filter((it) => it.status === "ok");

@@ -7,6 +7,8 @@ import { Container, Row, Col, Button } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
+const roundPoints = (n: number): number => Math.round((n + Number.EPSILON) * 10) / 10;
+
 const CartPage = () => {
   const { language } = useLanguage();
   const {
@@ -39,6 +41,7 @@ const CartPage = () => {
           price: Number(p.price) || 0,
           stockQuantity: Number(p.stockQuantity) || 0,
           name: pickProductTitle(p, language) || p.sku || "Product",
+          points: typeof p.points === "number" ? p.points : 0,
         });
       }
 
@@ -72,6 +75,12 @@ const CartPage = () => {
   const empty = items.length === 0;
   const thereAreInvalid = liveItems.some((i) => i.status !== "ok");
   const allInvalid = liveItems.length > 0 && liveItems.every((i) => i.status !== "ok");
+
+  const totalPoints = roundPoints(
+    liveItems
+      .filter((i) => i.status === "ok")
+      .reduce((sum, i) => sum + Number(i.points || 0) * Number(i.quantity || 0), 0)
+  );
 
   const reasonText = (item: { status: string; reasons: string[] }): string => {
     if (item.status === "stale") {
@@ -238,6 +247,10 @@ const CartPage = () => {
               <div className="dxn-summary-row">
                 <span>{t("الشحن", "Frais de port")}</span>
                 <strong>{t("يُحسب عند إتمام الطلب", "Calculé à la commande")}</strong>
+              </div>
+              <div className="dxn-summary-row" style={{ color: "#0b3d1f", fontWeight: 600 }}>
+                <span>{t("مجموع نقاط DXN", "Total des points DXN")}</span>
+                <strong>{totalPoints} {t("نقطة", "points")}</strong>
               </div>
               <div className="dxn-summary-total">
                 <span>{t("المجموع", "Total")}</span>
