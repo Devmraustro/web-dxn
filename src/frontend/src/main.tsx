@@ -45,10 +45,10 @@ const PageSuspense = ({ children }: { children: React.ReactNode }) => (
 const App = () => (
   <HelmetProvider>
     <BrowserRouter>
+      <ScrollToTop />
       <Header />
       <PageSuspense>
         <Routes>
-          <ScrollToTop />
           <Route path="/" element={<HomePage />} />
           <Route path="/products" element={<ProductListPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
