@@ -1,4 +1,15 @@
 import * as yup from "yup";
+import { isUrlLike, isValidSlug } from "../utils/slug";
+
+const slugFormatMessage =
+  "Slug must be a lowercase URL-safe slug (letters, numbers and hyphens only), not a URL or path";
+
+const slugInputTest = (value: string | undefined): boolean => {
+  if (value === undefined || value === null) return true;
+  const v = value.trim();
+  if (!v) return true;
+  return !isUrlLike(v) && isValidSlug(v);
+};
 
 const phoneTest = (value: string | undefined): boolean => {
   if (!value) return true;
@@ -93,7 +104,10 @@ const productUpdateFields = {
 
 export const productSchema = yup.object({
   sku: yup.string().required("SKU is required").max(100),
-  slug: yup.string().required("Slug is required").max(200),
+  slug: yup
+    .string()
+    .max(200)
+    .test("product-slug-format", slugFormatMessage, slugInputTest),
   ...productCreateFields,
   translations: yup.object({
     ar: translationSchema,

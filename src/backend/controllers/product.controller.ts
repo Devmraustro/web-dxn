@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Product, ProductTranslation } from "../../Database/Models";
 import { withPublicReadScope, isPlaceholderProduct } from "../services/placeholderCatalog.service";
+import { isValidSlug, isUrlLike, buildProductSlug } from "../utils/slug";
 
 /** Escape regex metacharacters before a user string is used as a $regex source. */
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -41,6 +42,28 @@ function pickAllowedProductFields(body: Record<string, unknown>): Record<string,
     if (body[key] !== undefined) out[key] = body[key];
   }
   return out;
+}
+
+/** All slugs currently occupied in the collection (optionally excluding one id). */
+async function collectTakenSlugs(excludeId?: string): Promise<Set<string>> {
+  const docs = await Product.find({}, { slug: 1 }).lean();
+  return new Set(
+    docs
+      .filter((d: any) => String(d._id) !== String(excludeId))
+      .map((d: any) => String(d.slug ?? "").trim())
+      .filter(Boolean)
+  );
+}
+
+/** ar/fr titles persisted for a product (used when repairing an old slug). */
+async function productTitles(productId: any): Promise<{ arTitle?: string; frTitle?: string }> {
+  const docs = await ProductTranslation.find({ productId }).lean();
+  const ar = docs.find((d: any) => d.language === "ar")?.title;
+  const fr = docs.find((d: any) => d.language === "fr")?.title;
+  return {
+    arTitle: typeof ar === "string" ? ar.trim() : undefined,
+    frTitle: typeof fr === "string" ? fr.trim() : undefined,
+  };
 }
 
 /** Extract only the translatable content fields (never _id / productId). */
@@ -213,15 +236,34 @@ export const createProduct = async (req: Request, res: Response) => {
     if (existingSku) {
       return res.status(400).json({ message: "SKU already exists" });
     }
-    const existingSlug = await Product.findOne({ slug });
-    if (existingSlug) {
-      return res.status(400).json({ message: "Slug already exists" });
+
+    // Slug line: if the client supplied one it must be a valid URL-safe slug
+    // (URLs/rejects are checked in the yup schema). When missing, generate a
+    // deterministic clean slug from the translated titles (fr > ar > sku).
+    const providedSlug = typeof slug === "string" ? slug.trim() : "";
+    const taken = await collectTakenSlugs();
+
+    let finalSlug: string;
+    if (providedSlug) {
+      if (taken.has(providedSlug)) {
+        return res.status(400).json({ message: "Slug already exists" });
+      }
+      finalSlug = providedSlug;
+    } else {
+      const arTitle = translations?.ar?.title?.trim();
+      const frTitle = translations?.fr?.title?.trim();
+      finalSlug = buildProductSlug({ arTitle, frTitle, sku, reserved: taken });
+      if (!finalSlug) {
+        return res
+          .status(400)
+          .json({ message: "Slug could not be generated: provide a product title or an explicit slug" });
+      }
     }
 
     // Only allowlisted, schema-validated fields reach the database. Client
     // discount/flags/pricing extras are silently dropped.
     const productData = pickAllowedProductFields(body);
-    const product = await Product.create({ sku, slug, ...productData });
+    const product = await Product.create({ sku, slug: finalSlug, ...productData });
 
     await ensureTranslations(product._id, translations);
 
@@ -235,7 +277,8 @@ export const createProduct = async (req: Request, res: Response) => {
 // PUT /api/products/:id - Update product (admin)
 export const updateProduct = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id: rawId } = req.params;
+    const id = String(rawId);
     const { sku, slug, translations, ...body } = req.body;
 
     if (sku) {
@@ -244,16 +287,41 @@ export const updateProduct = async (req: Request, res: Response) => {
         return res.status(400).json({ message: "SKU already exists" });
       }
     }
-    if (slug) {
-      const existingSlug = await Product.findOne({ slug, _id: { $ne: id } });
-      if (existingSlug) {
-        return res.status(400).json({ message: "Slug already exists" });
-      }
-    }
 
     const update: Record<string, unknown> = pickAllowedProductFields(body);
     if (sku !== undefined) update.sku = sku;
-    if (slug !== undefined) update.slug = slug;
+
+    // Slug is repaired, not rejected, on update: a legacy polluted slug (e.g.
+    // a pasted URL) is regenerated from the product identity so admins can
+    // still edit the product while the slug gets cleaned. Explicit valid slugs
+    // are preserved; unrelated products never collide thanks to the dedupe.
+    const providedSlug = typeof slug === "string" ? slug.trim() : undefined;
+    if (providedSlug !== undefined) {
+      const taken = await collectTakenSlugs(id);
+      const isValidExplicit = providedSlug !== "" && !isUrlLike(providedSlug) && isValidSlug(providedSlug);
+
+      if (isValidExplicit) {
+        if (taken.has(providedSlug)) {
+          return res.status(400).json({ message: "Slug already exists" });
+        }
+        update.slug = providedSlug;
+      } else {
+        const existingSku = sku || (await Product.findById(id).select("sku").lean())?.sku;
+        const titles = await productTitles(id);
+        const repaired = buildProductSlug({
+          arTitle: titles.arTitle,
+          frTitle: titles.frTitle,
+          sku: typeof existingSku === "string" ? existingSku : undefined,
+          reserved: taken,
+        });
+        if (!repaired) {
+          return res
+            .status(400)
+            .json({ message: "Slug could not be repaired: add a product title or a valid slug" });
+        }
+        update.slug = repaired;
+      }
+    }
 
     const product = await Product.findByIdAndUpdate(id, update, {
       new: true,

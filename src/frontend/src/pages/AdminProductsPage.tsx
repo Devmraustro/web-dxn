@@ -222,6 +222,18 @@ const AdminProductsPage = () => {
   const validateLocal = (): string | null => {
     if (!form.sku.trim()) return t("الرقم المرجعي (SKU) مطلوب", "Le SKU est requis");
     if (!form.slug.trim()) return t("الرابط (slug) مطلوب", "Le slug est requis");
+    const slugVal = form.slug.trim().toLowerCase();
+    if (
+      /^https?:\/\//i.test(slugVal) ||
+      slugVal.includes("://") ||
+      slugVal.includes("/") ||
+      /facebook\.com|instagram\.com/.test(slugVal)
+    ) {
+      return t(
+        "الرابط (slug) يجب أن يكون نصاً قصيراً — وليس رابطاً أو مساراً",
+        "Le slug doit être un court libellé (pas une URL ou un chemin)"
+      );
+    }
     const titleAr = form.translations.ar.title.trim();
     const titleFr = form.translations.fr.title.trim();
     if (!titleAr && !titleFr) {
