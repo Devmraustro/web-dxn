@@ -15,6 +15,7 @@
 import { WebhookEvent } from "../../../Database/Models";
 import { DedupRegistry } from "./processor";
 import { ensureDB } from "../../db";
+import { aiDebug } from "../debug";
 
 export interface MongoDedupRegistryOptions {
   /** Webhook source label recorded on the dedup row. Defaults to "meta". */
@@ -37,7 +38,7 @@ export class MongoDedupRegistry implements DedupRegistry {
         .exec();
       return !!doc;
     } catch (err) {
-      console.error("[DIAGNOSTIC-DEDUP] has_error", err instanceof Error ? err.message : String(err));
+      console.error("[AI-DEDUP] has failed:", err instanceof Error ? err.message : String(err));
       throw err;
     }
   }
@@ -49,10 +50,7 @@ export class MongoDedupRegistry implements DedupRegistry {
    */
   async add(key: string): Promise<boolean> {
     await ensureDB();
-    console.log("[DIAGNOSTIC-DEDUP] add_start", JSON.stringify({
-      keyLength: key.length,
-      keyPrefix: key.split(":")[0],
-    }));
+    aiDebug("dedup.add_start", { keyLength: key.length });
     try {
       const res = await WebhookEvent.updateOne(
         { dedupKey: key },
@@ -67,15 +65,14 @@ export class MongoDedupRegistry implements DedupRegistry {
         },
         { upsert: true }
       );
-      console.log("[DIAGNOSTIC-DEDUP] add_result", JSON.stringify({
+      aiDebug("dedup.add_result", {
         upsertedCount: res.upsertedCount,
         matchedCount: res.matchedCount,
         modifiedCount: res.modifiedCount,
-        upsertedCount_gt_0: res.upsertedCount > 0,
-      }));
+      });
       return res.upsertedCount > 0;
     } catch (err) {
-      console.error("[DIAGNOSTIC-DEDUP] add_error", err instanceof Error ? err.message : String(err));
+      console.error("[AI-DEDUP] add failed:", err instanceof Error ? err.message : String(err));
       throw err;
     }
   }

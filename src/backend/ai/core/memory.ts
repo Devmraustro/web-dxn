@@ -123,6 +123,33 @@ export class MongooseConversationStore implements ConversationStore {
       role: message.role,
       content: message.content,
     });
+
+    // Bound storage: keep at most MAX_STORED_MESSAGES per conversation so a
+    // long-running or abusive thread cannot grow the collection without limit.
+    await this.pruneConversation(conv._id);
+  }
+
+  /**
+   * Best-effort pruning of the oldest messages beyond MAX_STORED_MESSAGES.
+   * Never throws: the append path must not fail because pruning did.
+   */
+  private async pruneConversation(conversationId: unknown): Promise<void> {
+    try {
+      const count = await Message.countDocuments({ conversationId });
+      if (count <= MAX_STORED_MESSAGES) return;
+      const boundary = await Message.findOne({ conversationId })
+        .sort({ createdAt: -1 })
+        .skip(MAX_STORED_MESSAGES)
+        .select({ _id: 1, createdAt: 1 })
+        .lean();
+      if (!boundary?.createdAt) return;
+      await Message.deleteMany({
+        conversationId,
+        createdAt: { $lt: boundary.createdAt },
+      });
+    } catch (err) {
+      console.error("[AI-MEMORY] conversation prune skipped (best-effort):", err instanceof Error ? err.message : String(err));
+    }
   }
 
   async clear(conversationId: string): Promise<void> {

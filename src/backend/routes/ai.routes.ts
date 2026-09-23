@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import { Orchestrator } from "../ai/core/orchestrator";
 import { createProvider } from "../ai/provider/AIProvider";
 import { MongooseDataAccess } from "../ai/dataAccess";
-import { AI_SALES_MODE } from "../config/env";
+import { getAiSalesMode } from "../config/env";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -53,8 +53,8 @@ router.post("/message", aiMessageLimiter, async (req: Request, res: Response) =>
       return res.status(400).json({ error: "message is too long" });
     }
 
-    // AI Sales Mode Pause Check
-    if (AI_SALES_MODE === "PAUSED") {
+    // AI Sales Mode Pause Check (read dynamically; PAUSED is the safe default)
+    if (getAiSalesMode() === "PAUSED") {
       return res.json({
         response: "",
         needsHumanHandoff: false,
@@ -62,10 +62,13 @@ router.post("/message", aiMessageLimiter, async (req: Request, res: Response) =>
         language: "ar",
       });
     }
+    // Anonymous (id-less) clients get a per-day slot instead of a single shared
+    // "web:anon" bucket. This prevents long-lived cross-user memory pollution
+    // while keeping stored conversations bounded.
     const id =
       typeof conversationId === "string" && conversationId && conversationId.length <= 200
         ? conversationId
-        : "web:anon";
+        : `web:anon:${new Date().toISOString().slice(0, 10)}`;
     const result = await getOrchestrator().handleMessage(id, message);
     res.json({
       response: result.response,

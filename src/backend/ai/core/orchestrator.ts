@@ -31,6 +31,7 @@ import {
 import { DataAccess, retrieve, recommend } from "./retrieval";
 import { buildContext, ConversationStore, InMemoryConversationStore } from "./memory";
 import { PRODUCT_ALIASES, normalizeText, stripArticle } from "./catalogSearch";
+import { aiDebug } from "../debug";
 import {
   escalatedResponse,
   greetingResponse,
@@ -43,6 +44,14 @@ import {
   safeMedicalResponse,
   shippingResponse,
 } from "./responses";
+
+/**
+ * Hard ceiling on inbound message length. The Meta webhook path is NOT length
+ * limited upstream, so an attacker could push a huge body and force the intent /
+ * guardrail regexes to scan it (RegExp DoS). The web route already enforces the
+ * same bound; enforcing it here protects every transport (Meta, Messenger, web).
+ */
+export const MAX_MESSAGE_LENGTH = 2000;
 
 export interface OrchestratorOptions {
   provider?: AiProvider;
@@ -74,21 +83,36 @@ export class Orchestrator {
     rawMessage: string,
     previousLanguage?: LanguageCode
   ): Promise<OrchestratorResult> {
-    console.log("[DIAGNOSTIC-ORCHESTRATOR] handleMessage_start", JSON.stringify({
+    aiDebug("orchestrator.handleMessage_start", {
       conversationIdLength: conversationId?.length || 0,
       rawMessageLength: rawMessage?.length || 0,
-      rawMessagePreview: rawMessage?.slice(0, 50),
       previousLanguage,
       providerName: this.provider?.name,
-    }));
+    });
 
     const normalized = normalizeMessage(rawMessage);
     const history = await this.store.getHistory(conversationId);
 
-    console.log("[DIAGNOSTIC-ORCHESTRATOR] normalized_message", JSON.stringify({
+    aiDebug("orchestrator.normalized_message", {
       normalizedLength: normalized?.length || 0,
-      normalizedPreview: normalized?.slice(0, 50),
-    }));
+    });
+
+    // Reject oversized input BEFORE any regex scans it (Meta path is unlimited).
+    if (normalized.length > MAX_MESSAGE_LENGTH) {
+      const response = safeFallbackResponse("ar");
+      await this.remember(conversationId, "user", normalized.slice(0, 400));
+      await this.remember(conversationId, "assistant", response);
+      return {
+        response,
+        needsHumanHandoff: true,
+        escalationReason: "message too long (possible abuse)",
+        intent: Intent.UNKNOWN,
+        language: "ar",
+        confidence: 0,
+        performedRetrieval: false,
+        validation: "blocked",
+      };
+    }
 
     // Extract context from conversation history for entity resolution
     const contextProduct = this.extractContextProduct(history);

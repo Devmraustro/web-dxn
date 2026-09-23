@@ -6,6 +6,11 @@
  * Realistic social (Phase 19AB): simulate an Instagram conversation through
  * the full webhook → orchestrator → messenger flow, including Meta retry
  * deduplication.
+ *
+ * The 19AB suite injects aiSalesMode:"ACTIVE" (an explicit test-only override —
+ * production keeps PAUSED as the default) so the ACTIVE branch is exercised
+ * with a mocked transport and no real outbound messages. PAUSED behavior is
+ * covered separately by meta-processor-pause.test.ts.
  */
 import { Orchestrator } from "../core/orchestrator";
 import { InMemoryConversationStore } from "../core/memory";
@@ -98,6 +103,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(r1.handled).toBe(true);
     expect(replies.length).toBe(1);
@@ -107,6 +113,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(r2.handled).toBe(true);
     expect(replies.length).toBe(2);
@@ -116,6 +123,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(r3.handled).toBe(true);
     expect(replies.length).toBeGreaterThanOrEqual(3);
@@ -126,6 +134,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(r4.replySent).toBe(false);
     expect(replies.length).toBe(before);
@@ -135,7 +144,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
     const replies: string[] = [];
     const { messenger, orch, dedup } = buildProcessor(replies);
     const body = makeBody("بشحال القهوة؟", "MID_DUP");
-    const first = await processWebhookEvent(body, { orchestrator: orch, messenger, dedup });
+    const first = await processWebhookEvent(body, { orchestrator: orch, messenger, dedup, aiSalesMode: "ACTIVE" });
     expect(first.replySent).toBe(true);
     expect(replies.length).toBe(1);
 
@@ -144,6 +153,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(second.duplicate).toBe(true);
     expect(replies.length).toBe(1); // no second reply
@@ -156,6 +166,7 @@ describe("Phase 19AB — realistic Instagram conversation", () => {
       orchestrator: orch,
       messenger,
       dedup,
+      aiSalesMode: "ACTIVE",
     });
     expect(r.platform).toBe("facebook");
   });

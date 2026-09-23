@@ -195,6 +195,51 @@ const SHIPPING_TERMS_FR = /\b(livraison|frais de livraison|port|shipping)\b/i;
 const SHIPPING_TERMS_AR = /(التوصيل|الشحن|الطاكسي|الديليفري|livraison)/i;
 const FREE_SHIPPING_TERMS_FR = /\b(gratuit|gratuite|offert|offerte|free)\b/i;
 const FREE_SHIPPING_TERMS_AR = /(مجاني|مجانا|مجانية|مجانية|بلاش)/i;
+
+/**
+ * The window (in characters) around a shipping term within which a numeric
+ * figure is treated as a shipping fee claim. Numbers far away from a shipping
+ * term (e.g. an already-allowlisted product price elsewhere in the sentence)
+ * must NOT be mistaken for invented shipping fees — that caused false
+ * escalations on legitimate multi-fact replies.
+ */
+const SHIPPING_WINDOW_BEFORE = 20;
+const SHIPPING_WINDOW_AFTER = 30;
+
+/** Collect numeric figures that appear near a shipping term, with a snippet. */
+function numbersNearShipping(proposed: string): { value: number; snippet: string }[] {
+  const lower = proposed.toLowerCase();
+  const terms: { start: number; end: number }[] = [];
+  const collect = (re: RegExp): void => {
+    const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(lower)) !== null) {
+      terms.push({ start: m.index, end: m.index + m[0].length });
+      if (m.index === g.lastIndex) g.lastIndex++;
+    }
+  };
+  collect(SHIPPING_TERMS_FR);
+  collect(SHIPPING_TERMS_AR);
+
+  const out: { value: number; snippet: string }[] = [];
+  const numberRe = /\d[\d,.]*/g;
+  let m: RegExpExecArray | null;
+  while ((m = numberRe.exec(proposed)) !== null) {
+    const start = m.index;
+    const end = m.index + m[0].length;
+    const near = terms.some(
+      (t) =>
+        (start >= t.start - SHIPPING_WINDOW_BEFORE && start <= t.end + SHIPPING_WINDOW_AFTER) ||
+        (end >= t.start - SHIPPING_WINDOW_BEFORE && end <= t.end + SHIPPING_WINDOW_AFTER)
+    );
+    if (!near) continue;
+    const value = Number(m[0].replace(/[.,\s]/g, ""));
+    if (!Number.isFinite(value)) continue;
+    out.push({ value, snippet: proposed.slice(Math.max(0, start - 20), end + 6).trim() });
+  }
+  return out;
+}
+
 function checkShippingInvention(
   proposed: string,
   ctx: OutputContext | undefined,
@@ -222,26 +267,17 @@ function checkShippingInvention(
     }
   }
 
-  const numbers = proposed.match(/\d[\d,.]*/g) || [];
-  for (const n of numbers) {
-    const value = Number(n.replace(/[.,\s]/g, ""));
-
+  for (const { value, snippet } of numbersNearShipping(proposed)) {
     if (ctx && ctx.shippingPricesDA && ctx.shippingPricesDA.length > 0) {
       // Has authoritative shipping prices - check against them
-      if (Number.isFinite(value) && !ctx.shippingPricesDA.includes(value)) {
-        const idx = proposed.indexOf(n);
-        const snippet = proposed.slice(Math.max(0, idx - 20), idx + n.length + 6).trim();
+      if (!ctx.shippingPricesDA.includes(value)) {
         violations.push({ type: "shipping_invention", snippet });
         return;
       }
     } else if (ctx && ctx.hasRetrievalContext === false) {
       // Retrieval performed but no shipping configured - any numeric claim is invention
-      if (Number.isFinite(value)) {
-        const idx = proposed.indexOf(n);
-        const snippet = proposed.slice(Math.max(0, idx - 20), idx + n.length + 6).trim();
-        violations.push({ type: "shipping_invention", snippet });
-        return;
-      }
+      violations.push({ type: "shipping_invention", snippet });
+      return;
     }
     // If no context and no retrieval context, we can't verify - allow but log
   }

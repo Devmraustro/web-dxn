@@ -10,6 +10,7 @@
  */
 import axios from "axios";
 import { withRetry, RetryOptions } from "../core/retry";
+import { aiDebug } from "../debug";
 
 export type MetaPlatform = "instagram" | "facebook";
 
@@ -96,26 +97,22 @@ export class MetaMessenger {
     recipientId: string,
     text: string
   ): Promise<{ recipientId?: string; messageId?: string }> {
-    console.log("[DIAGNOSTIC-MESSENGER] sendText_start", JSON.stringify({
+    aiDebug("messenger.sendText_start", {
       platform,
       recipientIdLength: recipientId?.length || 0,
       textLength: text?.length || 0,
-      textPreview: text?.slice(0, 50),
       hasToken: !!this.token,
       graphVersion: this.graphVersion,
-    }));
+    });
 
     if (!this.token) {
-      console.error("[DIAGNOSTIC-MESSENGER] no_token_configured");
       throw new Error("MetaMessenger: page access token not configured");
     }
     // Validate inputs
     if (!recipientId || typeof recipientId !== "string") {
-      console.error("[DIAGNOSTIC-MESSENGER] invalid_recipientId");
       throw new Error("MetaMessenger: recipientId is required");
     }
     if (!text || typeof text !== "string") {
-      console.error("[DIAGNOSTIC-MESSENGER] invalid_text");
       throw new Error("MetaMessenger: text is required");
     }
     if (text.length > 4096) {
@@ -124,7 +121,6 @@ export class MetaMessenger {
     }
     const pageId = process.env.META_PAGE_ID;
     if (!pageId) {
-      console.error("[DIAGNOSTIC-MESSENGER] no_page_id_configured");
       throw new Error("MetaMessenger: META_PAGE_ID not configured");
     }
     const base = `https://graph.facebook.com/${this.graphVersion}/${pageId}/messages`;
@@ -146,27 +142,25 @@ export class MetaMessenger {
         this.retry
       );
     } catch (err: any) {
-      // Log detailed error from Meta Graph API
+      // Log detailed error from Meta Graph API (no customer content or secrets).
       if (err.response) {
-        console.error("[DIAGNOSTIC-MESSENGER] sendText_error_response", JSON.stringify({
+        console.error("[AI-MESSENGER] Meta send failed", JSON.stringify({
           status: err.response.status,
           statusText: err.response.statusText,
           errorCode: err.response.data?.error?.code,
           errorType: err.response.data?.error?.type,
-          errorMessage: err.response.data?.error?.message,
           errorSubcode: err.response.data?.error?.error_subcode,
           fbtrace_id: err.response.data?.error?.fbtrace_id,
-          requestUrl: url,
         }));
       } else {
-        console.error("[DIAGNOSTIC-MESSENGER] sendText_error_no_response", err instanceof Error ? err.message : String(err));
+        console.error("[AI-MESSENGER] Meta send failed (no response):", err instanceof Error ? err.message : String(err));
       }
       throw err;
     }
-    console.log("[DIAGNOSTIC-MESSENGER] sendText_success", JSON.stringify({
+    aiDebug("messenger.sendText_success", {
       recipientId: data?.recipient_id,
       messageId: data?.message_id,
-    }));
+    });
     return {
       recipientId: data?.recipient_id,
       messageId: data?.message_id,

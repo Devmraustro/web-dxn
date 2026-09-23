@@ -15,7 +15,8 @@ import { Orchestrator } from "../core/orchestrator";
 import { MetaMessenger } from "../meta/messenger";
 import { toNormalizedMessage, conversationIdFor } from "../meta/webhook";
 import { notifyHumanHandoff, TelegramSink } from "../core/escalation";
-import { AI_SALES_MODE } from "../../config/env";
+import { getAiSalesMode, AiSalesMode } from "../../config/env";
+import { aiDebug } from "../debug";
 
 export interface DedupRegistry {
   has(key: string): boolean | Promise<boolean>;
@@ -44,6 +45,12 @@ export interface SocialProcessorOptions {
   messenger: MetaMessenger;
   dedup?: DedupRegistry;
   /**
+   * AI sales mode override. When absent, the current runtime value of
+   * process.env.AI_SALES_MODE is read dynamically (default PAUSED). Supplying
+   * the override makes tests deterministic without mutating process.env.
+   */
+  aiSalesMode?: AiSalesMode;
+  /**
    * Optional Telegram sink used to notify the human owner when the AI decides
    * a conversation needs human handoff. When absent, the handoff is recorded
    * (no automated reply is sent) but no external notification is dispatched.
@@ -70,52 +77,35 @@ export async function processWebhookEvent(
   body: unknown,
   opts: SocialProcessorOptions
 ): Promise<AppEventResult> {
-  console.log("[DIAGNOSTIC-PROCESSOR] processWebhookEvent_start", JSON.stringify({
-    bodyKeys: Object.keys(body as object),
+  const msg: any = (body as any)?.entry?.[0]?.messaging?.[0];
+  const chg: any = (body as any)?.entry?.[0]?.changes?.[0];
+  aiDebug("processor.webhook_received", {
     objectType: (body as any)?.object,
-    hasEntry: Array.isArray((body as any)?.entry),
     entryCount: Array.isArray((body as any)?.entry) ? (body as any).entry.length : 0,
     firstEntryKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? Object.keys((body as any).entry[0]) : [],
     messagingCount: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? ((body as any).entry[0]?.messaging?.length || 0) : 0,
-    firstMessagingKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 ? Object.keys((body as any).entry[0].messaging[0]) : [],
+    firstMessagingKeys: msg ? Object.keys(msg) : [],
     changesCount: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 ? ((body as any).entry[0]?.changes?.length || 0) : 0,
-    firstChangeKeys: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.changes) && (body as any).entry[0].changes.length > 0 ? Object.keys((body as any).entry[0].changes[0]) : [],
-    firstChangeField: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.changes) && (body as any).entry[0].changes.length > 0 ? (body as any).entry[0].changes[0]?.field : null,
-    hasMessageObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.message,
-    hasMessageText: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.message?.text,
-    hasSenderObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.sender,
-    hasRecipientObject: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.recipient,
-    hasTimestamp: Array.isArray((body as any)?.entry) && (body as any).entry.length > 0 && Array.isArray((body as any).entry[0]?.messaging) && (body as any).entry[0].messaging.length > 0 && !!(body as any).entry[0].messaging[0]?.timestamp,
-  }));
+    firstChangeKeys: chg ? Object.keys(chg) : [],
+    firstChangeField: chg?.field ?? null,
+    hasMessageObject: !!msg?.message,
+  });
 
   const normalized = toNormalizedMessage(body as any);
-  console.log("[DIAGNOSTIC-PROCESSOR] normalized_message", JSON.stringify({
+  aiDebug("processor.normalized", {
     hasNormalized: !!normalized,
     platform: normalized?.platform,
-    senderId: normalized?.senderId,
-    messageId: normalized?.messageId,
     textLength: normalized?.text?.length || 0,
-    textPreview: normalized?.text?.slice(0, 50),
-  }));
+  });
 
   if (!normalized) {
-    console.log("[DIAGNOSTIC-PROCESSOR] no_normalized_message_returning");
+    aiDebug("processor.no_normalized_message_returning");
     return { handled: false, duplicate: false, replySent: false };
   }
 
   const dedup = opts.dedup || new InMemoryDedupRegistry();
   const convId = conversationIdFor(normalized.platform, normalized.senderId);
   const key = `${normalized.platform}:${normalized.senderId}:${normalized.messageId}`;
-
-  console.log("[DIAGNOSTIC-PROCESSOR] dedup_key_generated", JSON.stringify({
-    platform: normalized.platform,
-    senderIdLength: normalized.senderId?.length || 0,
-    senderIdPrefix: normalized.senderId?.slice(0, 10),
-    messageId: normalized.messageId,
-    messageIdLength: normalized.messageId?.length || 0,
-    keyLength: key.length,
-    keyPrefix: key.split(":")[0],
-  }));
 
   // Atomically claim the event key. If another worker/restart already processed
   // this event (or Meta redelivered it), the claim returns false and we must
@@ -124,53 +114,48 @@ export async function processWebhookEvent(
   try {
     claimed = await dedup.add(key);
   } catch (err) {
-    console.error("[DIAGNOSTIC-PROCESSOR] dedup_add_error", err instanceof Error ? err.message : String(err));
+    console.error("[AI] dedup claim failed (webhook will retry):", err instanceof Error ? err.message : String(err));
     // Re-throw to let the webhook return 500 so Meta can retry
     throw err;
   }
-  console.log("[DIAGNOSTIC-PROCESSOR] dedup_check", JSON.stringify({
-    key,
-    claimed,
-  }));
+  aiDebug("processor.dedup_checked", { key, claimed });
   if (!claimed) {
-    console.log("[DIAGNOSTIC-PROCESSOR] duplicate_detected_returning");
+    aiDebug("processor.duplicate_detected_returning");
     return { handled: true, duplicate: true, replySent: false, platform: normalized.platform };
   }
 
-  console.log("[DIAGNOSTIC-PROCESSOR] calling_orchestrator_handleMessage");
+  aiDebug("processor.calling_orchestrator");
   const result = await opts.orchestrator.handleMessage(
     convId,
     normalized.text,
     undefined
   );
 
-  console.log("[DIAGNOSTIC-PROCESSOR] orchestrator_result", JSON.stringify({
+  aiDebug("processor.orchestrator_result", {
     hasResponse: !!result.response,
     responseLength: result.response?.length || 0,
-    responsePreview: result.response?.slice(0, 50),
     needsHumanHandoff: result.needsHumanHandoff,
     intent: result.intent,
     language: result.language,
     confidence: result.confidence,
     performedRetrieval: result.performedRetrieval,
     validation: result.validation,
-  }));
+  });
+
+  const aiSalesMode = opts.aiSalesMode ?? getAiSalesMode();
 
   // AI Sales Mode Pause Check - if paused, do not send AI response to customer
   // but still process human handoffs if needed
-  if (AI_SALES_MODE === "PAUSED") {
-    console.log("[DIAGNOSTIC-PROCESSOR] AI_SALES_MODE=PAUSED - suppressing outbound AI response");
-    // Still log the response for debugging but don't send it
-    console.log("[DIAGNOSTIC-PROCESSOR] suppressed_response", JSON.stringify({
-      responsePreview: result.response?.slice(0, 100),
+  if (aiSalesMode === "PAUSED") {
+    aiDebug("processor.paused_suppressing_outbound", {
       needsHumanHandoff: result.needsHumanHandoff,
       intent: result.intent,
-    }));
+    });
 
     // Still process human handoff if needed, but don't send AI response to customer
     let humanEscalated = false;
     if (result.needsHumanHandoff) {
-      console.log("[DIAGNOSTIC-PROCESSOR] human_handoff_required (paused mode)");
+      aiDebug("processor.human_handoff_required_paused");
       if (opts.telegramSink) {
         const esc = await notifyHumanHandoff(opts.telegramSink, {
           platform: normalized.platform,
@@ -180,9 +165,6 @@ export async function processWebhookEvent(
           recentContext: `${normalized.platform}: ${normalized.text}`.slice(0, 400),
         });
         humanEscalated = esc.delivered;
-        console.log("[DIAGNOSTIC-PROCESSOR] telegram_notification_sent", JSON.stringify({
-          delivered: esc.delivered,
-        }));
       }
     }
 
@@ -199,7 +181,7 @@ export async function processWebhookEvent(
   let replySent = false;
   let humanEscalated = false;
   if (result.needsHumanHandoff) {
-    console.log("[DIAGNOSTIC-PROCESSOR] human_handoff_required");
+    aiDebug("processor.human_handoff_required");
     // Human handoff: never auto-reply (correctness). Notify the owner through
     // the existing escalation pipeline when a Telegram sink is wired in.
     if (opts.telegramSink) {
@@ -211,35 +193,30 @@ export async function processWebhookEvent(
         recentContext: `${normalized.platform}: ${normalized.text}`.slice(0, 400),
       });
       humanEscalated = esc.delivered;
-      console.log("[DIAGNOSTIC-PROCESSOR] telegram_notification_sent", JSON.stringify({
-        delivered: esc.delivered,
-      }));
     }
   } else {
     try {
-      console.log("[DIAGNOSTIC-PROCESSOR] calling_messenger_sendText");
       const out = await opts.messenger.sendText(normalized.platform, normalized.senderId, result.response);
-      console.log("[DIAGNOSTIC-PROCESSOR] messenger_sendText_result", JSON.stringify({
-        recipientId: out?.recipientId,
+      aiDebug("processor.messenger_sendText_result", {
         messageId: out?.messageId,
         replySent: !!out,
-      }));
+      });
       replySent = !!out;
     } catch (err) {
       // Sending is best-effort; the orchestrator already decided not to escalate.
-      console.error("[DIAGNOSTIC-PROCESSOR] messenger_sendText_error", err instanceof Error ? err.message : String(err));
+      console.error("[AI] messenger send failed (best-effort):", err instanceof Error ? err.message : String(err));
       replySent = false;
     }
   }
 
-  console.log("[DIAGNOSTIC-PROCESSOR] processWebhookEvent_complete", JSON.stringify({
+  aiDebug("processor.webhook_complete", {
     handled: true,
     duplicate: false,
     replySent,
     humanEscalated,
     platform: normalized.platform,
     textLength: result.response?.length || 0,
-  }));
+  });
 
   return {
     handled: true,

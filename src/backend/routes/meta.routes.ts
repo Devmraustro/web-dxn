@@ -27,6 +27,7 @@ import { TelegramSink } from "../ai/core/escalation";
 import { getMetaConfig, isMetaConfigured, getMetaHealth } from "../ai/meta/config";
 import { MongooseDataAccess } from "../ai/dataAccess";
 import { MongooseConversationStore } from "../ai/core/memory";
+import { aiDebug } from "../ai/debug";
 import axios from "axios";
 
 const router = Router();
@@ -36,16 +37,16 @@ const pageToken = process.env.META_PAGE_ACCESS_TOKEN || "";
 const graphVersion = process.env.META_GRAPH_VERSION || "v26.0";
 
 /**
- * Safe diagnostic logging for Meta webhook verification.
- * NEVER logs actual token values. Only logs safe metadata.
+ * Safe diagnostic logging for Meta webhook activity.
+ * NEVER logs actual token values, message text, or customer identifiers — only
+ * safe metadata. Emits ONLY when AI_DEBUG=1 is set, so production logs stay
+ * quiet (no PII, no tiny requests spamming function logs).
  */
 function logWebhookDiagnostic(
   label: string,
   data: Record<string, unknown>
 ): void {
-  // In production, we use console.log which Vercel captures in function logs
-  // The data object contains NO secrets, only safe metadata
-  console.log(`[META-WEBHOOK-DIAGNOSTIC] ${label}`, JSON.stringify(data));
+  aiDebug(`meta.webhook.${label}`, data);
 }
 
 /**
@@ -144,14 +145,12 @@ router.get("/webhook", (req: Request, res: Response) => {
   const receivedChallenge = requestUrl.searchParams.get("hub.challenge") ?? undefined;
 
   // SAFE DIAGNOSTIC: Log what WHATWG URL parser extracted (no secrets)
-  console.log("[META-ROUTE-DIAGNOSTIC] whatwg_parsed", JSON.stringify({
+  logWebhookDiagnostic("whatwg_parsed", {
     urlPath: (req.originalUrl || req.url).split("?")[0],
     searchParamsKeys: Array.from(requestUrl.searchParams.keys()),
     hubModePresent: receivedMode !== null,
-    hubModeValue: receivedMode,
-    hubVerifyTokenPresent: receivedVerifyToken !== null,
     hubChallengePresent: receivedChallenge !== null,
-  }));
+  });
 
   const config = { verifyToken, appSecret };
   
@@ -218,8 +217,8 @@ router.get("/webhook", (req: Request, res: Response) => {
  * POST event delivery.
  */
 router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
-  // DIAGNOSTIC: Log raw body at route entry
-  console.log("[DIAGNOSTIC-ROUTE] post_webhook_entry", JSON.stringify({
+  // DIAGNOSTIC: Log request metadata at route entry (gated by AI_DEBUG)
+  aiDebug("meta.post_webhook_entry", {
     path: req.path,
     method: req.method,
     contentType: req.headers["content-type"],
@@ -227,7 +226,7 @@ router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
     isBuffer: Buffer.isBuffer(req.body),
     bodyType: typeof req.body,
     bodyLength: Buffer.isBuffer(req.body) ? req.body.length : (req.body ? Object.keys(req.body).length : 0),
-  }));
+  });
 
   // express.raw() (mounted on /meta in app.ts) sets req.body to a Buffer of the
   // exact bytes Meta transmitted, so we can verify the signature over them.
@@ -235,30 +234,30 @@ router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
 
   const signature = req.header("x-hub-signature-256");
   if (!verifySignature({ verifyToken, appSecret }, signature, rawBody)) {
-    console.log("[DIAGNOSTIC-ROUTE] signature_verification_failed", JSON.stringify({
+    aiDebug("meta.signature_verification_failed", {
       hasSignature: !!signature,
       hasAppSecret: !!appSecret,
       rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
-    }));
+    });
     return res.status(401).json({ status: "invalid signature" });
   }
 
-  console.log("[DIAGNOSTIC-ROUTE] signature_verification_passed", JSON.stringify({
+  aiDebug("meta.signature_verification_passed", {
     rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
-  }));
+  });
 
   let body: any;
   try {
     body = JSON.parse(rawBody.toString("utf8"));
-    console.log("[DIAGNOSTIC-ROUTE] json_parse_success", JSON.stringify({
+    aiDebug("meta.json_parse_success", {
       bodyKeys: Object.keys(body),
       objectType: body?.object,
       entryCount: Array.isArray(body?.entry) ? body.entry.length : 0,
-    }));
+    });
   } catch (e) {
-    console.log("[DIAGNOSTIC-ROUTE] json_parse_failed", JSON.stringify({
+    aiDebug("meta.json_parse_failed", {
       error: e instanceof Error ? e.message : String(e),
-    }));
+    });
     return res.status(400).json({ status: "invalid json" });
   }
 
@@ -266,33 +265,33 @@ router.post("/webhook", webhookLimiter, async (req: Request, res: Response) => {
 
   // If Meta integration is not configured externally (EXTERNAL CONFIGURATION
   // REQUIRED), acknowledge the event loudly but do not attempt to connect.
-  console.log("[DIAGNOSTIC-ROUTE] meta_config_check", JSON.stringify({
+  aiDebug("meta.config_check", {
     verifyTokenPresent: !!cfg.verifyToken,
     appSecretPresent: !!cfg.appSecret,
     pageAccessTokenPresent: !!cfg.pageAccessToken,
     graphVersion: cfg.graphVersion,
     isMetaConfigured: isMetaConfigured(cfg),
-  }));
+  });
 
   if (!isMetaConfigured(cfg)) {
-    console.log("[DIAGNOSTIC-ROUTE] meta_not_configured_returning_200");
+    aiDebug("meta.not_configured_returning_200");
     return res.status(200).json({ status: "not_configured" });
   }
 
-  console.log("[DIAGNOSTIC-ROUTE] meta_configured_proceeding_to_process");
+  aiDebug("meta.configured_proceeding_to_process");
 
   // Wrap in try/catch so we ALWAYS acknowledge Meta quickly (HTTP 200) even
   // when processing throws. Without this, an unhandled rejection would produce
   // a 500 and Meta would retry indefinitely, causing a storm of duplicate events.
   try {
-    console.log("[DIAGNOSTIC-ROUTE] calling_processWebhookEvent");
+    aiDebug("meta.calling_processWebhookEvent");
     await processWebhookEvent(body, {
       orchestrator: getOrchestrator(),
       messenger: getMessenger(),
       dedup: getDedup(),
       telegramSink: getTelegramSink() || undefined,
     });
-    console.log("[DIAGNOSTIC-ROUTE] processWebhookEvent_completed");
+    aiDebug("meta.processWebhookEvent_completed");
   } catch (err) {
     // Log without propagating so Meta gets a clean 200 ack
     console.error("processWebhookEvent threw:", err instanceof Error ? err.message : String(err));

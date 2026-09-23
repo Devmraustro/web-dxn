@@ -43,5 +43,20 @@ export const DEFAULT_SHIPPING_OFFICE = (() => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 })();
 
-/** AI Sales Assistant mode: "ACTIVE" | "PAUSED" — controls whether the AI replies to customers */
-export const AI_SALES_MODE = (process.env.AI_SALES_MODE || "PAUSED").toUpperCase() as "ACTIVE" | "PAUSED";
+export type AiSalesMode = "ACTIVE" | "PAUSED";
+
+/**
+ * AI Sales Assistant mode: "ACTIVE" | "PAUSED" — controls whether the AI replies
+ * to customers. Read DYNAMICALLY at each call so the value reflects the current
+ * process.env. This fixes an import-order bug (the old module-level const was
+ * evaluated before dotenv loaded .env on some entry paths) and lets tests and
+ * feature flags switch the mode per-call. PAUSED is the safe default: nothing
+ * is ever sent to a customer until an operator explicitly opts in.
+ */
+export function getAiSalesMode(): AiSalesMode {
+  const raw = process.env.AI_SALES_MODE || "PAUSED";
+  return raw.trim().toUpperCase() === "ACTIVE" ? "ACTIVE" : "PAUSED";
+}
+
+/** Backward-compatible snapshot; prefer getAiSalesMode() for gate decisions. */
+export const AI_SALES_MODE = getAiSalesMode();
