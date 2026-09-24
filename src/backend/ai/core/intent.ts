@@ -25,7 +25,7 @@ const AR: Record<string, string[]> = {
   complaint: ["شكوى", "مشكل", "غاضب", "خطا", "متضرر", "وصلنيش", "وصلانيش", "ماوصلش", "ما وصلش"],
   order: ["طلب", "الطلب", "أمر", "الأمر", "تتبع", "متابعة", "وين الطلب"],
   pack: ["باك", "علبة", "سلة", "مجموعة", "حزمة"],
-  offer: ["عرض", "تخفيض", "التخفيضات", "برومو", "خصم"],
+  offer: ["عرض", "عروض", "العروض", "تخفيض", "التخفيضات", "برومو", "خصم"],
   thanks: ["شكرا", "ميرسي", "يعيشك", "بارك الله"],
   recommend: ["انصح", "نصيحة", "اقترح", "ترشيح", "مناسب ل", "حاجة ل", "وش من", "شن غادي", "تنصحني", "ننصح", "تنصح", "نصحت"],
   catalog: ["المنتجات", "كاين شنو", "واش عندكم", "المعروض", "قائمة", "كل المنتجات"],
@@ -67,14 +67,7 @@ export function classifyIntent(
     return ok(Intent.COMPLAINT, 1.0, language, entities);
   }
 
-  if (matches(GREETING_PATTERNS, m) || matchArabic(m, AR.greeting)) {
-    return ok(Intent.GREETING, 1.0, language, entities);
-  }
-  if (matches(THANKS_PATTERNS, m) || matchArabic(m, AR.thanks)) {
-    return ok(Intent.THANKS, 1.0, language, entities);
-  }
-
-  // Order number present => order status.
+  // Order number present => order status (specific before generic order).
   if (entities.orderNumber) {
     return ok(Intent.ORDER_STATUS, 0.95, language, entities);
   }
@@ -82,6 +75,10 @@ export function classifyIntent(
     return ok(Intent.ORDER_HELP, 0.85, language, entities);
   }
 
+  // Business intents take precedence over social greetings (Phase 5 F-1): a
+  // message like "مرحبا، بشحال القهوة؟" is answered with the business answer
+  // and the greeting becomes a modifier, so only a PURE greeting message is
+  // answered with the social template.
   if (matches(PACK_PATTERNS, m) || matchArabic(m, AR.pack)) {
     return ok(Intent.PACK_INFO, 0.9, language, entities);
   }
@@ -94,22 +91,40 @@ export function classifyIntent(
   if (matches(SHIPPING_PATTERNS, m) || matchArabic(m, AR.shipping)) {
     return ok(Intent.SHIPPING, 0.85, language, entities);
   }
-  if (matches(AVAILABILITY_PATTERNS, m) || matchArabic(m, AR.availability)) {
-    return ok(Intent.PRODUCT_AVAILABILITY, 0.9, language, entities);
-  }
-  if (matches(RECOMMEND_PATTERNS, m) || matchArabic(m, AR.recommend)) {
-    return ok(Intent.PRODUCT_RECOMMENDATION, 0.8, language, entities);
+  // Offers / payment / catalog are checked BEFORE availability so the Darija
+  // "كاين" wording never hijacks an offer question (Phase 5 F-2).
+  if (matches(OFFER_PATTERNS, m) || matchArabic(m, AR.offer)) {
+    return ok(Intent.OFFER_INFO, 0.7, language, entities);
   }
   if (matches(PAYMENT_PATTERNS, m) || matchArabic(m, AR.payment)) {
     return ok(Intent.PAYMENT, 0.85, language, entities);
   }
-  const hasOffer = matches(OFFER_PATTERNS, m) || matchArabic(m, AR.offer);
-  if (hasOffer) {
-    return ok(Intent.OFFER_INFO, 0.7, language, entities);
-  }
   if (matches(CATALOG_PATTERNS, m) || matchArabic(m, AR.catalog)) {
     return ok(Intent.CATALOG, 0.7, language, entities);
   }
+
+  // Availability requires a product / category / pack entity — OR a Latin
+  // product-like token (a slug / alias such as "unknown-stock") that the data
+  // layer can resolve. A bare "واش كاين؟"/"متوفر?"/'"disponible?"' with no
+  // specific reference is catalog-browsing (Phase 5 F-2).
+  if (matches(AVAILABILITY_PATTERNS, m) || matchArabic(m, AR.availability)) {
+    if (entities.product || entities.category || entities.pack || hasProductishToken(m)) {
+      return ok(Intent.PRODUCT_AVAILABILITY, 0.9, language, entities);
+    }
+    return ok(Intent.CATALOG, 0.7, language, entities);
+  }
+  if (matches(RECOMMEND_PATTERNS, m) || matchArabic(m, AR.recommend)) {
+    return ok(Intent.PRODUCT_RECOMMENDATION, 0.8, language, entities);
+  }
+
+  // Social intents are a last resort.
+  if (matches(GREETING_PATTERNS, m) || matchArabic(m, AR.greeting)) {
+    return ok(Intent.GREETING, 1.0, language, entities);
+  }
+  if (matches(THANKS_PATTERNS, m) || matchArabic(m, AR.thanks)) {
+    return ok(Intent.THANKS, 1.0, language, entities);
+  }
+
   if (entities.product || entities.pack || entities.category) {
     return ok(Intent.PRODUCT_INFO, 0.6, language, entities);
   }
@@ -118,6 +133,16 @@ export function classifyIntent(
   }
 
   return ok(Intent.UNKNOWN, 0.2, language, entities);
+}
+
+/**
+ * True when a message opens with a greeting word/phrase. Used by the
+ * orchestrator to acknowledge the greeting while still answering the actual
+ * business question (Phase 5 F-1).
+ */
+export function containsGreeting(message: string): boolean {
+  const m = (message || "").trim();
+  return matches(GREETING_PATTERNS, m) || matchArabic(m, AR.greeting);
 }
 
 function ok(
@@ -160,7 +185,8 @@ const THANKS_PATTERNS = [
   /(شكرا|شكراً|ميرسي|يعيشك|بارك الله)/i,
 ];
 const PRICE_PATTERNS = [
-  /\b(price|cost|combien|how much)\b/i,
+  /\b(price|cost|combien|how much|prix|tarif)\b/i,
+  /combien\s+(ça|ca)?\s*co(u|û)te/i,
   /(سعر|الثمن|شحال|بشحال|كم سعر|سوم)/i,
 ];
 const AVAILABILITY_PATTERNS = [
@@ -193,28 +219,61 @@ const RECOMMEND_PATTERNS = [
 ];
 const OFFER_PATTERNS = [
   /\b(offer|discount|promo|promotion|reduction|deal)\b/i,
-  /(عرض|تخفيض|تخفيضات|برومو|خصم)/i,
+  /(عرض|عروض|العروض|تخفيض|تخفيضات|برومو|خصم)/i,
 ];
 const CATALOG_PATTERNS = [
   /\b(catalog|products|all products|list|menu)\b/i,
   /(المنتجات|كاين شنو|واش عندكم|المعروض|القائمة|كل المنتجات)/i,
 ];
 
+// Known product identifiers (slugs / aliases / seed titles) used to decide
+// whether a message names a specific product. Only real identifiers qualify —
+// generic words never become a product entity, so a bare "واش كاين؟" stays
+// entity-less (→ catalog browsing) instead of an availability question.
+const PRODUCT_ENTITY_TERMS: string[] = [
+  "lingzhi-coffee-3in1", "lingzhi-coffee", "black-coffee", "spirulina",
+  "reishi-gano", "ganocelium", "cordyceps", "morinzhi", "spiruline",
+  "gaintegra", "andrographis", "dionic", "royal morin",
+  "قهوة الريشي 3 في 1", "قهوة الريشي", "القهوة السوداء", "سبيرولينا",
+  "ريشي غانو", "غانوسيليوم", "كورديسيبس", "مورينزي",
+  "ganozhi", "gano", "lingzhi", "reishi", "morinzhi", "cordyceps", "ganocelium",
+  "coffee", "قهوة", "سبيرولين",
+];
+
 function extractProductEntity(message: string): string | undefined {
   const lower = message.toLowerCase();
-  // Avoid capturing generic words as product names.
-  const stop = /(هذا|the |le |la |un |une |pack|produit|product|المنتج|باك|سعر|شحال|كم)/;
-  // Try to get a noun following known triggers; fallback: none.
+  for (const term of PRODUCT_ENTITY_TERMS) {
+    if (lower.includes(term)) return term;
+  }
   return undefined;
+}
+
+// Concept / glue words that never signal a specific product. A message whose
+// only Latin words are these (e.g. "disponible?", "in stock?") is a bare
+// availability question → catalog browsing, not a named-product lookup.
+const NON_PRODUCT_LATIN_WORDS = new Set([
+  "disponible", "available", "availability", "stock", "in", "out", "of", "off",
+  "en", "de", "du", "des", "un", "une", "le", "la", "les", "the", "est", "et",
+  "many", "beaucoup", "combien", "coute", "coûte", "ça", "ca", "il", "y", "a",
+]);
+
+function hasProductishToken(message: string): boolean {
+  const words = message.toLowerCase().match(/[a-zà-ÿ]{2,}(?:-[a-zà-ÿ0-9]+)*/g) || [];
+  return words.some(
+    (w) => (w.length >= 3 || w.includes("-")) && !NON_PRODUCT_LATIN_WORDS.has(w)
+  );
 }
 
 function extractPackEntity(message: string): string | undefined {
   const m = message.match(/\bpack\s+([a-zà-ÿ0-9_-]+)/i);
-  if (m && m[1] && /(^|\b)(sport|study|essai|gamme|g)/i.test(m[1])) {
+  if (m && m[1] && m[1].length >= 3) {
     return m[1].toLowerCase();
   }
-  const ar = message.match(/(?:باك|علبة|pack)\s*[:\s]*([\u0600-\u06FFa-zA-Z0-9_-]+)/);
-  return ar ? ar[1] : undefined;
+  // Generic pack wording ("الباكات", "packs", a bare "pack" with no name)
+  // yields no entity so the orchestrator lists the pack catalog instead of
+  // scoping to a wrong pack.
+  const ar = message.match(/(?:باك|علبة)\s*[:\s]*([\u0600-\u06FFa-zA-Z0-9_-]{3,})/);
+  return ar ? ar[1].toLowerCase() : undefined;
 }
 
 function extractCategoryEntity(message: string): string | undefined {
@@ -240,7 +299,14 @@ function extractWilayaEntity(message: string): string | undefined {
     "msila", "mascara", "ouargla", "oran", "el bayadh", "illizi", "bordj bou arreridj",
     "boumerdes", "el tarf", "tindouf", "tissemsilt", "el oued", "khenchela",
     "souk ahras", "tipaza", "mila", "ain defla", "naama", "ain temouchent",
-    "ghardaia", "relizane", "سطيف", "برج بوعريريج", "الجزائر", "وهران", "البليدة",
+    "ghardaia", "relizane",
+    "سطيف", "برج بوعريريج", "الجزائر", "وهران", "البليدة",
+    "قسنطينة", "عنابة", "جيجل", "بجاية", "تيزي وزو", "تلمسان", "باتنة",
+    "بسكرة", "سكيكدة", "قالمة", "معسكر", "غرداية", "ورقلة", "سيدي بلعباس",
+    "أم البواقي", "البيض", "تندوف", "تقرت", "إليزي", "عين الدفلى", "عين تموشنت",
+    "الوادي", "خنشلة", "سوق أهراس", "تيبازة", "ميلة", "المسيلة", "المدية",
+    "مستغانم", "النعامة", "تسمسيلت", "أدرار", "الشلف", "الأغواط", "أم البواقي",
+    "الطارف", "تيميمون", "بني عباس", "إن صالح", "إن قزام", "تقرت",
   ];
   const lower = message.toLowerCase();
   for (const w of known) {

@@ -109,11 +109,25 @@ const shipping = {
   shippingConfigured: true,
 };
 
+// Per-wilaya shipping rate table (Phase 5 F-4): configured wilayas get their
+// OWN rates; wilayas absent from this table must NOT be quoted a substituted
+// generic fee (the fake renders "حسب الولاية / selon wilaya" for them).
+const perWilaya: Record<string, Partial<typeof shipping>> = {
+  setif: { homePriceDA: 800, officePriceDA: 450 },
+  سطيف: { homePriceDA: 800, officePriceDA: 450 },
+  constantine: { homePriceDA: 1000, officePriceDA: 700 },
+  قسنطينة: { homePriceDA: 1000, officePriceDA: 700 },
+  oran: { homePriceDA: 900, officePriceDA: 550 },
+  وهران: { homePriceDA: 900, officePriceDA: 550 },
+  alger: { homePriceDA: 600, officePriceDA: 300 },
+  الجزائر: { homePriceDA: 600, officePriceDA: 300 },
+};
+
 function makeDA(opts?: { outOfStock?: string[] }) {
   const items = catalog.map((p) =>
     opts?.outOfStock?.includes(p.slug) ? { ...p, available: false, stock: 0, stockState: "OUT_OF_STOCK" as const } : p
   );
-  return new InMemoryDataAccess({ catalog: items, packs, offers, shipping });
+  return new InMemoryDataAccess({ catalog: items, packs, offers, shipping, perWilaya });
 }
 
 function makeOrch(opts?: { outOfStock?: string[]; store?: InMemoryConversationStore }) {
@@ -303,10 +317,9 @@ describe("Phase 4 — product discovery, prices and stock (AR/Darija/FR)", () =>
     expect(r.response).toContain("/product/morinzhi");
   });
 
-  // Note: FR "prix" (unlike price/cost/combien) is not a PRICE intent trigger,
-  // so the classifier lands on PRODUCT_INFO or UNKNOWN — but the deterministic
-  // retrieval still renders the exact price + link. The business outcome is
-  // correct; the label is a cosmetic nuance.
+  // Note: FR "prix"/"tarif" are PRICE intent triggers since Phase 5 (the FR
+  // cosmetic fix), so `prix <slug>` is classified as PRODUCT_PRICE and still
+  // renders the exact price + link. The business outcome is exact.
   test("ORDINARY — every one of the 8 seeded products answers an exact price query", async () => {
     for (const p of STARTER_PRODUCTS as any[]) {
       const r = await scenario(`prix ${p.slug}`);
@@ -376,15 +389,18 @@ describe("Phase 4 — shipping (generic fees quoted only when authoritative)", (
     expect(r.response).toContain(fmtDA(300));
   });
 
-  test("KNOWN GAP F-4 — per-wilaya fees are not applied in the deterministic path", async () => {
-    // Orchestrator calls getShippingInfo() WITHOUT the detected wilaya, so the
-    // wilaya-specific fee lookup and the wilaya header are never exercised.
+  test("Phase 5 FIXED F-4 — per-wilaya fees are applied in the deterministic path", async () => {
+    // The deterministic SHIPPING path now forwards the detected wilaya entity,
+    // so the wilaya header AND its own configured rate (Sétif 800/450) are
+    // rendered — the generic 600/300 is never substituted for a configured
+    // wilaya.
     const r = await scenario("التوصيل لسطيف");
     expect(r.intent).toBe(Intent.SHIPPING);
     expect(r.validation).toBe("safe");
-    expect(r.response).not.toContain("سطيف");
-    // Generic fee is still authoritative and quoted correctly.
-    expect(r.response).toContain(fmtDA(600));
+    expect(r.response).toContain("سطيف");
+    expect(r.response).toContain(fmtDA(800));
+    expect(r.response).toContain(fmtDA(450));
+    expect(r.response).not.toContain(fmtDA(600));
   });
 
   test("fabricated shipping fee is NEVER emitted (guardrails)", () => {
@@ -406,12 +422,17 @@ describe("Phase 4 — packs", () => {
     expect(r.response).toContain("/product/pack-decouverte");
   });
 
-  test("KNOWN GAP F-7 — pack info lists the whole pack catalog (entity not scoped)", async () => {
+  test("Phase 5 FIXED F-7 — pack info is scoped to the named pack", async () => {
+    // A named pack ("découverte") is scoped to that pack only — the whole
+    // pack catalog is no longer dumped.
     const r = await scenario("pack découverte");
-    expect(r.response).toContain("Pack Café Matin");
-    expect(r.response).toContain("Pack Sport");
-    expect(r.response).toContain(fmtDA(2600));
-    expect(r.response).toContain(fmtDA(3400));
+    expect(r.response).toContain("Pack Découverte");
+    expect(r.response).toContain(fmtDA(4800));
+    expect(r.response).toContain("/product/pack-decouverte");
+    expect(r.response).not.toContain("Pack Café Matin");
+    expect(r.response).not.toContain("Pack Sport");
+    expect(r.response).not.toContain(fmtDA(2600));
+    expect(r.response).not.toContain(fmtDA(3400));
   });
 
   test("pack stock renders as 'cannot confirm' (packs carry no stockQuantity)", async () => {
@@ -449,24 +470,24 @@ describe("Phase 4 — payment methods (cash-on-delivery is the only gateway)", (
 /* 5. Offers                                                             */
 /* ==================================================================== */
 describe("Phase 4 — offers", () => {
-  test("KNOWN GAP F-6 — any percentage offer blocks the OFFER reply (suppressed, escalates)", async () => {
-    // The seed offer "Promotion pouvoir d'achat" (-5%) makes the draft contain
-    // the FR discount term "promotion"; with no output-context the "-5%" figure
-    // cannot be allowlisted → discount_invention → suppressed. Safe (no false
-    // offer is ever told to a customer) but the offers flow is non-functional.
+  test("Phase 5 FIXED F-6 — configured offers flow (percentage 5%) validate clean", async () => {
+    // The OFFER draft now passes the output context (the retrieved discounts)
+    // through the deterministic validator, so the REAL 5% offer is allowlisted
+    // and the reply is delivered instead of being suppressed.
     const r = await scenario("كم خصم عندكم؟");
     expect(r.intent).toBe(Intent.OFFER_INFO);
-    expect(r.validation).toBe("blocked");
-    expect(r.handoff).toBe(true);
-    expect(r.reason).toContain("output validation blocked");
-    expect(r.response).not.toContain("5%");
+    expect(r.validation).toBe("safe");
+    expect(r.handoff).toBe(false);
+    expect(r.response).toContain("5%");
   });
 
-  test("KNOWN GAP F-2 — Darija 'كاين' phrasing hijacks the classifier to AVAILABILITY", async () => {
+  test("Phase 5 FIXED F-2 — Darija 'كاين' phrasing no longer hijacks the classifier", async () => {
+    // "عروض" (Arabic plural "offers") now resolves to OFFER_INFO before the
+    // generic Darija "كاين" availability wording is reached.
     const r = await scenario("واش كاين عروض؟");
-    expect(r.intent).toBe(Intent.PRODUCT_AVAILABILITY);
+    expect(r.intent).toBe(Intent.OFFER_INFO);
     expect(r.validation).toBe("safe");
-    expect(r.response).not.toContain("5%");
+    expect(r.response).toContain("5%");
   });
 
   test("ORDINARY — offer values in the seed are both structurally valid", () => {
@@ -483,24 +504,23 @@ describe("Phase 4 — offers", () => {
 /* 5b. Catalog listing (KNOWN GAP F-3)                                   */
 /* ==================================================================== */
 describe("Phase 4 — catalog listing", () => {
-  test("KNOWN GAP F-3 — generic catalog requests never list the real catalog", async () => {
-    // The CATALOG intent resolves to an empty listing notice rather than the
-    // 8 real products — searchCatalog finds no exact match for generic words
-    // ("قائمة"/"المنتجات"), so no product cards are ever dispatched. This is
-    // safe (no wrong data) but the catalog-browsing flow is non-functional.
+  test("Phase 5 FIXED F-3 — generic catalog requests list the real catalog", async () => {
+    // The CATALOG intent now falls back to the active public catalog and
+    // renders real product cards (price + storefront link) instead of an
+    // empty "check the store" notice.
     const r = await scenario("قائمة المنتجات");
     expect(r.intent).toBe(Intent.CATALOG);
     expect(r.validation).toBe("safe");
-    expect(r.response).toContain("زيد تحقق في المتجر");
-    expect(r.response).not.toMatch(/product\//);
-    expect(r.response).not.toContain(fmtDA(1200));
+    expect(r.response).toContain(fmtDA(1200));
+    expect(r.response).toMatch(/\/product\/lingzhi-coffee-3in1/);
+    expect(r.response).not.toContain("زيد تحقق في المتجر");
   });
 
-  test("French catalog request behaves identically (no list dispatched)", async () => {
+  test("French catalog request lists real products (no empty notice)", async () => {
     const r = await scenario("products list");
     expect(r.intent).toBe(Intent.CATALOG);
     expect(r.validation).toBe("safe");
-    expect(r.response).not.toMatch(/product\//);
+    expect(r.response).toMatch(/\/product\//);
   });
 });
 
@@ -508,16 +528,16 @@ describe("Phase 4 — catalog listing", () => {
 /* 6. Recommendations                                                    */
 /* ==================================================================== */
 describe("Phase 4 — recommendations", () => {
-  test("KNOWN GAP F-5 — product recommendation with real prices is suppressed (escalates)", async () => {
-    // recommend() cannot match category metadata (seed items have none), so the
-    // fallback lists retrieved products but allowedFacts stays empty → the
-    // prices in the rendered cards are treated as inventions. Safe (never
-    // invent) but the positive recommendation flow always escalates.
+  test("Phase 5 FIXED F-5 — product recommendation with real prices is delivered", async () => {
+    // The recommender now grounds matches on the customer's own terms against
+    // real titles, and the allowlist mirrors the rendered set — so the real
+    // coffee prices validate clean and the recommendation is sent.
     const r = await scenario("انصحني بقهوة");
     expect(r.intent).toBe(Intent.PRODUCT_RECOMMENDATION);
-    expect(r.validation).toBe("blocked");
-    expect(r.handoff).toBe(true);
-    expect(r.reason).toContain("price_invention");
+    expect(r.validation).toBe("safe");
+    expect(r.handoff).toBe(false);
+    expect(r.response).toContain(fmtDA(1200));
+    expect(r.response).toMatch(/\/product\//);
   });
 
   test("free-form need with no retrievable product defuses to a safe generic message", async () => {
@@ -544,9 +564,10 @@ describe("Phase 4 — language handling", () => {
     expect(/[A-Za-z\u00C0-\u017F]{4}/.test(r.response)).toBe(true);
   });
 
-  // NB: greeting terms (bonjour/salut/مرحبا) short-circuit to GREETING — see
-// KNOWN GAP F-1 — so a mixed message with a leading greeting is covered there.
-// Here we mix Arabic + French non-greeting intent triggers.
+  // NB: greeting terms (bonjour/salut/مرحبا) no longer short-circuit — since
+  // Phase 5 F-1 a bundled "greeting + question" answers the question while
+  // acknowledging the greeting (covered in section 14). Here we mix Arabic +
+  // French non-greeting intent triggers.
   test("mixed Arabic/French input still resolves the product", async () => {
     const r = await scenario("بشحال café lingzhi 3in1؟");
     expect(r.language).toBe("ar");
@@ -575,7 +596,7 @@ describe("Phase 4 — follow-up context and cross-user isolation", () => {
     const store = new InMemoryConversationStore();
     const orch = makeOrch({ store });
     await orch.handleMessage("A", "بشحال قهوة الريشي؟");
-    const b = await orch.handleMessage("B", "متوفر؟");
+    const b = await orch.handleMessage("B", "متوفر سبيرولينا؟");
     expect(b.response).not.toContain("قهوة الريشي");
     expect(b.response).not.toContain(fmtDA(1200));
   });
@@ -748,10 +769,14 @@ describe("Phase 4 — greeting & thanks", () => {
     expect(r.validation).toBe("safe");
   });
 
-  test("KNOWN GAP F-1 — a bundled 'greeting + question' only yields the greeting", async () => {
+  test("Phase 5 FIXED F-1 — a bundled 'greeting + question' answers the question", async () => {
+    // The greeting is acknowledged, but the real business question is
+    // answered with the actual price (not short-circuited to GREETING).
     const r = await scenario("مرحبا، بشحال قهوة الريشي؟");
-    expect(r.intent).toBe(Intent.GREETING);
-    expect(r.response).not.toContain(fmtDA(1200));
+    expect(r.intent).toBe(Intent.PRODUCT_PRICE);
+    expect(r.validation).toBe("safe");
+    expect(r.response).toContain("مرحبًا");
+    expect(r.response).toContain(fmtDA(1200));
   });
 });
 

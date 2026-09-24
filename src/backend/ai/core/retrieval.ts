@@ -137,7 +137,42 @@ export function recommend(
   const items = catalog.filter((it) => {
     if (cats.size === 0) return false;
     const haystack = `${it.title} ${it.category || ""}`.toLowerCase();
-    return [...cats].some((c) => haystack.includes(c));
+    // Grounded matching (Phase 5 F-5): match the mapped category on catalog
+    // metadata AND the customer's own term against the title/category, so a
+    // seed catalog with no category metadata still recommends real products
+    // ("انصحني بقهوة" → the coffee products whose titles contain "قهوة").
+    if ([...cats].some((c) => haystack.includes(c))) return true;
+    return matchedTerms.some((t) => t.length >= 2 && haystack.includes(t));
   });
   return { items, matchedTerms };
+}
+
+/**
+ * Normalize a pack name/token (lowercase, unaccented, alphanumeric-only) so
+ * "découverte" matches slug "pack-decouverte" across scripts.
+ */
+export function normalizePackToken(token: string): string {
+  return (token || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\u0600-\u06ff]/g, "");
+}
+
+/**
+ * Scope a pack request to a SPECIFIC pack when the message names one (Phase 5
+ * F-7). Returns undefined when no pack matches — the caller must then answer
+ * "not found" rather than dump the whole pack catalog.
+ */
+export function matchPack(
+  packs: CatalogItem[],
+  token: string | undefined
+): CatalogItem | undefined {
+  if (!token) return undefined;
+  const t = normalizePackToken(token);
+  if (!t) return undefined;
+  return packs.find((p) => {
+    const hay = normalizePackToken(`${p.slug} ${p.title}`);
+    return hay.includes(t);
+  });
 }

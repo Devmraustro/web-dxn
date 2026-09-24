@@ -12,6 +12,7 @@ export class InMemoryDataAccess implements DataAccess {
   packs: CatalogItem[];
   offers: OfferInfo[];
   shipping: ShippingInfo;
+  perWilaya: Record<string, Partial<ShippingInfo>>;
   storeSettings = { name: "DXN Store", currency: "DA", paymentMethods: ["cod"] };
 
   constructor(opts?: {
@@ -19,12 +20,14 @@ export class InMemoryDataAccess implements DataAccess {
     packs?: CatalogItem[];
     offers?: OfferInfo[];
     shipping?: ShippingInfo;
+    perWilaya?: Record<string, Partial<ShippingInfo>>;
   }) {
     this.catalog = opts?.catalog || [];
     this.packs = opts?.packs || [];
     this.offers = opts?.offers || [];
     this.shipping =
       opts?.shipping || { homeDelivery: true, officeDelivery: true, homePriceDA: 600, officePriceDA: 300, shippingConfigured: true };
+    this.perWilaya = opts?.perWilaya || {};
   }
 
   async searchCatalog(query: string): Promise<CatalogItem[]> {
@@ -42,6 +45,24 @@ export class InMemoryDataAccess implements DataAccess {
     return this.offers;
   }
   async getShippingInfo(wilaya?: string): Promise<ShippingInfo> {
+    if (wilaya) {
+      const key = wilaya.toLowerCase().trim();
+      const override = this.perWilaya[key];
+      if (override) {
+        return { ...this.shipping, ...override, wilaya };
+      }
+      // The wilaya is known/recognized but no rate is configured for it: never
+      // substitute the generic store-wide figure as if it applied to this
+      // wilaya. The response renders "حسب الولاية / selon wilaya".
+      if (Object.keys(this.perWilaya).length > 0) {
+        return {
+          ...this.shipping,
+          wilaya,
+          homePriceDA: undefined,
+          officePriceDA: undefined,
+        };
+      }
+    }
     return { ...this.shipping, wilaya: wilaya || this.shipping.wilaya };
   }
   async getFaq(_language: string): Promise<{ question: string; answer: string; language: string }[]> {

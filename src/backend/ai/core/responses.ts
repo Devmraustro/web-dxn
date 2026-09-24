@@ -59,9 +59,11 @@ function formatStock(state: StockState | undefined, lang: LanguageCode): string 
   }
 }
 
-function card(item: CatalogItem, lang: LanguageCode, link: boolean): string {
-  const stockNote = item.stockState ? formatStock(item.stockState, lang) : (item.available ? (lang === "ar" ? "متوفر" : "En stock") : (lang === "ar" ? "نفذت الكمية" : "Rupture de stock"));
-  const base = `${item.title} (${stockNote})`;
+function card(item: CatalogItem, lang: LanguageCode, link: boolean, showStock = true): string {
+  const stockNote = showStock
+    ? item.stockState ? formatStock(item.stockState, lang) : (item.available ? (lang === "ar" ? "متوفر" : "En stock") : (lang === "ar" ? "نفذت الكمية" : "Rupture de stock"))
+    : "";
+  const base = stockNote ? `${item.title} (${stockNote})` : item.title;
   const price = item.compareAtPriceDA && item.compareAtPriceDA > item.priceDA
     ? `${fmtDA(item.compareAtPriceDA)} → ${fmtDA(item.priceDA)}`
     : fmtDA(item.priceDA);
@@ -103,6 +105,23 @@ export function recommendationResponse(
   return lang === "ar"
     ? `انطلاقًا من طلبك، هذه اقتراحاتنا المتوفرة:\n${lines.join("\n")}`
     : `Selon votre demande, voici nos suggestions disponibles :\n${lines.join("\n")}`;
+}
+
+/**
+ * Bounded catalog listing rendered from ACTUAL retrieved products (Phase 5
+ * F-3). Shows the catalog's own entries with verified prices and storefront
+ * links; never fabricated items.
+ */
+export function catalogResponse(items: CatalogItem[], lang: LanguageCode): string {
+  if (items.length === 0) {
+    return lang === "ar"
+      ? "إليك منتجاتنا الحالية:\nزيد تحقق في المتجر."
+      : "Voici nos produits actuels :\nVérifiez la boutique.";
+  }
+  const lines = items.slice(0, 5).map((p) => card(p, lang, true, false));
+  return lang === "ar"
+    ? `إليك منتجاتنا الحالية:\n${lines.join("\n")}`
+    : `Voici nos produits actuels :\n${lines.join("\n")}`;
 }
 
 export function shippingResponse(shipping: ShippingInfo | undefined, lang: LanguageCode): string {

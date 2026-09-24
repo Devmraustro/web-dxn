@@ -20,19 +20,20 @@
  * the provider is unavailable).
  */
 import { DeterministicProvider } from "../provider/AIProvider";
-import { AiProvider, LanguageCode, Intent, OrchestratorResult } from "./types";
-import { classifyIntent } from "./intent";
+import { AiProvider, LanguageCode, Intent, IntentResult, OrchestratorResult } from "./types";
+import { classifyIntent, containsGreeting } from "./intent";
 import {
   isMedicalRiskQuestion,
   validateInputMessage,
   validateOutput,
   OutputContext,
 } from "./guardrails";
-import { DataAccess, retrieve, recommend } from "./retrieval";
+import { DataAccess, retrieve, recommend, matchPack } from "./retrieval";
 import { buildContext, ConversationStore, InMemoryConversationStore } from "./memory";
 import { PRODUCT_ALIASES, normalizeText, stripArticle } from "./catalogSearch";
 import { aiDebug } from "../debug";
 import {
+  catalogResponse,
   escalatedResponse,
   greetingResponse,
   offersResponse,
@@ -207,7 +208,7 @@ export class Orchestrator {
     // 4. Retrieve current data (source of truth).
     let result: OrchestratorResultBuilder;
     try {
-      result = await this.routeRetrieval(intentResult.intent, enhancedQuery, lang);
+      result = await this.routeRetrieval(intentResult.intent, enhancedQuery, lang, intentResult.entities);
     } catch {
       const response = safeFallbackResponse(lang);
       await this.remember(conversationId, "user", normalized);
@@ -225,14 +226,24 @@ export class Orchestrator {
     }
 
     // 5. If we produced a direct, data-backed answer candidate, validate it.
+    //    The deterministic path passes the same output context the LLM path
+    //    uses, so verified shipping fees / discounts / stock claims found in
+    //    retrieved data are allowlisted instead of being mistaken for
+    //    inventions (Phase 5 F-5/F-6).
     if (result.draft) {
       const allowed = result.allowedFacts || [];
-      const v = validateOutput(result.draft, lang, allowed);
+      let finalDraft = result.draft;
+      if (containsGreeting(normalized)) {
+        // A mixed "greeting + question" acknowledges the greeting and still
+        // answers the question (Phase 5 F-1).
+        finalDraft = lang === "ar" ? `مرحبًا! ${finalDraft}` : `Bonjour ! ${finalDraft}`;
+      }
+      const v = validateOutput(finalDraft, lang, allowed, this.buildOutputContext(result));
       if (v.safe) {
         await this.remember(conversationId, "user", normalized);
-        await this.remember(conversationId, "assistant", result.draft);
+        await this.remember(conversationId, "assistant", finalDraft);
         return {
-          response: result.draft,
+          response: finalDraft,
           needsHumanHandoff: false,
           intent: intentResult.intent,
           language: lang,
@@ -337,7 +348,8 @@ export class Orchestrator {
   private async routeRetrieval(
     intent: Intent,
     query: string,
-    lang: LanguageCode
+    lang: LanguageCode,
+    entities?: IntentResult["entities"]
   ): Promise<OrchestratorResultBuilder> {
     const base: OrchestratorResultBuilder = { allowedFacts: [], confidence: 0.5, performedRetrieval: false, requiresLLM: true };
 
@@ -372,30 +384,41 @@ export class Orchestrator {
       }
       case Intent.PRODUCT_RECOMMENDATION: {
         const lo = await retrieve(intent, query, lang, this.dataAccess);
-        base.performedRetrieval = true;
-        base.retrievedItems = lo.products.map((p) => ({ title: p.title, available: p.available }));
-        base.retrievedContext = formatCatalog(lo.products, lo.packs);
         const { items, matchedTerms } = recommend(query, lo.products, lang);
-        base.allowedFacts = items.flatMap((p) => priceFacts(p));
-        base.draft = recommendationResponse(
-          items.length ? items : lo.products,
-          lang,
-          matchedTerms
-        );
+        const rendered = items.length ? items : lo.products;
+        base.performedRetrieval = true;
+        base.retrievedItems = rendered.map((p) => ({ title: p.title, available: p.available }));
+        base.retrievedContext = formatCatalog(rendered, lo.packs);
+        // allowedFacts MUST mirror the rendered set so real recomended prices
+        // validate clean (Phase 5 F-5) while fabricated ones are still rejected.
+        base.allowedFacts = rendered.flatMap((p) => priceFacts(p));
+        base.draft = recommendationResponse(rendered, lang, matchedTerms);
         base.requiresLLM = false;
         base.confidence = 0.75;
         return base;
       }
       case Intent.PACK_INFO: {
         const lo = await retrieve(intent, query, lang, this.dataAccess);
+        let packs = lo.packs;
+        // Phase 5 F-7: when a SPECIFIC pack is named, scope to it instead of
+        // listing the whole pack catalog.
+        if (entities?.pack) {
+          const found = matchPack(lo.packs, entities.pack);
+          packs = found ? [found] : [];
+        }
         base.performedRetrieval = true;
-        base.retrievedItems = lo.packs.map((p) => ({ title: p.title, available: p.available }));
-        base.retrievedContext = formatCatalog(lo.products, lo.packs);
-        if (lo.packs.length) {
-          base.allowedFacts = lo.packs.flatMap((p) => priceFacts(p));
-          base.draft = productInfoResponse(lo.packs, intent, lang, true) ||
+        base.retrievedItems = packs.map((p) => ({ title: p.title, available: p.available }));
+        base.retrievedContext = formatCatalog(lo.products, packs);
+        if (packs.length) {
+          base.allowedFacts = packs.flatMap((p) => priceFacts(p));
+          base.draft = productInfoResponse(packs, intent, lang, true) ||
             (lang === "ar" ? "لدي معلومات بسيطة عن الباك، أنصحك بمراجعة المتجر." : "J'ai quelques infos sur le pack, consultez la boutique.");
           base.confidence = 0.8;
+        } else if (entities?.pack) {
+          // A named pack was not found — never substitute another pack.
+          base.draft = lang === "ar"
+            ? "لا نجد هذا الباك في قائمتنا الحالية. تفضل بمراجعة الباكسات المتاحة في المتجر."
+            : "Je ne trouve pas ce pack dans notre offre actuelle. Consultez la liste des packs dans la boutique.";
         } else {
           base.draft = lang === "ar"
             ? "لم أجد هذا الباك. هل تريد قائمة الباكسات المتاحة؟"
@@ -426,7 +449,7 @@ export class Orchestrator {
         return base;
       }
       case Intent.SHIPPING: {
-        const shipping = await this.dataAccess.getShippingInfo();
+        const shipping = await this.dataAccess.getShippingInfo(entities?.wilaya);
         base.performedRetrieval = true;
         const h = shipping.homePriceDA;
         const o = shipping.officePriceDA;
@@ -465,14 +488,17 @@ export class Orchestrator {
       }
       case Intent.CATALOG: {
         const lo = await retrieve(intent, query, lang, this.dataAccess);
+        // Phase 5 F-3: when the query does not narrow to real products, list
+        // the actual active public catalog instead of an empty notice.
+        let items = lo.products;
+        if (items.length === 0) {
+          items = (await this.dataAccess.getCatalog()).filter((p) => p.kind === "product");
+        }
         base.performedRetrieval = true;
-        base.retrievedItems = lo.products.map((p) => ({ title: p.title, available: p.available }));
-        base.retrievedContext = formatCatalog(lo.products, lo.packs);
-        base.allowedFacts = lo.products.flatMap((p) => priceFacts(p));
-        base.draft =
-          lang === "ar"
-            ? `إليك منتجاتنا الحالية:\n${productInfoResponse(lo.products, intent, lang, true) || "زيد تحقق في المتجر."}`
-            : `Voici nos produits actuels :\n${productInfoResponse(lo.products, intent, lang, true) || "Vérifiez la boutique."}`;
+        base.retrievedItems = items.map((p) => ({ title: p.title, available: p.available }));
+        base.retrievedContext = formatCatalog(items, []);
+        base.allowedFacts = items.flatMap((p) => priceFacts(p));
+        base.draft = catalogResponse(items, lang);
         base.requiresLLM = false;
         base.confidence = 0.8;
         return base;

@@ -556,6 +556,9 @@ describe("P0 — Product entity resolution with aliases", () => {
     expect(r.response).toContain("Reishi Gano");
   });
   test("unknown product remains unresolved", async () => {
+    // A Latin slug-like token keeps the availability/product lookup honest: the
+    // data layer finds nothing, so the reply states it cannot confirm stock —
+    // it never invents a product or a price, and it never escalates.
     const r = await makeOrch().handleMessage("p-unknown-2", "منتج غير موجود xyz123");
     expect(r.validation).not.toBe("blocked");
     expect(r.response.length).toBeGreaterThan(0);
@@ -748,9 +751,14 @@ describe("P0 — Guardrails: unresolved product cannot fabricate", () => {
     }
     const da = new InMemoryDataAccess({ catalog: [] });
     const orch = new Orchestrator({ dataAccess: da, store: new InMemoryConversationStore(), provider: new FabricatingProvider() });
+    // Phase 5 F-2: a bare availability question with NO product entity is
+    // catalog browsing — resolved deterministically from the (empty) catalog,
+    // so the fabricating provider is never even consulted.
     const r = await orch.handleMessage("guard-2", "كاين منتج غير موجود؟");
+    expect(r.intent).toBe(Intent.CATALOG);
+    expect(r.validation).toBe("safe");
     expect(r.response).not.toContain("متوفر");
-    expect(r.validation).toBe("blocked");
+    expect(r.response).not.toContain("وبالكثير");
   });
   test("unresolved product cannot produce fabricated shipping", async () => {
     class FabricatingProvider {
