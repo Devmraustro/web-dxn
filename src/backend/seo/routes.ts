@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { normalizeBaseUrl } from "../config/baseUrl";
 import {
   generateSitemap,
   generateRobotsTxt,
@@ -15,18 +16,18 @@ const router = Router();
 
 /** Absolute sitemap URL advertised to crawlers (env-driven, domain-aware). */
 const publicSitemapUrl = (): string =>
-  `${(process.env.BASE_URL || "https://dxn.dz").replace(/\/+$/, "")}/sitemap.xml`;
+  `${normalizeBaseUrl(process.env.BASE_URL, "https://dxn.dz")}/sitemap.xml`;
 
 /** GET sitemap.xml (queries active products; needs the DB). */
 export const serveSitemap = async (_req: Request, res: Response): Promise<void> => {
   try {
     const products = await Product.find({ isActive: true })
-      .select("slug updatedAt")
+      .select("slug updatedAt isActive")
       .lean();
 
     const sitemap = generateSitemap(
       products,
-      `${(process.env.BASE_URL || "https://dxn.dz").replace(/\/+$/, "")}`
+      normalizeBaseUrl(process.env.BASE_URL, "https://dxn.dz")
     );
 
     res.type("application/xml").send(sitemap);

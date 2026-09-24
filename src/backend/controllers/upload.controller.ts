@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getStorageProvider, isSafeImageUrl } from "../config/storage";
 import { imageSignatureMismatch } from "../middleware/upload.middleware";
+import { normalizeBaseUrl } from "../config/baseUrl";
 
 /** Validate a buffered file against its declared MIME type before storing. */
 const checkSignature = (file: Express.Multer.File): string | null =>
@@ -73,7 +74,7 @@ export const uploadImages = async (req: Request, res: Response) => {
 export const deleteImage = async (req: Request, res: Response) => {
   try {
     const { url } = req.body;
-    const allowedBase = (process.env.BASE_URL || "http://localhost:5000").replace(/\/+$/, "");
+    const allowedBase = normalizeBaseUrl(process.env.BASE_URL, "http://localhost:5000");
 
     if (!url || typeof url !== "string" || !isSafeImageUrl(url, allowedBase)) {
       res.status(400).json({ message: "Invalid image URL" });

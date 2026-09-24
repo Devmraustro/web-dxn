@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import https from "https";
+import { normalizeBaseUrl } from "./baseUrl";
 
 // Serverless-safe default: Vercel's project directory is READ-ONLY, so a
 // filesystem-backed local store must live under the writable /tmp dir there
@@ -67,7 +68,7 @@ export interface StorageProvider {
 }
 
 function getImageUrl(filename: string): string {
-  const baseUrl = (process.env.BASE_URL || "http://localhost:5000").replace(/\/+$/, "");
+  const baseUrl = normalizeBaseUrl(process.env.BASE_URL, "http://localhost:5000");
   return `${baseUrl}/uploads/${filename}`;
 }
 
@@ -83,7 +84,7 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   async delete(url: string): Promise<void> {
-    const prefix = `${(process.env.BASE_URL || "http://localhost:5000").replace(/\/+$/, "")}/uploads/`;
+    const prefix = `${normalizeBaseUrl(process.env.BASE_URL, "http://localhost:5000")}/uploads/`;
     if (!url.startsWith(prefix)) return;
     const filename = url.slice(prefix.length).split(/[/?#]/)[0] || "";
     // Defense in depth: only ever touch a generated UUID filename. Any
