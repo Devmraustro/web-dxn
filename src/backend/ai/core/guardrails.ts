@@ -8,6 +8,8 @@
  * A proposed response that violates safety is NEVER sent as-is; the pipeline
  * falls back to a safe message and escalates.
  */
+import { LanguageCode } from "./types";
+
 export type ViolationType =
   | "medical_claim"
   | "cure_or_treatment"
@@ -332,7 +334,7 @@ function checkDiscountInvention(
  */
 export function validateOutput(
   proposed: string,
-  language: "ar" | "fr",
+  language: LanguageCode,
   allowedFacts: string[],
   context?: OutputContext
 ): GuardResult {

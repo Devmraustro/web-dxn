@@ -1,4 +1,4 @@
-export type LanguageCode = "ar" | "fr";
+export type LanguageCode = "ar" | "fr" | "darija";
 
 export type AiPlatform = "instagram" | "facebook" | "web";
 

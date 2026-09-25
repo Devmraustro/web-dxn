@@ -9,6 +9,22 @@ import { LanguageCode } from "./types";
 const ARABIC_CHARS = /[\u0600-\u06FF\u0750-\u077F]/;
 const LATIN_CHARS = /[a-zA-ZàâäéèêëîïôöùûüçÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ]/;
 
+// Strong Darija indicators (Arabic script but distinct vocabulary)
+const DARIJA_WORDS = new Set([
+  "كاين", "كاينة", "كاينين", "واش", "واش كاين", " شنو", "شنو", "بشحال", "شحال", "كيفاش", "فين", "وين",
+  "غادي", "بغيت", "نحب", "عندك", "عندكم", "معي", "معلومة", "علاش", "أسباب", "مهم", "زطاطة",
+  "خوا", "خليني", "خليني نشوف", "نعاونك", "نخدمك", "نقولك", "نصح", "تنصحني", "ننصح",
+  "مزيان", "مزيانة", "على فكرة", "بالمقابل", "مشكور", "ميرسي", "يا ريت", "يسعدك",
+  "خير", "محتاج", "محتاجة", "نوصي", "نعطيك", "تفاصيل", "معلومة", "معلومات",
+  "للرياضة", "للطاقة", "للصحة", "للدراسة", "للنوم", "للتركيز", "لمناعة", "للبشرة",
+  "الاستعمال اليومي", "يومي", "مباشرة", "نضيف", "نكمل", "نشري", "نطلب",
+  "التوصيل", "الشحن", "ليفري", "ليفريج", "يدفع", "الاستلام", "باريديموب", "باريدي",
+  "كاش", "نقدا", "المنتج", "الباك", "العلبة", "السلة", "المجموعة", "الحزمة",
+  "العرض", "العروض", "التخفيض", "التخفيضات", "برومو", "خصم", "موجود", "موجودة",
+  "نفذت", "نفدت", "الكمية", "مخزون", "كاين عندكم", "عندكم", "عندك", "طيب",
+  "واحش", "نصف", "قريب", "إيلي", "دير", "ديرلي", "علمني", "عرفني", "قالولي"
+]);
+
 const FRENCH_WORDS = new Set([
   "bonjour", "salut", "merci", "oui", "non", "comment", "combien", "prix",
   "livraison", "paiement", "produit", "pack", "commande", "code", "wilaya",
@@ -39,17 +55,25 @@ export function detectLanguage(
 
   const words = m.split(/\s+/).filter(Boolean);
   let arabicCount = 0;
+  let darijaCount = 0;
   let latinCount = 0;
 
   for (const w of words) {
-    if (ARABIC_CHARS.test(w)) arabicCount++;
-    else if (LATIN_CHARS.test(w)) {
-      const lower = w.toLowerCase().replace(/[^a-zàâäéèêëîïôöùûüç]/g, "");
+    const lower = w.toLowerCase().replace(/[^a-zàâäéèêëîïôöùûüç]/g, "");
+    if (ARABIC_CHARS.test(w)) {
+      if (DARIJA_WORDS.has(lower)) {
+        darijaCount++;
+      } else {
+        arabicCount++;
+      }
+    } else if (LATIN_CHARS.test(w)) {
       if (FRENCH_WORDS.has(lower)) latinCount++;
       else latinCount++;
     }
   }
 
+  // Darija wins if it has the most Darija-specific words
+  if (darijaCount > arabicCount && darijaCount > latinCount) return "darija";
   if (arabicCount > latinCount) return "ar";
   if (latinCount > arabicCount) return "fr";
   // Tied or empty of letters — fall back to the conversation's prior language.

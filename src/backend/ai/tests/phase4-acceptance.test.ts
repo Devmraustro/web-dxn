@@ -142,10 +142,11 @@ afterEach(() => {
 });
 
 // Standardized outcome record so every scenario has a uniform result shape.
+import { LanguageCode } from "../core/types";
 interface ScenarioOutcome {
   response: string;
   intent: Intent;
-  language: "ar" | "fr";
+  language: LanguageCode;
   validation: "safe" | "fallback" | "blocked";
   handoff: boolean;
   reason?: string;
