@@ -27,8 +27,8 @@ describe("Phase 19I — language detection", () => {
   test("detects French", () => {
     expect(detectLanguage("Je veux le pack sport")).toBe("fr");
   });
-  test("detects mixed Arabic/French preferring Arabic when dominant", () => {
-    expect(detectLanguage("واش كاين livraison لسطيف")).toBe("ar");
+  test("detects mixed Darija/French returns Darija", () => {
+    expect(detectLanguage("واش كاين livraison لسطيف")).toBe("darija");
   });
   test("falls back to previous language on ties", () => {
     expect(detectLanguage("😊", "ar")).toBe("ar");

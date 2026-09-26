@@ -9,20 +9,27 @@ import { LanguageCode } from "./types";
 const ARABIC_CHARS = /[\u0600-\u06FF\u0750-\u077F]/;
 const LATIN_CHARS = /[a-zA-ZàâäéèêëîïôöùûüçÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ]/;
 
-// Strong Darija indicators (Arabic script but distinct vocabulary)
+// Strong Darija indicators (distinctly Algerian vocabulary - not common Arabic)
 const DARIJA_WORDS = new Set([
-  "كاين", "كاينة", "كاينين", "واش", "واش كاين", " شنو", "شنو", "بشحال", "شحال", "كيفاش", "فين", "وين",
-  "غادي", "بغيت", "نحب", "عندك", "عندكم", "معي", "معلومة", "علاش", "أسباب", "مهم", "زطاطة",
-  "خوا", "خليني", "خليني نشوف", "نعاونك", "نخدمك", "نقولك", "نصح", "تنصحني", "ننصح",
-  "مزيان", "مزيانة", "على فكرة", "بالمقابل", "مشكور", "ميرسي", "يا ريت", "يسعدك",
-  "خير", "محتاج", "محتاجة", "نوصي", "نعطيك", "تفاصيل", "معلومة", "معلومات",
+  // Distinctly Algerian pronouns/particles
+  "خويا", "صاحبي", "رفيق", "ياخي", "ياختي", "علاش", "كيفاش", "فين", "وين",
+  "غادي", "بغيت", "نحب", "كاين", "كاينة", "كاينين", "مليحة", "مليح", "زطاطة",
+  "خليني", "نعاونك", "نخدمك", "نقولك", "تنصحني", "ننصح", "مزيان", "مزيانة",
+  "مشكور", "ميرسي", "يا ريت", "يسعدك", "خير", "محتاج", "محتاجة", "نوصي", "نعطيك",
   "للرياضة", "للطاقة", "للصحة", "للدراسة", "للنوم", "للتركيز", "لمناعة", "للبشرة",
-  "الاستعمال اليومي", "يومي", "مباشرة", "نضيف", "نكمل", "نشري", "نطلب",
-  "التوصيل", "الشحن", "ليفري", "ليفريج", "يدفع", "الاستلام", "باريديموب", "باريدي",
-  "كاش", "نقدا", "المنتج", "الباك", "العلبة", "السلة", "المجموعة", "الحزمة",
-  "العرض", "العروض", "التخفيض", "التخفيضات", "برومو", "خصم", "موجود", "موجودة",
-  "نفذت", "نفدت", "الكمية", "مخزون", "كاين عندكم", "عندكم", "عندك", "طيب",
-  "واحش", "نصف", "قريب", "إيلي", "دير", "ديرلي", "علمني", "عرفني", "قالولي"
+  "نشري", "نطلب", "ليفري", "ليفريج", "باريديموب", "باريدي", "باك", "باكات",
+  "نفذت", "نفدت", "مفقود", "ناقص", "نفد", "انتهى", "خلص",
+  "مزيان", "مزيانة", "لاباس", "لاباس عليك", "لاباس عليكوم",
+  "شكرا بزاف", "مرسي", "ميرسي", "الله يعاون", "ربنا يعاون",
+  "بخير", "ماشي", "ماشي مشكل", "ماشكلة", "تمام", "أهلا", "أهلاً",
+  "سلام", "سلام عليكم", "عليكم السلام", "صباح الخير", "مساء الخير",
+  "تصبح على خير", "طيب", "طيب جداً", "ممتاز", "ممتازة",
+  "زين", "زينة", "حلو", "حلوة", "باهي", "باهية", "كويّس", "كويسة",
+  "ماعندكش", "ماعندكمش", "ماعنديش", "ماغاديش", "مابغيتش", "ماحبش",
+  "ماعرفش", "مافهمتش", "ماشي مشكل", "ماشكلة", "فهمت", "فهمتك", "فهمتكوم",
+  "واضح", "مفهوم", "تمام", "تصبح على خير", "تصبح على خير",
+  // Distinctly Algerian question words
+  "شنو", "شن", "شنوة", "باش", "يلي", "حتى ما", "بلا ما",
 ]);
 
 const FRENCH_WORDS = new Set([
@@ -38,6 +45,17 @@ const FRENCH_WORDS = new Set([
   "facebook", "instagram", "ding", "roi", "café", "cafe", "thé", "the", "sucre",
   "gingembre", "corde", "conseils", "maman", "cod", "honoraire",
 ]);
+
+/**
+ * Normalize Arabic word for Darija detection (strip punctuation, diacritics).
+ */
+function normalizeArabicWord(w: string): string {
+  return w
+    .toLowerCase()
+    .replace(/[\u064B-\u0652\u0670]/g, "") // Arabic diacritics
+    .replace(/[؟?!,.،;:()\[\]'"\-_]/g, "") // punctuation
+    .trim();
+}
 
 /**
  * Detect the dominant language of a message.
@@ -61,7 +79,8 @@ export function detectLanguage(
   for (const w of words) {
     const lower = w.toLowerCase().replace(/[^a-zàâäéèêëîïôöùûüç]/g, "");
     if (ARABIC_CHARS.test(w)) {
-      if (DARIJA_WORDS.has(lower)) {
+      const norm = normalizeArabicWord(w);
+      if (DARIJA_WORDS.has(norm)) {
         darijaCount++;
       } else {
         arabicCount++;
@@ -72,8 +91,9 @@ export function detectLanguage(
     }
   }
 
-  // Darija wins if it has the most Darija-specific words
-  if (darijaCount > arabicCount && darijaCount > latinCount) return "darija";
+  // If ANY Darija-specific word is present, classify as Darija
+  // (Darija is a variant of Arabic with distinct vocabulary markers)
+  if (darijaCount > 0) return "darija";
   if (arabicCount > latinCount) return "ar";
   if (latinCount > arabicCount) return "fr";
   // Tied or empty of letters — fall back to the conversation's prior language.

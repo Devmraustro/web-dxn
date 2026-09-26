@@ -49,13 +49,19 @@ export async function retrieve(
     case Intent.PRODUCT_INFO:
     case Intent.PRODUCT_PRICE:
     case Intent.PRODUCT_AVAILABILITY:
-    case Intent.PRODUCT_RECOMMENDATION:
     case Intent.PACK_INFO:
     case Intent.PRODUCT_LINK:
     case Intent.CATALOG:
     case Intent.OFFER_INFO:
     case Intent.OUT_OF_STOCK: {
       const products = await da.searchCatalog(query);
+      const packs = await da.getPacks();
+      const offers = await da.getActiveOffers();
+      return { products, packs, offers, performedRetrieval: true, confidence: 0.9 };
+    }
+    case Intent.PRODUCT_RECOMMENDATION: {
+      // For recommendations, use full catalog so recommend() can filter by category
+      const products = await da.getCatalog();
       const packs = await da.getPacks();
       const offers = await da.getActiveOffers();
       return { products, packs, offers, performedRetrieval: true, confidence: 0.9 };

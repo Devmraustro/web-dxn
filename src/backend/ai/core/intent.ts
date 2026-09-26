@@ -234,7 +234,7 @@ const PRODUCT_ENTITY_TERMS: string[] = [
   "lingzhi-coffee-3in1", "lingzhi-coffee", "black-coffee", "spirulina",
   "reishi-gano", "ganocelium", "cordyceps", "morinzhi", "spiruline",
   "gaintegra", "andrographis", "dionic", "royal morin",
-  "قهوة الريشي 3 في 1", "قهوة الريشي", "القهوة السوداء", "سبيرولينا",
+  "قهوة الريشي 3 في 1", "قهوة الريشي", "قهوة الريشي بودرة", "القهوة السوداء", "سبيرولينا",
   "ريشي غانو", "غانوسيليوم", "كورديسيبس", "مورينزي",
   "ganozhi", "gano", "lingzhi", "reishi", "morinzhi", "cordyceps", "ganocelium",
   "coffee", "قهوة", "سبيرولين",

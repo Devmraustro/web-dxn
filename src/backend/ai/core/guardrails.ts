@@ -410,6 +410,12 @@ const PROMPT_INJECTION = [
   /(قل للعميل|قل للزبون|قل للمشتري|قل للعميل أن|أخبر العميل أن|اقنع العميل)/,
   /(قل إن|قل أن|قل لهم|اخترع|افترض شراء|افترض|ومن ثم قل)/,
   /(استخدم هذه المعلومات الكاذبة|هذه المعلومة كاذبة)/,
+  // Price manipulation / fabrication attempts
+  /(اعتبر|اجعل|خلّي|اخلي|اجعل).*السعر.*\d+/i,
+  /(السعر|الثمن).*(\d+).*?(فقط|فقط|بس)/i,
+  // Internal info extraction attempts
+  /(اعطيني|أعطني|اعطني|قل لي|أخبرني|عرفني|أعرفني).{0,30}(قاعدة البيانات|الداتا بيز|مونغودب|mongodb|تليجرام|telegram|التوكن|token|السر|secret|المفتاح|key|api|كلمة السر|password)/i,
+  /(database|mongo|telegram|token|secret|api key|password).{0,30}(اعطيني|أعطني|give me|tell me|show me)/i,
 ];
 
 export function validateInputMessage(message: string): GuardResult {
@@ -436,10 +442,16 @@ export function isMedicalRiskQuestion(message: string): boolean {
     /(est-ce que|est ce que|ce produit|ce remède).{0,40}(guérit|guérir|soigne|soigner|traite|traiter|cure|cures?|heal|treats?).{0,35}(diabète|diabetes|cancer|hypertension|tension|maladie|disease|tumeur)/i,
     // English
     /(does|can|could|will|this product).{0,40}(cure|cures?|heal|treat|treats?).{0,35}(diabète|diabetes|cancer|hypertension|disease|tumor)/i,
-    // Arabic / Darija
+    // Arabic / Darija: cure verb followed by disease
     /(يعالج|يشفي|يداوي|يشافي|يخلي|يعالج مرض|علاج).{0,25}(السكري|السرطان|الضغط|تقلاص|القلب|المرض)/i,
     /(يعالج السكري|يداوي السكري|يشفي السكري|واش يداوي السكري|هل يعالج)/i,
     /(هذا المنتج|هذا).{0,40}(يعالج|يشفي|يداوي).{0,20}(السكري|السرطان)/i,
+    // Darija: "يشفيني", "يداويني", "يعالجني" + disease (disease after)
+    /(يشفيني|يداويني|يعالجني|واش يشفي|واش يداوي).{0,20}(السكري|السرطان|الضغط|القلب|المرض|السكر)/i,
+    /(منتج|حاجة|دواء).{0,20}(يشفيني|يداويني|يعالجني).{0,20}(السكري|السرطان|الضغط)/i,
+    // Darija/Arabic: disease BEFORE cure verb (e.g. "السكري، واش المنتج لي يشفيني")
+    /(السكري|السرطان|الضغط|القلب|المرض|السكر).{0,30}(يشفيني|يداويني|يعالجني|واش يشفي|واش يداوي|يشفي|يداوي|يعالج)/i,
+    /(السكري|السرطان|الضغط|القلب|المرض).{0,30}(المنتج|الحاجة|الدواء).{0,20}(يشفيني|يداويني|يعالجني)/i,
   ];
   return patterns.some((p) => p.test(lower));
 }
