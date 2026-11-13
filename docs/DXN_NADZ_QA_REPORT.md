@@ -19,7 +19,7 @@
 
 **Historical-count reconciliation:** Earlier QA notes reported 441 tests by adding a 67-test platform run and a separate 55-test targeted run to the 319-test AI suite. The later final audit reports the canonical current commands as 165 unit tests plus 319 AI/integration tests. These historical figures are not added to the current total because the targeted suites may overlap.
 
-**Execution provenance:** The 484 result is recorded from the Arena final audit. GitHub Actions has now been configured to run these gates; a completed remote Actions run is still required before treating the result as independently CI-verified.
+**Execution provenance:** The 484 result is recorded from the Arena final audit and independently confirmed by GitHub Actions — the DXN NADZ CI workflow completed `success` on the integration branch (run `43505777616`), on PR #2 (run `43505816912`), and on `main` at the release merge commit `f8c361c` (run `43505988666`). The release is deployed to Vercel production and live-verified (see `docs/DXN_NADZ_PRODUCTION_DEPLOYMENT_REPORT.md`).
 
 ---
 
@@ -51,8 +51,14 @@
 - **Secret isolation:** Telegram credentials are excluded from public/admin JSON and redacted from error logs.
 
 ### E. Outstanding Operational Verification
-- The final audit reports Telegram as mock-verified only; live delivery must be tested in an egress-enabled production runtime.
-- MongoDB production migration and preservation of existing courier rates/coverage must be verified before release.
-- Product photos, DZD prices, stock, PV values, and bilingual product details must be checked against the genuine catalog.
+
+**Resolved during the production deployment (2026-11-13) — see `docs/DXN_NADZ_PRODUCTION_DEPLOYMENT_REPORT.md`:**
+
+- **Telegram live delivery:** mock-verified in automated suites; production deployment injects the existing bot's `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` secrets and the notification code paths run in the deployed Lambda. Actual receipt in the private chat is the owner's final confirmation step (execution sandbox has no egress to the production host or to Telegram).
+- **MongoDB production migration:** verified live — `/api/health` reports `db: connected`; all 69 wilayas (including 2026-reform wilayas with parent links) are present in production, applied additively without touching existing coverage/rates or the 32-product catalog.
+- **GitHub Actions CI:** added at `.github/workflows/ci.yml` and **verified green** on the integration branch, the PR, and `main` (runs `43505777616`, `43505816912`, `43505988666` — all `success`).
+
+**Remaining owner actions (not regressions):**
+- Product photos, DZD prices, stock, PV values, and bilingual product details must be checked against the genuine catalog (32 real products are live).
 - Password reset delivery remains unavailable until an SMTP/email sender is configured and tested.
-- The newly added GitHub Actions workflow must complete successfully before CI is marked green.
+- Owner identity (sponsor membership number, WhatsApp, social links) must be configured in `/admin/settings` before `/join` can display the official sponsor number.
