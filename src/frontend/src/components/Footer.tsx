@@ -1,18 +1,23 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
-import { STORE_EMAIL, STORE_EMAIL_MAILTO, readSiteSocialConfig } from "../config/site";
-
-const site = readSiteSocialConfig();
+import { useSiteSettings } from "../context/SiteSettingsContext";
+import { STORE_EMAIL } from "../config/site";
 
 /**
- * Site footer. Contains only factual store information — no invented phone
- * numbers or social accounts. Contact channels remain those surfaced by the
- * order flow (phone confirmation) and the backend.
+ * DXN NADZ — Professional Footer (Phase 2.2 section 13 & Phase 11 & Phase 12).
+ * Displays only verified, configured links and clear health/income disclaimers.
  */
 const Footer = () => {
   const { language } = useLanguage();
+  const { settings } = useSiteSettings();
   const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+
+  const email = settings.contactEmail || STORE_EMAIL;
+  const socials = settings.socialLinks;
+  const hasAnySocial = Boolean(
+    socials.facebook || socials.instagram || socials.tiktok || socials.telegram || socials.whatsapp
+  );
 
   return (
     <footer className="dxn-footer">
@@ -20,97 +25,138 @@ const Footer = () => {
         {/* Brand */}
         <div>
           <div className="dxn-footer-brand">
-            <span className="dxn-brand-badge" style={{ width: 40, height: 40, borderRadius: 12 }}>
+            <span className="dxn-brand-badge" style={{ width: 42, height: 42, borderRadius: 12 }}>
               DXN
             </span>
             <span>
-              <span className="dxn-brand-name" style={{ color: "#fff", fontSize: "1.05rem" }}>
-                DXN Store
+              <span className="dxn-brand-name" style={{ color: "#fff", fontSize: "1.1rem" }}>
+                {settings.brandName || "DXN NADZ"}
               </span>
-              <span className="dxn-brand-sub d-block">{t("صحتك هي الصح", "Votre santé d'abord")}</span>
+              <span className="dxn-brand-sub d-block">
+                {t("منتجات متنوعة • معرفة موثوقة • فرصة عمل منظمة", "Produits • Éducation • Opportunité")}
+              </span>
             </span>
           </div>
-          <p>
+          <p className="mt-2">
             {t(
-              "متجر مكملات غذائية ومنتجات DXN الصحية في الجزائر، مع التوصيل إلى جميع الولايات والدفع عند الاستلام.",
-              "Boutique de compléments alimentaires et produits de bien-être DXN en Algérie, avec livraison vers toutes les wilayas et paiement à la livraison."
+              "منصة DXN NADZ للتسوق المباشر، التثقيف المسؤول بالمنتجات، ومرافقة الراغبين في الانضمام إلى نشاط البيع المباشر مع DXN بشفافية واحترافية.",
+              "Plateforme DXN NADZ dédiée aux produits DXN, à l'information responsable et à l'accompagnement transparent de notre équipe."
             )}
           </p>
         </div>
 
-        {/* Quick links */}
+        {/* Store & Catalog */}
         <div className="dxn-footer-col">
-          <div className="dxn-footer-title">{t("روابط سريعة", "Liens rapides")}</div>
-          <Link to="/">{t("الرئيسية", "Accueil")}</Link>
-          <Link to="/products">{t("المنتجات", "Produits")}</Link>
+          <div className="dxn-footer-title">{t("المتجر والمنتجات", "Boutique")}</div>
+          <Link to="/products">{t("جميع المنتجات", "Tous les produits")}</Link>
+          <Link to="/products?category=supplements">{t("المكملات الغذائية", "Compléments alimentaires")}</Link>
+          <Link to="/products?category=cosmetics">{t("الكوسميتيك والعناية", "Cosmétiques & Soins")}</Link>
           <Link to="/cart">{t("سلة التسوق", "Panier")}</Link>
-          <Link to="/checkout">{t("إتمام الطلب", "Commande")}</Link>
-          <Link to="/privacy">{t("footerPrivacy", "footerPrivacyFr")}</Link>
+          <Link to="/checkout">{t("إتمام الطلب", "Valider la commande")}</Link>
         </div>
 
-        {/* Delivery */}
+        {/* Company, Education & Team */}
         <div className="dxn-footer-col">
-          <div className="dxn-footer-title">{t("التوصيل والدفع", "Livraison & paiement")}</div>
-          <p>{t("التوصيل إلى 69 ولاية.", "Livraison vers les 69 wilayas.")}</p>
-          <p>{t("الدفع عند الاستلام متاح.", "Paiement à la livraison disponible.")}</p>
-          <p>{t("تأكيد الطلبات عبر الهاتف.", "Confirmation des commandes par téléphone.")}</p>
+          <div className="dxn-footer-title">{t("المعرفة والفريق", "Entreprise & Équipe")}</div>
+          <Link to="/about">{t("من هي شركة DXN؟", "Qui est DXN ?")}</Link>
+          <Link to="/founder">{t("تعرّف على مؤسس DXN", "Fondateur de DXN")}</Link>
+          <Link to="/why-dxn">{t("لماذا يختار الكثيرون DXN؟", "Pourquoi choisir DXN ?")}</Link>
+          <Link to="/education">{t("مركز التثقيف بالمنتجات", "Centre éducatif produits")}</Link>
+          <Link to="/join">{t("انضم إلى فريق DXN NADZ", "Rejoindre l'équipe DXN NADZ")}</Link>
         </div>
 
-        {/* Contact */}
+        {/* Trust, Support & Socials */}
         <div className="dxn-footer-col">
-          <div className="dxn-footer-title">{t("تواصل معنا", "Contactez-nous")}</div>
-          <p>
+          <div className="dxn-footer-title">{t("الثقة والتواصل", "Confiance & Contact")}</div>
+          <Link to="/faq">{t("الأسئلة الشائعة ومركز الثقة", "FAQ & Centre de confiance")}</Link>
+          <Link to="/contact">{t("تواصل معنا", "Contactez-nous")}</Link>
+          <Link to="/privacy">{t("سياسة الخصوصية", "Politique de confidentialité")}</Link>
+          <p className="mt-2 mb-1">
             {t("البريد الإلكتروني", "Email")} :{" "}
-            <a href={STORE_EMAIL_MAILTO} aria-label="Email">
-              {STORE_EMAIL}
+            <a href={`mailto:${email}`} aria-label="Email">
+              {email}
             </a>
           </p>
 
-          {(site.facebook || site.instagram) && (
-            <div className="d-flex gap-2 mt-2">
-              {site.facebook && (
+          {hasAnySocial && (
+            <div className="d-flex flex-wrap gap-2 mt-2">
+              {socials.facebook && (
                 <a
-                  href={site.facebook}
+                  href={socials.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Facebook"
                   className="btn btn-sm btn-outline-light"
-                  style={{ width: 36, height: 36, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}
+                  style={{ borderRadius: 8 }}
                 >
-                  f
+                  Facebook
                 </a>
               )}
-              {site.instagram && (
+              {socials.instagram && (
                 <a
-                  href={site.instagram}
+                  href={socials.instagram}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Instagram"
                   className="btn btn-sm btn-outline-light"
-                  style={{ width: 36, height: 36, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}
+                  style={{ borderRadius: 8 }}
                 >
-                  ig
+                  Instagram
+                </a>
+              )}
+              {socials.tiktok && (
+                <a
+                  href={socials.tiktok}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="TikTok"
+                  className="btn btn-sm btn-outline-light"
+                  style={{ borderRadius: 8 }}
+                >
+                  TikTok
+                </a>
+              )}
+              {socials.telegram && (
+                <a
+                  href={socials.telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Telegram"
+                  className="btn btn-sm btn-outline-light"
+                  style={{ borderRadius: 8 }}
+                >
+                  Telegram
+                </a>
+              )}
+              {socials.whatsapp && (
+                <a
+                  href={socials.whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="WhatsApp"
+                  className="btn btn-sm btn-outline-light"
+                  style={{ borderRadius: 8 }}
+                >
+                  WhatsApp
                 </a>
               )}
             </div>
           )}
         </div>
+      </div>
 
-        {/* Admin */}
-        <div className="dxn-footer-col">
-          <div className="dxn-footer-title">{t("الإدارة", "Administration")}</div>
-          <Link to="/admin/login">{t("دخول الأدمن", "Espace admin")}</Link>
-          <p className="mt-2">
-            {t(
-              "الأسعار والمخزون تُدار من لوحة التحكم.",
-              "Prix et stock sont gérés depuis le tableau de bord."
-            )}
-          </p>
-        </div>
+      <div className="container py-3 border-top border-secondary border-opacity-25">
+        <p className="small mb-0" style={{ color: "rgba(255,255,255,0.72)", lineHeight: 1.7 }}>
+          {t(
+            "تنبيه قانوني وصحي: المكملات الغذائية ومنتجات العناية المعروضة ليست أدوية طبية ولا تهدف إلى تشخيص أي مرض أو علاجه أو الشفاء منه أو الوقاية منه. كما أن فرص البيع المباشر مع DXN تعتمد على المبيعات الفعلية والجهد الشخصي دون أي وعود بأرباح مضمونة أو تلقائية.",
+            "Avis légal et sanitaire : Les compléments alimentaires et soins proposés ne sont pas des médicaments et ne visent pas à diagnostiquer, traiter, guérir ou prévenir une maladie. Toute activité de vente directe dépend exclusivement des ventes réelles et de l'effort personnel, sans revenu garanti."
+          )}
+        </p>
       </div>
 
       <div className="dxn-footer-bottom">
-        © {new Date().getFullYear()} DXN Store — {t("جميع الحقوق محفوظة", "Tous droits réservés")}
+        © {new Date().getFullYear()} {settings.brandName || "DXN NADZ"} —{" "}
+        {t("جميع الحقوق محفوظة", "Tous droits réservés")}
       </div>
     </footer>
   );

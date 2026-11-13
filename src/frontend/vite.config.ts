@@ -45,7 +45,9 @@ export default defineConfig(({ command }) => ({
     } : {},
   },
   server: {
+    host: "0.0.0.0",
     port: 3000,
+    allowedHosts: true,
     proxy: {
       "/api": "http://localhost:5000",
       "/uploads": "http://localhost:5000",

@@ -19,7 +19,17 @@ export const securityHeaders = helmet({
   },
 });
 
-const stripMongoOperators = (value: unknown): unknown => {
+const PASSWORD_LIKE_FIELDS = new Set([
+  "password",
+  "currentPassword",
+  "newPassword",
+  "confirmPassword",
+  "token",
+]);
+
+export const stripMongoOperators = (value: unknown): unknown => {
+  if (Buffer.isBuffer(value)) return value;
+
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
       value[i] = stripMongoOperators(value[i]);
@@ -42,16 +52,61 @@ const stripMongoOperators = (value: unknown): unknown => {
   return value;
 };
 
+export const sanitizeXssString = (input: string): string => {
+  return input
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, "")
+    .replace(/<\/?(?:script|iframe|object|embed)\b[^>]*>/gi, "")
+    .replace(/\bon[a-z]{2,}\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\b(?:javascript|vbscript)\s*:/gi, "");
+};
+
+export const sanitizeXssValue = (value: unknown, fieldName?: string): unknown => {
+  if (Buffer.isBuffer(value)) return value;
+  if (fieldName && PASSWORD_LIKE_FIELDS.has(fieldName)) return value;
+
+  if (typeof value === "string") {
+    return sanitizeXssString(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      value[i] = sanitizeXssValue(value[i], fieldName);
+    }
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      record[key] = sanitizeXssValue(record[key], key);
+    }
+    return record;
+  }
+
+  return value;
+};
+
 const createNoSqlSanitizer = () => {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    if (req.body) req.body = stripMongoOperators(req.body);
+    if (req.body && !Buffer.isBuffer(req.body)) req.body = stripMongoOperators(req.body);
     if (req.query) stripMongoOperators(req.query);
     if (req.params) req.params = stripMongoOperators(req.params) as Request["params"];
     next();
   };
 };
 
-export const xssSanitization = createNoSqlSanitizer();
+const createXssSanitizer = () => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (req.body && !Buffer.isBuffer(req.body)) req.body = sanitizeXssValue(req.body);
+    if (req.query) sanitizeXssValue(req.query);
+    if (req.params) req.params = sanitizeXssValue(req.params) as Request["params"];
+    next();
+  };
+};
+
+export const xssSanitization = createXssSanitizer();
 export const noSqlInjectionProtection = createNoSqlSanitizer();
 
 export const rateLimiter = rateLimit({
@@ -68,6 +123,14 @@ export const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many login attempts, please try again later." },
+});
+
+export const publicFormRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many submissions, please try again in a few minutes." },
 });
 
 export const validateInput = (req: Request, res: Response, next: NextFunction) => {

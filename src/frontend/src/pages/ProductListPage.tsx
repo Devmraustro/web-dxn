@@ -1,173 +1,232 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useLanguage } from "../context/LanguageContext";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
-import ProductCard from "../components/ProductCard";
 import { Container, Row, Col } from "react-bootstrap";
+import ProductCard, { pickProductDescription, pickProductTitle } from "../components/ProductCard";
+import SeoHead from "../components/SeoHead";
+import { useLanguage } from "../context/LanguageContext";
 
 const ProductListPage = () => {
   const { language } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialCategory = (searchParams.get("category") || "all").toLowerCase();
+
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
+  const [searchQuery, setSearchQuery] = useState<string>(searchParams.get("q") || "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+
   useEffect(() => {
-    const loadProducts = async () => {
+    const paramCat = (searchParams.get("category") || "all").toLowerCase();
+    setSelectedCategory(paramCat);
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    const loadCatalog = async () => {
       try {
-        const response = await axios.get(`/api/products?language=${language}`);
-        setProducts(response.data.data);
-        setLoading(false);
+        setLoading(true);
+        const [prodRes, catRes] = await Promise.all([
+          axios.get(`/api/products?language=${language}`),
+          axios.get("/api/categories").catch(() => ({ data: { data: [] } })),
+        ]);
+        if (!active) return;
+        setProducts(Array.isArray(prodRes.data?.data) ? prodRes.data.data : []);
+        setCategories(Array.isArray(catRes.data?.data) ? catRes.data.data : []);
+        setError(null);
       } catch (err) {
+        if (!active) return;
         console.error("Error loading products:", err);
         setError("Failed to load products");
-        setLoading(false);
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
-    loadProducts();
+    void loadCatalog();
+    return () => {
+      active = false;
+    };
   }, [language]);
 
-  const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+  const handleSelectCategory = (slug: string) => {
+    setSelectedCategory(slug);
+    const next = new URLSearchParams(searchParams);
+    if (slug === "all") {
+      next.delete("category");
+    } else {
+      next.set("category", slug);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
-  if (loading) {
-    return (
-      <div className="dxn-loading" role="status" aria-live="polite">
-        <div className="dxn-loading-ring"></div>
-        <div>{t("جارٍ تحميل المنتجات...", "Chargement des produits...")}</div>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <Container className="mt-5" style={{ maxWidth: 560 }}>
-        <div className="dxn-feedback-error p-3" role="alert">
-          {t("فشل تحميل المنتجات", "Échec du chargement des produits")}
-        </div>
-      </Container>
-    );
-  }
+  // Ensure the 3 core required filter tabs are always present + any dynamic DB categories
+  const filterTabs = useMemo(() => {
+    const tabs: Array<{ slug: string; label: string }> = [
+      { slug: "all", label: t("الكل", "Tous") },
+      { slug: "supplements", label: t("المكملات الغذائية", "Compléments alimentaires") },
+      { slug: "cosmetics", label: t("الكوسميتيك", "Cosmétiques") },
+    ];
+    const seen = new Set(tabs.map((x) => x.slug));
+    for (const c of categories) {
+      const s = String(c?.slug || "").toLowerCase();
+      if (s && !seen.has(s) && c.isActive !== false) {
+        seen.add(s);
+        tabs.push({
+          slug: s,
+          label: language === "ar" ? c.nameAr || s : c.nameFr || s,
+        });
+      }
+    }
+    return tabs;
+  }, [categories, language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Instant client-side category & search filtering (zero page reload!)
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      if (selectedCategory !== "all") {
+        const pCat = String(p.category || "general").toLowerCase();
+        if (pCat !== selectedCategory) return false;
+      }
+      if (!q) return true;
+      const title = pickProductTitle(p, language).toLowerCase();
+      const desc = pickProductDescription(p, language).toLowerCase();
+      const sku = String(p.sku || "").toLowerCase();
+      return title.includes(q) || desc.includes(q) || sku.includes(q);
+    });
+  }, [products, selectedCategory, searchQuery, language]);
 
   return (
-    <>
-      {/* Hero */}
-      <section className="dxn-hero dxn-anim-fade-up">
-        <div className="dxn-hero-inner">
-          <span className="dxn-hero-kicker">
-            {t("مكملات غذائية طبيعية من DXN", "Compléments alimentaires naturels DXN")}
+    <div className="dxn-page">
+      <SeoHead
+        title={t("المنتجات — متجر DXN NADZ", "Catalogue Produits — DXN NADZ")}
+        description={t(
+          "تصفّح منتجات DXN الأصلية من المكملات الغذائية والكوسميتيك والمشروبات مع التوصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية شركة التوصيل) والدفع عند الاستلام.",
+          "Parcourez les produits authentiques DXN : compléments alimentaires, cosmétiques et boissons avec livraison en Algérie (69 wilayas — selon couverture du transporteur) et paiement à la livraison."
+        )}
+        canonicalPath="/products"
+      />
+
+      <section className="dxn-hero" style={{ padding: "3.2rem 0" }}>
+        <div className="container dxn-hero-inner">
+          <span className="dxn-hero-eyebrow">
+            {t("كتالوج منتجات DXN NADZ", "Catalogue officiel DXN NADZ")}
           </span>
-          <h1 className="dxn-hero-title">
-            {language === "ar" ? (
-              <>
-                منتجات طبيعية <span className="dxn-hero-gold">لصحة أفضل</span>
-              </>
-            ) : (
-              <>
-                Des produits naturels pour <span className="dxn-hero-gold">votre bien-être</span>
-              </>
-            )}
+          <h1 className="mb-2">
+            {t("اكتشف تشكيلة منتجات DXN", "Découvrez notre gamme de produits DXN")}
           </h1>
-          <p className="dxn-hero-text">
+          <p className="dxn-hero-lead mb-0">
             {t(
-              "اكتشف تشكيلة DXN من المكملات الغذائية والمنتجات الصحية. توصيل إلى جميع الولايات الـ 69 مع الدفع عند الاستلام وتأكيد الطلب عبر الهاتف.",
-              "Découvrez la gamme DXN de compléments alimentaires et produits de bien-être. Livraison vers les 69 wilayas, paiement à la livraison et confirmation par téléphone."
+              "تسوّق مباشرة بدون اشتراط عضوية، مع توصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية شركة التوصيل) والدفع عند الاستلام.",
+              "Commandez librement sans adhésion obligatoire, avec livraison en Algérie (69 wilayas — selon couverture du transporteur) et paiement à la livraison."
             )}
           </p>
-          <div className="dxn-hero-cta">
-            <a href="#products" className="dxn-btn dxn-btn-gold">
-              {t("تصفح المنتجات", "Parcourir les produits")}
-            </a>
-            <Link to="/checkout" className="dxn-btn dxn-btn-outline" style={{ borderColor: "#fff", color: "#fff" }}>
-              {t("إتمام الطلب", "Passer commande")}
-            </Link>
-          </div>
         </div>
       </section>
 
-      {/* Trust strip */}
-      <section className="dxn-trust" aria-label={t("مزايا المتجر", "Nos garanties")}>
-        <div className="dxn-trust-item">
-          <div className="dxn-trust-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-          </div>
-          <div>
-            <div className="dxn-trust-title">{t("توصيل 69 ولاية", "Livraison 69 wilayas")}</div>
-            <div className="dxn-trust-sub">{t("إلى جميع ولايات الجزائر", "Partout en Algérie")}</div>
-          </div>
+      <Container id="products" className="py-4 my-2">
+        {/* Category Filter Tabs & Instant Search Bar (Phase 4.1) */}
+        <div className="bg-white border rounded-4 p-3 p-md-4 mb-4 shadow-xs">
+          <Row className="g-3 align-items-center">
+            <Col lg={8}>
+              <div
+                className="dxn-cat-pill-bar"
+                role="tablist"
+                aria-label={t("تصفية المنتجات حسب الفئة", "Filtrer par catégorie")}
+              >
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.slug}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedCategory === tab.slug}
+                    className={selectedCategory === tab.slug ? "dxn-cat-pill active" : "dxn-cat-pill"}
+                    onClick={() => handleSelectCategory(tab.slug)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </Col>
+            <Col lg={4}>
+              <input
+                type="search"
+                className="form-control"
+                placeholder={t("ابحث باسم المنتج أو الوصف أو الرمز...", "Rechercher par nom, description ou réf...")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label={t("ابحث عن منتج", "Rechercher un produit")}
+              />
+            </Col>
+          </Row>
         </div>
-        <div className="dxn-trust-item">
-          <div className="dxn-trust-icon gold">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-              <line x1="1" y1="10" x2="23" y2="10" />
-            </svg>
-          </div>
-          <div>
-            <div className="dxn-trust-title">{t("الدفع عند الاستلام", "Paiement à la livraison")}</div>
-            <div className="dxn-trust-sub">{t("ادفع عند وصول طلبك", "Payez à la réception")}</div>
-          </div>
-        </div>
-        <div className="dxn-trust-item">
-          <div className="dxn-trust-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-          </div>
-          <div>
-            <div className="dxn-trust-title">{t("منتجات DXN أصلية", "Produits DXN authentiques")}</div>
-            <div className="dxn-trust-sub">{t("تأكيد الطلب عبر الهاتف", "Confirmation par téléphone")}</div>
-          </div>
-        </div>
-      </section>
 
-      {/* Products */}
-      <section id="products" className="mt-5">
-        <div className="d-flex align-items-center gap-3 flex-wrap mb-3">
-          <div>
-            <span className="dxn-chip">{language === "ar" ? "التشكيلة" : "La gamme"}</span>
-            <h2 className="dxn-section-title h3">
-              {t("منتجاتنا", "Nos produits")}
-            </h2>
+        {loading ? (
+          <div className="dxn-loading" role="status" aria-live="polite">
+            <div className="dxn-loading-ring" />
+            <div>{t("جارٍ تحميل المنتجات...", "Chargement des produits...")}</div>
           </div>
-        </div>
-        <p className="dxn-section-sub">
-          {t(
-            "جميع الأسعار بالدينار الجزائري (دج). الأسعار والمخزون قابلة للتحديث بشكل مستمر.",
-            "Tous les prix sont en dinars algériens (DA). Prix et stocks peuvent être mis à jour à tout moment."
-          )}
-        </p>
-
-        {products.length === 0 ? (
+        ) : error ? (
+          <div className="dxn-feedback-error p-3" role="alert">
+            {t("فشل تحميل المنتجات. يرجى المحاولة مرة أخرى.", "Échec du chargement des produits.")}
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="dxn-empty">
-            <div className="dxn-empty-icon">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="9" cy="21" r="1" />
-                <circle cx="20" cy="21" r="1" />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-            </div>
+            <h3>{t("لا توجد منتجات مطابقة حالياً", "Aucun produit correspondant")}</h3>
             <p className="mb-3">
-              {t(
-                "لا توجد منتجات حالياً. نعمل على تحديث الكتالوج.",
-                "Aucun produit disponible. Nous mettons à jour le catalogue."
-              )}
+              {products.length === 0
+                ? t(
+                    "قائمة المنتجات قيد التجهيز والتحديث حالياً. يمكنك التواصل معنا للاستفسار عن المنتجات المتوفرة.",
+                    "Le catalogue est en cours d'actualisation. Contactez-nous pour toute demande de disponibilité."
+                  )
+                : t(
+                    "جرّب اختيار تصنيف آخر أو مسح كلمة البحث لعرض كافة المنتجات المتوفرة.",
+                    "Essayez une autre catégorie ou effacez la recherche."
+                  )}
             </p>
+            {products.length > 0 ? (
+              <button
+                type="button"
+                className="dxn-btn dxn-btn-outline"
+                onClick={() => {
+                  handleSelectCategory("all");
+                  setSearchQuery("");
+                }}
+              >
+                {t("عرض كل المنتجات", "Afficher tous les produits")}
+              </button>
+            ) : (
+              <Link to="/contact" className="dxn-btn dxn-btn-primary">
+                {t("تواصل معنا", "Contactez-nous")}
+              </Link>
+            )}
           </div>
         ) : (
-          <Row>
-            {products.map((product, index) => (
-              <Col key={product._id} xs={12} sm={6} lg={4} xl={3} className="mb-4 d-flex">
-                <div className={`w-100 dxn-anim-fade-up dxn-stagger-${(index % 6) + 1}`}>
+          <>
+            <div className="d-flex justify-content-between align-items-center mb-3 small text-muted">
+              <span>
+                {t("عدد المنتجات المعروضة:", "Produits affichés :")} <strong>{filteredProducts.length}</strong>
+              </span>
+              <Link to="/education" className="text-decoration-none fw-semibold" style={{ color: "var(--dxn-green-700)" }}>
+                {t("اقرأ إرشادات الاستخدام والحفظ ←", "Conseils d'utilisation & conservation →")}
+              </Link>
+            </div>
+            <Row className="g-3 g-md-4">
+              {filteredProducts.map((product: any) => (
+                <Col key={product._id} xs={6} md={4} lg={3}>
                   <ProductCard product={product} language={language} />
-                </div>
-              </Col>
-            ))}
-          </Row>
+                </Col>
+              ))}
+            </Row>
+          </>
         )}
-      </section>
-    </>
+      </Container>
+    </div>
   );
 };
 

@@ -1,8 +1,9 @@
 import { ALGERIAN_WILAYAS as WILAYAS_DATA } from "../data/algerianWilayas";
 import { isPlaceholderProduct } from "../services/placeholderCatalog.service";
 
-// Canonical 58-wilaya list (single source of truth, shared with the shipping
-// dataset). Sitemap entries use the romanized name in the query string.
+// Canonical 69-wilaya list (Law n° 26-06 of 4 April 2026 & Decree n° 26-206,
+// single source of truth shared with the shipping dataset). Sitemap entries use
+// the romanized canonical name in the query string.
 export const ALGERIAN_WILAYAS_LIST = WILAYAS_DATA;
 
 // Keep the historical export name (tests / callers reference it).
@@ -62,12 +63,24 @@ export const getProductMetaTags = (product: any, language: "ar" | "fr") => {
  * a page is added, iterate ALGERIAN_WILAYAS (canonical dataset, imported
  * above) — never a hand-maintained copy.
  */
-export const generateSitemap = (products: any[], urlBase: string = "https://dxn.dz") => {
+export const generateSitemap = (
+  products: any[],
+  urlBase: string = "https://dxn.dz",
+  articles: Array<{ slug: string; updatedAt?: Date | string }> = []
+) => {
   const today = new Date().toISOString().split("T")[0];
 
   const coreEntries = [
     { loc: "/", priority: "1.0", freq: "daily" },
     { loc: "/products", priority: "0.9", freq: "daily" },
+    { loc: "/about", priority: "0.8", freq: "monthly" },
+    { loc: "/founder", priority: "0.8", freq: "monthly" },
+    { loc: "/why-dxn", priority: "0.8", freq: "monthly" },
+    { loc: "/education", priority: "0.9", freq: "weekly" },
+    { loc: "/join", priority: "0.9", freq: "weekly" },
+    { loc: "/faq", priority: "0.8", freq: "weekly" },
+    { loc: "/contact", priority: "0.7", freq: "monthly" },
+    { loc: "/privacy", priority: "0.5", freq: "yearly" },
   ]
     .map(
       (page) => `    <url>
@@ -92,11 +105,23 @@ export const generateSitemap = (products: any[], urlBase: string = "https://dxn.
     })
     .join("\n");
 
+  const articleEntries = (articles || [])
+    .filter((a) => a && a.slug)
+    .map((article) => {
+      const lastmod = article.updatedAt ? new Date(article.updatedAt).toISOString().split("T")[0] : today;
+      return `    <url>
+      <loc>${urlBase}/education/${encodeURIComponent(article.slug)}</loc>
+      <lastmod>${lastmod}</lastmod>
+      <changefreq>monthly</changefreq>
+      <priority>0.7</priority>
+    </url>`;
+    })
+    .join("\n");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   ${coreEntries}
-  ${productEntries}
-</urlset>`;
+${productEntries ? `  ${productEntries}\n` : ""}${articleEntries ? `  ${articleEntries}\n` : ""}</urlset>`;
 };
 
 /** robots.txt generator (the "/shipping" route is a storefront informational page). */

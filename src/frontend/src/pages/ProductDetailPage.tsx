@@ -1,18 +1,41 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useLanguage } from "../context/LanguageContext";
-import { useCart } from "../context/CartContext";
 import axios from "axios";
 import { Container, Row, Col, Button } from "react-bootstrap";
+import { useLanguage } from "../context/LanguageContext";
+import { useCart } from "../context/CartContext";
+import { useSiteSettings } from "../context/SiteSettingsContext";
 import ReviewCard from "../components/ReviewCard";
-import { pickProductTitle, pickProductDescription } from "../components/ProductCard";
+import ProductCard, {
+  pickProductCategoryLabel,
+  pickProductDescription,
+  pickProductTitle,
+} from "../components/ProductCard";
+import SeoHead from "../components/SeoHead";
+
+function pickTranslatedField(product: any, field: string, language: string): string {
+  if (!product) return "";
+  const want = language === "ar" ? "ar" : "fr";
+  if (Array.isArray(product.translations)) {
+    const exact = product.translations.find((tr: any) => tr.language === want && tr[field]);
+    if (exact?.[field]) return String(exact[field]);
+    const fallback = product.translations.find((tr: any) => tr[field]);
+    if (fallback?.[field]) return String(fallback[field]);
+  }
+  if (typeof product[field] === "string" && product[field]) {
+    return product[field];
+  }
+  return "";
+}
 
 const ProductDetailPage = () => {
   const { language } = useLanguage();
   const { slug } = useParams<{ slug: string }>();
   const { addItem } = useCart();
+  const { settings } = useSiteSettings();
 
   const [product, setProduct] = useState<any>(null);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,14 +59,25 @@ const ProductDetailPage = () => {
         return;
       }
       setProduct(data);
-      setActiveImage(data.image || (Array.isArray(data.images) && data.images.length ? data.images[0] : ""));
-      // Reviews (public, published only)
-      try {
-        const reviewsResponse = await axios.get(`/api/reviews/product/${data._id}`);
-        setReviews(reviewsResponse.data?.data || []);
-      } catch {
-        setReviews([]);
-      }
+      setActiveImage(
+        data.image || (Array.isArray(data.images) && data.images.length ? data.images[0] : "")
+      );
+
+      // Load reviews & related products in parallel
+      const [reviewsRes, catalogRes] = await Promise.all([
+        axios.get(`/api/reviews/product/${data._id}`).catch(() => ({ data: { data: [] } })),
+        axios
+          .get(`/api/products?language=${language}`)
+          .catch(() => ({ data: { data: [] } })),
+      ]);
+
+      setReviews(reviewsRes.data?.data || []);
+      const allActive: any[] = Array.isArray(catalogRes.data?.data) ? catalogRes.data.data : [];
+      const others = allActive.filter((p) => String(p._id) !== String(data._id));
+      const sameCategory = others.filter(
+        (p) => p.category && data.category && p.category === data.category
+      );
+      setRelatedProducts((sameCategory.length >= 2 ? sameCategory : others).slice(0, 4));
       setLoading(false);
     } catch (err: any) {
       console.error("Error loading product:", err);
@@ -57,13 +91,13 @@ const ProductDetailPage = () => {
   }, [slug, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   if (loading) {
     return (
       <div className="dxn-loading" role="status">
-        <div className="dxn-loading-ring"></div>
+        <div className="dxn-loading-ring" />
         <div>{t("جارٍ التحميل...", "Chargement...")}</div>
       </div>
     );
@@ -71,7 +105,7 @@ const ProductDetailPage = () => {
 
   if (error || !product) {
     return (
-      <Container className="mt-5" style={{ maxWidth: 560 }}>
+      <Container className="mt-5 mb-5" style={{ maxWidth: 560 }}>
         <div className="dxn-feedback-error p-3 mb-3" role="alert">
           {error || t("حدث خطأ", "Une erreur est survenue")}
         </div>
@@ -84,9 +118,16 @@ const ProductDetailPage = () => {
 
   const title = pickProductTitle(product, language) || product.sku || "DXN Product";
   const description = pickProductDescription(product, language);
+  const specifications = pickTranslatedField(product, "specifications", language);
+  const ingredients = pickTranslatedField(product, "ingredients", language);
+  const usageInstructions = pickTranslatedField(product, "usageInstructions", language);
+  const storageInstructions = pickTranslatedField(product, "storageInstructions", language);
+  const sizeText = pickTranslatedField(product, "size", language);
+
   const price = Number(product.price) || 0;
   const compareAt = product.compareAtPrice ? Number(product.compareAtPrice) : 0;
-  const imageUrl = product.image || (Array.isArray(product.images) && product.images.length ? product.images[0] : "");
+  const imageUrl =
+    product.image || (Array.isArray(product.images) && product.images.length ? product.images[0] : "");
   const gallery = Array.isArray(product.images) && product.images.length > 1 ? product.images : [];
   const inStock = typeof product.stockQuantity !== "number" || product.stockQuantity > 0;
   const hasOffer = compareAt > price && price > 0;
@@ -105,20 +146,61 @@ const ProductDetailPage = () => {
 
   const thumbnails = Array.from(new Set([imageUrl, ...gallery].filter(Boolean)));
 
+  const whatsappInquiryHref = settings.whatsappUrl
+    ? `${settings.whatsappUrl}${settings.whatsappUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(
+        language === "ar"
+          ? `السلام عليكم فريق DXN NADZ، أود الاستفسار عن المنتج: ${title} (${product.sku || ""})`
+          : `Bonjour DXN NADZ, je souhaite me renseigner sur le produit : ${title} (${product.sku || ""})`
+      )}`
+    : "";
+
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: title,
+    description: description || title,
+    sku: product.sku || "",
+    ...(imageUrl ? { image: imageUrl } : {}),
+    brand: { "@type": "Brand", name: "DXN" },
+    offers: {
+      "@type": "Offer",
+      price,
+      priceCurrency: "DZD",
+      availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    },
+  };
+
   return (
-    <Container className="mt-4">
-      {/* Breadcrumb */}
+    <Container className="mt-4 mb-5">
+      <SeoHead
+        title={title}
+        description={description ? description.slice(0, 160) : title}
+        canonicalPath={`/product/${encodeURIComponent(product.slug || slug || "")}`}
+        ogType="product"
+        ogImage={imageUrl || undefined}
+        jsonLd={productJsonLd}
+      />
+
       <nav aria-label="breadcrumb" className="dxn-breadcrumb mb-3">
+        <Link to="/">{t("الرئيسية", "Accueil")}</Link>
+        <span aria-hidden="true" className="mx-2">/</span>
         <Link to="/products">{t("المنتجات", "Produits")}</Link>
+        {product.category && (
+          <>
+            <span aria-hidden="true" className="mx-2">/</span>
+            <Link to={`/products?category=${encodeURIComponent(product.category)}`}>
+              {pickProductCategoryLabel(product.category, language)}
+            </Link>
+          </>
+        )}
         <span aria-hidden="true" className="mx-2">/</span>
         <span>{title}</span>
       </nav>
 
       <Row className="g-4">
-        {/* Gallery */}
         <Col md={6}>
           <div className="dxn-detail-gallery dxn-anim-fade-up">
-            <div className="text-center" style={{ minHeight: 300 }}>
+            <div className="text-center d-flex align-items-center justify-content-center" style={{ minHeight: 320 }}>
               {activeImage ? (
                 <img
                   src={activeImage}
@@ -128,7 +210,12 @@ const ProductDetailPage = () => {
                 />
               ) : (
                 <div className="py-5 text-secondary">
-                  {t("لا توجد صورة", "Aucune image disponible")}
+                  <div className="fw-bold mb-1" style={{ fontSize: "1.2rem", color: "#0b3d1f" }}>
+                    DXN NADZ
+                  </div>
+                  <div className="small">
+                    {t("الصورة الرسمية للمنتج غير مرفقة حالياً", "Photo officielle non disponible pour le moment")}
+                  </div>
                 </div>
               )}
             </div>
@@ -150,12 +237,16 @@ const ProductDetailPage = () => {
           )}
         </Col>
 
-        {/* Info */}
         <Col md={6} className="dxn-anim-fade-up">
+          <div className="mb-2">
+            <span className="badge rounded-pill" style={{ background: "#e6f4ec", color: "#0b3d1f" }}>
+              {pickProductCategoryLabel(product.category, language)}
+            </span>
+          </div>
           <h1 className="mb-1" style={{ fontWeight: 800, color: "#0b3d1f" }}>{title}</h1>
           {product.sku && (
             <p className="text-muted small mb-2">
-              {t("المرجع", "Réf")}: {product.sku}
+              {t("رمز المنتج (SKU)", "Référence SKU")}: {product.sku}
             </p>
           )}
 
@@ -169,17 +260,9 @@ const ProductDetailPage = () => {
                 {t("غير متوفر حالياً", "Rupture de stock")}
               </span>
             )}
-            {product.isFeatured && (
-              <span className="dxn-chip" style={{ marginBottom: 0 }}>
-                {t("مميز", "En vedette")}
-              </span>
-            )}
-            {(typeof product.points === "number" && product.points > 0) && (
-              <span className="dxn-chip" style={{ backgroundColor: "#f0f4f1", color: "#0b3d1f" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 4 }}>
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 1.18 14.14 6.91 9.27 2 9.27 6.91 2.98 17.77 6.91" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-                {t("نقاط DXN: {points}", "Points DXN: {points}").replace("{points}", product.points.toString())}
+            {typeof product.points === "number" && product.points > 0 && (
+              <span className="dxn-chip" style={{ backgroundColor: "#f0f4f1", color: "#0b3d1f", marginBottom: 0 }}>
+                {t(`نقاط DXN (PV): ${product.points}`, `Points DXN (PV): ${product.points}`)}
               </span>
             )}
           </div>
@@ -200,20 +283,22 @@ const ProductDetailPage = () => {
             )}
           </div>
 
-          {product.size && (
+          {sizeText && (
             <p className="mb-3">
               <span className="dxn-detail-size">
-                {t("الحجم", "Taille")}: {product.size}
+                {t("الحجم / العبوة", "Format / Contenance")}: {sizeText}
               </span>
             </p>
           )}
 
           {description && (
             <div className="mb-4">
-              <h2 className="h5 fw-bold" style={{ color: "#0b3d1f" }}>
-                {t("الوصف", "Description")}
+              <h2 className="h6 fw-bold" style={{ color: "#0b3d1f" }}>
+                {t("نظرة عامة على المنتج", "Aperçu du produit")}
               </h2>
-              <p style={{ whiteSpace: "pre-line", color: "#4a5a50" }}>{description}</p>
+              <p className="mb-0" style={{ whiteSpace: "pre-line", color: "#4a5a50", lineHeight: 1.8 }}>
+                {description}
+              </p>
             </div>
           )}
 
@@ -226,29 +311,102 @@ const ProductDetailPage = () => {
               disabled={!inStock}
               aria-busy={added}
             >
-              {added
-                ? t("تمت الإضافة ✓", "Ajouté ✓")
-                : t("أضف إلى السلة", "Ajouter au panier")}
+              {added ? t("تمت الإضافة ✓", "Ajouté ✓") : t("أضف إلى السلة", "Ajouter au panier")}
             </Button>
             <Link to="/cart" className="dxn-btn dxn-btn-outline">
               {t("الذهاب إلى السلة", "Voir le panier")}
             </Link>
+            {whatsappInquiryHref ? (
+              <a
+                href={whatsappInquiryHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="dxn-btn dxn-btn-primary"
+              >
+                {t("استفسر عبر واتساب", "Question via WhatsApp")}
+              </a>
+            ) : (
+              <Link
+                to={`/contact?subject=${encodeURIComponent(title)}`}
+                className="dxn-btn dxn-btn-outline"
+              >
+                {t("استفسر عن هذا المنتج", "Poser une question")}
+              </Link>
+            )}
           </div>
 
           <div className="dxn-detail-note">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }}>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
             <span>
               {t(
-                "الدفع عند الاستلام متاح لجميع الولايات الـ 69. يتم تأكيد الطلب عبر الهاتف.",
-                "Paiement à la livraison disponible pour les 69 wilayas. Commande confirmée par téléphone."
+                "الدفع نقداً عند الاستلام متاح عبر ولايات الجزائر (69 ولاية — حسب تغطية شركة التوصيل) • لا يُشترط رقم عضوية للشراء (يمكن إضافته اختيارياً عند الدفع).",
+                "Paiement à la livraison en Algérie (69 wilayas — selon couverture du transporteur) • Aucun numéro d'adhésion requis pour commander."
               )}
             </span>
           </div>
         </Col>
       </Row>
 
+      {/* Detailed Ingredients, Specifications & Official Usage (Phase 4.2) */}
+      <Row className="g-4 mt-3">
+        <Col md={6}>
+          <div className="dxn-info-card">
+            <h2 className="h5 fw-bold mb-2" style={{ color: "#0b3d1f" }}>
+              {t("المكونات والمواصفات", "Ingrédients & Spécifications")}
+            </h2>
+            {ingredients ? (
+              <p className="text-muted mb-2" style={{ whiteSpace: "pre-line", lineHeight: 1.8 }}>
+                <strong>{t("المكونات:", "Ingrédients :")}</strong> {ingredients}
+              </p>
+            ) : null}
+            {specifications ? (
+              <p className="text-muted mb-0" style={{ whiteSpace: "pre-line", lineHeight: 1.8 }}>
+                {specifications}
+              </p>
+            ) : null}
+            {!ingredients && !specifications && (
+              <p className="text-muted small mb-0" style={{ lineHeight: 1.8 }}>
+                {t(
+                  "يرجى مراجعة الملصق الرسمي المطبوع على عبوة المنتج الأصلية للاطلاع على جدول القيم الغذائية وقائمة المكونات التفصيلية الخاصة بكل تشغيلة.",
+                  "Veuillez consulter l'étiquette officielle figurant sur l'emballage d'origine pour la liste complète des ingrédients et valeurs nutritionnelles."
+                )}
+              </p>
+            )}
+          </div>
+        </Col>
+
+        <Col md={6}>
+          <div className="dxn-info-card">
+            <h2 className="h5 fw-bold mb-2" style={{ color: "#0b3d1f" }}>
+              {t("طريقة الاستخدام والحفظ الرسمية", "Mode d'emploi officiel & Conservation")}
+            </h2>
+            <p className="text-muted mb-2" style={{ whiteSpace: "pre-line", lineHeight: 1.8 }}>
+              {usageInstructions ||
+                t(
+                  "تُتبع الحصة وطريقة التحضير أو الاستخدام الموضحة على العبوة الرسمية للمنتج حصراً (منتجات الكوسميتيك والعناية الشخصية مخصصة للاستعمال الخارجي فقط).",
+                  "Suivez exclusivement le mode d'emploi et la portion journalière indiqués sur l'emballage officiel (usage externe uniquement pour les cosmétiques)."
+                )}
+            </p>
+            <p className="text-muted small mb-0" style={{ lineHeight: 1.75 }}>
+              <strong>{t("التخزين:", "Conservation :")}</strong>{" "}
+              {storageInstructions ||
+                t(
+                  "يُحفظ في مكان بارد وجاف بعيداً عن الرطوبة وأشعة الشمس المباشرة وبعيداً عن متناول الأطفال.",
+                  "À conserver dans un endroit frais et sec, à l'abri du soleil et hors de portée des enfants."
+                )}
+            </p>
+          </div>
+        </Col>
+      </Row>
+
+      <div className="dxn-compliance-banner mt-4">
+        <strong>{t("تنبيه صحي:", "Avertissement sanitaire :")}</strong>{" "}
+        {t(
+          "المكملات الغذائية ومنتجات DXN ليست أدوية طبية، ولا تهدف إلى تشخيص أي مرض أو علاجه أو الشفاء منه أو الوقاية منه. استشر الطبيب قبل الاستخدام في حال الحمل أو الرضاعة أو تناول أدوية طبية.",
+          "Les compléments alimentaires et produits DXN ne sont pas des médicaments et ne visent pas à diagnostiquer, traiter, guérir ou prévenir une maladie."
+        )}
+      </div>
+
+      {/* Genuine Published Reviews */}
       {reviews.length > 0 && (
         <Row className="mt-5">
           <Col>
@@ -258,6 +416,25 @@ const ProductDetailPage = () => {
             ))}
           </Col>
         </Row>
+      )}
+
+      {/* Related Products (Phase 4.2) */}
+      {relatedProducts.length > 0 && (
+        <div className="mt-5 pt-3 border-top">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h2 className="h4 fw-bold mb-0">{t("منتجات ذات صلة", "Produits similaires")}</h2>
+            <Link to="/products" className="small fw-bold text-decoration-none" style={{ color: "var(--dxn-green-700)" }}>
+              {t("عرض الكل ←", "Tout voir →")}
+            </Link>
+          </div>
+          <Row className="g-3 g-md-4">
+            {relatedProducts.map((rel) => (
+              <Col key={rel._id} xs={6} md={3}>
+                <ProductCard product={rel} language={language} />
+              </Col>
+            ))}
+          </Row>
+        </div>
       )}
     </Container>
   );

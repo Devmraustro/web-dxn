@@ -140,10 +140,13 @@ describe("validation — cart lines must reference exactly one product OR pack",
 });
 
 describe("seo — canonical wilaya data drives generated output", () => {
-  it("ALGERIAN_WILAYAS has exactly 58 wilayas from the canonical dataset", () => {
-    expect(ALGERIAN_WILAYAS).toHaveLength(58);
+  it("ALGERIAN_WILAYAS has all 69 official wilayas (Law n° 26-06 of 4 April 2026)", () => {
+    expect(ALGERIAN_WILAYAS).toHaveLength(69);
     expect(ALGERIAN_WILAYAS).toContain("Algiers");
     expect(ALGERIAN_WILAYAS).toContain("Tamanrasset");
+    expect(ALGERIAN_WILAYAS).toContain("Aflou");
+    expect(ALGERIAN_WILAYAS).toContain("Bou Saada");
+    expect(ALGERIAN_WILAYAS).toContain("El Abiodh Sidi Cheikh");
   });
 
   it("generateSitemap contains only valid storefront/product URLs (no dead wilaya links)", () => {

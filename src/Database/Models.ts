@@ -34,6 +34,9 @@ const customerSchema = new Schema({
   lastName: { type: String, required: true },
   phone: { type: String, required: true },
   secondPhone: { type: String },
+  email: { type: String, lowercase: true, trim: true },
+  country: { type: String, default: "Algeria" },
+  dxnMemberId: { type: String, default: null },
   wilaya: { type: String, required: true },
   commune: { type: String },
   address: { type: String },
@@ -41,7 +44,27 @@ const customerSchema = new Schema({
   orders: [{ type: Schema.Types.ObjectId, ref: "Order" }],
 }, { timestamps: true });
 
+customerSchema.index({ phone: 1 });
+
 const Customer = mongoose.model("Customer", customerSchema);
+
+// ==========================================
+// PRODUCT CATEGORY
+// ==========================================
+
+const productCategorySchema = new Schema({
+  slug: { type: String, unique: true, required: true, lowercase: true, trim: true },
+  nameAr: { type: String, required: true, trim: true },
+  nameFr: { type: String, required: true, trim: true },
+  descriptionAr: { type: String, default: "" },
+  descriptionFr: { type: String, default: "" },
+  sortOrder: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true },
+}, { timestamps: true });
+
+productCategorySchema.index({ isActive: 1, sortOrder: 1 });
+
+const ProductCategory = mongoose.model("ProductCategory", productCategorySchema);
 
 // ==========================================
 // PRODUCT
@@ -50,6 +73,8 @@ const Customer = mongoose.model("Customer", customerSchema);
 const productSchema = new Schema({
   sku: { type: String, unique: true, required: true },
   slug: { type: String, unique: true, required: true },
+  category: { type: String, default: "general", lowercase: true, trim: true },
+  categoryId: { type: Schema.Types.ObjectId, ref: "ProductCategory", default: null },
   price: { type: Number, required: true, default: 0, min: 0 },
   compareAtPrice: { type: Number, min: 0 },
   image: { type: String },
@@ -63,6 +88,8 @@ const productSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+productSchema.index({ isActive: 1, category: 1, sortOrder: 1 });
+
 const productTranslationSchema = new Schema({
   productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
   language: { type: String, enum: ["ar", "fr"], required: true },
@@ -70,9 +97,14 @@ const productTranslationSchema = new Schema({
   description: { type: String, required: true },
   size: { type: String },
   specifications: { type: String },
+  ingredients: { type: String },
+  usageInstructions: { type: String },
+  storageInstructions: { type: String },
   metaTitle: { type: String },
   metaDescription: { type: String },
 }, { timestamps: true });
+
+productTranslationSchema.index({ productId: 1, language: 1 }, { unique: true });
 
 const ProductTranslation = mongoose.model("ProductTranslation", productTranslationSchema);
 
@@ -169,6 +201,17 @@ const orderSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
   internalNotes: { type: String },
   adminId: { type: Schema.Types.ObjectId, ref: "User" },
+  // Optional customer DXN membership number (never mandatory; null when omitted; private to order/admin/Telegram)
+  dxnMemberId: { type: String, default: null, trim: true },
+  // Traffic source & referral attribution (?ref=facebook|instagram|tiktok|whatsapp, UTM params)
+  trafficSource: {
+    source: { type: String, default: "direct" },
+    ref: { type: String, default: "" },
+    utmSource: { type: String, default: "" },
+    utmMedium: { type: String, default: "" },
+    utmCampaign: { type: String, default: "" },
+    landingPath: { type: String, default: "" },
+  },
   // Opaque client idempotency key: unique (sparse) so duplicate submissions of
   // the same checkout cannot create two orders, across restarts/replicas.
   metadata: { type: Schema.Types.Mixed, default: {} },
@@ -179,6 +222,8 @@ const orderSchema = new Schema({
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ "items.productId": 1 });
+orderSchema.index({ "trafficSource.source": 1, createdAt: -1 });
+orderSchema.index({ dxnMemberId: 1 }, { sparse: true });
 orderSchema.index({ "metadata.idempotencyKey": 1 }, { unique: true, sparse: true });
 
 const Order = mongoose.model("Order", orderSchema);
@@ -192,6 +237,19 @@ const wilayaSchema = new Schema({
   name: { type: String, required: true },
   nameFr: { type: String },
   nameAr: { type: String },
+  aliases: [{ type: String }],
+  reformYear: { type: Number },
+  parentCode: { type: Number, default: null },
+  parentName: { type: String, default: null },
+  coverageStatus: {
+    type: String,
+    enum: ["served", "via_parent_wilaya", "confirm_by_phone", "unserved"],
+    default: "served",
+  },
+  homeDeliverySupported: { type: Boolean, default: true },
+  officeDeliverySupported: { type: Boolean, default: true },
+  coverageNoteAr: { type: String, default: "" },
+  coverageNoteFr: { type: String, default: "" },
   isActive: { type: Boolean, default: true },
   sortOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
@@ -325,21 +383,259 @@ const adminNoteSchema = new Schema({
 
 const AdminNote = mongoose.model("AdminNote", adminNoteSchema);
 
-module.exports = {
-  User, Customer, Product, ProductTranslation,
-  Pack, PackItem,
-  Offer,
-  Order,
-  Wilaya, ShippingRate,
-  Review,
-  AIKnowledge, Conversation, Message, SocialAccount, WebhookEvent,
-  AdminNote
-};
+// ==========================================
+// MEMBERSHIP LEADS (DXN NADZ RECRUITMENT & CRM)
+// ==========================================
 
-// Typed named exports so the rest of the TypeScript codebase can import
-// these models as `import { Order } from "../../Database/Models"`.
-export {
-  User, Customer, Product, ProductTranslation,
+const membershipLeadSchema = new Schema({
+  leadReference: { type: String, unique: true, required: true },
+  firstName: { type: String, required: true, trim: true, maxlength: 100 },
+  lastName: { type: String, required: true, trim: true, maxlength: 100 },
+  country: { type: String, required: true, trim: true, maxlength: 100 },
+  phone: { type: String, required: true, trim: true, maxlength: 30 },
+  preferredContactMethod: {
+    type: String,
+    enum: ["whatsapp", "phone", "telegram", "email"],
+    required: true,
+    default: "whatsapp",
+  },
+  email: { type: String, lowercase: true, trim: true, maxlength: 160, default: "" },
+  existingMembershipNumber: { type: String, trim: true, maxlength: 32, default: null },
+  sponsorMembershipNumber: { type: String, trim: true, maxlength: 32, default: null },
+  message: { type: String, trim: true, maxlength: 2000, default: "" },
+  privacyConsent: { type: Boolean, required: true, default: false },
+  privacyConsentAt: { type: Date, default: Date.now },
+  status: {
+    type: String,
+    enum: ["new", "contacted", "interested", "customer", "registered_member", "not_interested"],
+    default: "new",
+  },
+  officialMembershipNumber: { type: String, trim: true, maxlength: 32, default: null },
+  registeredAt: { type: Date, default: null },
+  followUpDate: { type: Date, default: null },
+  assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  trafficSource: {
+    source: { type: String, default: "direct" },
+    ref: { type: String, default: "" },
+    utmSource: { type: String, default: "" },
+    utmMedium: { type: String, default: "" },
+    utmCampaign: { type: String, default: "" },
+    landingPath: { type: String, default: "" },
+  },
+  notes: [
+    {
+      content: { type: String, required: true, maxlength: 2000 },
+      createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+      authorName: { type: String, default: "" },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+  communicationHistory: [
+    {
+      channel: {
+        type: String,
+        enum: ["whatsapp", "phone", "telegram", "email", "other"],
+        default: "phone",
+      },
+      summary: { type: String, required: true, maxlength: 2000 },
+      outcome: { type: String, maxlength: 300, default: "" },
+      createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+      authorName: { type: String, default: "" },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+}, { timestamps: true });
+
+membershipLeadSchema.index({ createdAt: -1 });
+membershipLeadSchema.index({ status: 1, createdAt: -1 });
+membershipLeadSchema.index({ country: 1, createdAt: -1 });
+membershipLeadSchema.index({ "trafficSource.source": 1, createdAt: -1 });
+membershipLeadSchema.index({ phone: 1 });
+
+const MembershipLead = mongoose.model("MembershipLead", membershipLeadSchema);
+
+// ==========================================
+// CONTACT MESSAGES
+// ==========================================
+
+const contactMessageSchema = new Schema({
+  reference: { type: String, unique: true, required: true },
+  name: { type: String, required: true, trim: true, maxlength: 150 },
+  phone: { type: String, trim: true, maxlength: 30, default: "" },
+  email: { type: String, lowercase: true, trim: true, maxlength: 160, default: "" },
+  subject: { type: String, trim: true, maxlength: 200, default: "" },
+  message: { type: String, required: true, trim: true, maxlength: 3000 },
+  privacyConsent: { type: Boolean, required: true, default: false },
+  status: {
+    type: String,
+    enum: ["new", "read", "replied", "archived"],
+    default: "new",
+  },
+  adminNotes: { type: String, maxlength: 2000, default: "" },
+  trafficSource: {
+    source: { type: String, default: "direct" },
+    ref: { type: String, default: "" },
+    landingPath: { type: String, default: "" },
+  },
+}, { timestamps: true });
+
+contactMessageSchema.index({ status: 1, createdAt: -1 });
+contactMessageSchema.index({ createdAt: -1 });
+
+const ContactMessage = mongoose.model("ContactMessage", contactMessageSchema);
+
+// ==========================================
+// NOTIFICATION LOGS (TELEGRAM RELIABILITY & DEDUP)
+// ==========================================
+
+const notificationLogSchema = new Schema({
+  dedupKey: { type: String, unique: true, sparse: true },
+  eventType: {
+    type: String,
+    enum: ["new_order", "order_status", "new_lead", "new_contact", "escalation"],
+    required: true,
+  },
+  referenceId: { type: String, required: true },
+  delivered: { type: Boolean, default: false },
+  skipped: { type: Boolean, default: false },
+  attempts: { type: Number, default: 1 },
+  httpStatus: { type: Number },
+  errorSummary: { type: String, maxlength: 500, default: "" },
+}, { timestamps: true });
+
+notificationLogSchema.index({ eventType: 1, createdAt: -1 });
+notificationLogSchema.index({ referenceId: 1 });
+
+const NotificationLog = mongoose.model("NotificationLog", notificationLogSchema);
+
+// ==========================================
+// SITE SETTINGS (PUBLIC SAFE CONFIG + ADMIN MANAGEMENT)
+// ==========================================
+
+const siteSettingsSchema = new Schema({
+  key: { type: String, unique: true, required: true, default: "global" },
+  brandName: { type: String, default: "DXN NADZ", trim: true, maxlength: 80 },
+  sponsorMembershipNumber: { type: String, trim: true, maxlength: 32, default: "" },
+  sponsorNameAr: { type: String, trim: true, maxlength: 120, default: "" },
+  sponsorNameFr: { type: String, trim: true, maxlength: 120, default: "" },
+  whatsappNumber: { type: String, trim: true, maxlength: 30, default: "" },
+  contactEmail: { type: String, trim: true, maxlength: 160, default: "" },
+  socialLinks: {
+    facebook: { type: String, trim: true, maxlength: 500, default: "" },
+    instagram: { type: String, trim: true, maxlength: 500, default: "" },
+    tiktok: { type: String, trim: true, maxlength: 500, default: "" },
+    telegram: { type: String, trim: true, maxlength: 500, default: "" },
+    whatsapp: { type: String, trim: true, maxlength: 500, default: "" },
+  },
+  telegramNotificationsEnabled: { type: Boolean, default: true },
+  notifyOnNewOrder: { type: Boolean, default: true },
+  notifyOnNewLead: { type: Boolean, default: true },
+  notifyOnNewContact: { type: Boolean, default: true },
+  businessHoursAr: { type: String, maxlength: 200, default: "" },
+  businessHoursFr: { type: String, maxlength: 200, default: "" },
+  updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
+
+const SiteSettings = mongoose.model("SiteSettings", siteSettingsSchema);
+
+// ==========================================
+// EDUCATIONAL ARTICLES & FAQ & CONTENT BLOCKS (CMS)
+// ==========================================
+
+const educationalArticleSchema = new Schema({
+  slug: { type: String, unique: true, required: true, lowercase: true, trim: true },
+  category: {
+    type: String,
+    enum: ["ganoderma", "spirulina", "supplements", "nutrition", "usage", "faq"],
+    default: "supplements",
+  },
+  sortOrder: { type: Number, default: 0 },
+  isPublished: { type: Boolean, default: true },
+  readingMinutes: { type: Number, default: 4, min: 1, max: 60 },
+  ar: {
+    title: { type: String, required: true, maxlength: 200 },
+    summary: { type: String, required: true, maxlength: 600 },
+    scientificInfo: { type: String, required: true, maxlength: 12000 },
+    ingredientEvidence: { type: String, maxlength: 8000, default: "" },
+    traditionalUses: { type: String, maxlength: 8000, default: "" },
+    unprovenClaimsNotice: { type: String, maxlength: 4000, default: "" },
+    usageAndStorage: { type: String, maxlength: 6000, default: "" },
+    disclaimer: { type: String, maxlength: 2000, default: "" },
+  },
+  fr: {
+    title: { type: String, required: true, maxlength: 200 },
+    summary: { type: String, required: true, maxlength: 600 },
+    scientificInfo: { type: String, required: true, maxlength: 12000 },
+    ingredientEvidence: { type: String, maxlength: 8000, default: "" },
+    traditionalUses: { type: String, maxlength: 8000, default: "" },
+    unprovenClaimsNotice: { type: String, maxlength: 4000, default: "" },
+    usageAndStorage: { type: String, maxlength: 6000, default: "" },
+    disclaimer: { type: String, maxlength: 2000, default: "" },
+  },
+  updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
+
+educationalArticleSchema.index({ isPublished: 1, sortOrder: 1 });
+
+const EducationalArticle = mongoose.model("EducationalArticle", educationalArticleSchema);
+
+const faqItemSchema = new Schema({
+  slug: { type: String, unique: true, required: true, lowercase: true, trim: true },
+  category: {
+    type: String,
+    enum: ["company", "products", "ordering", "membership", "compliance"],
+    default: "company",
+  },
+  sortOrder: { type: Number, default: 0 },
+  isPublished: { type: Boolean, default: true },
+  ar: {
+    question: { type: String, required: true, maxlength: 400 },
+    answer: { type: String, required: true, maxlength: 4000 },
+  },
+  fr: {
+    question: { type: String, required: true, maxlength: 400 },
+    answer: { type: String, required: true, maxlength: 4000 },
+  },
+  updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
+
+faqItemSchema.index({ isPublished: 1, category: 1, sortOrder: 1 });
+
+const FaqItem = mongoose.model("FaqItem", faqItemSchema);
+
+const contentBlockSchema = new Schema({
+  key: { type: String, unique: true, required: true, lowercase: true, trim: true },
+  ar: { type: Schema.Types.Mixed, default: {} },
+  fr: { type: Schema.Types.Mixed, default: {} },
+  founderPortraitUrl: { type: String, default: "" },
+  updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
+
+const ContentBlock = mongoose.model("ContentBlock", contentBlockSchema);
+
+// ==========================================
+// ADMIN AUDIT LOGS
+// ==========================================
+
+const auditLogSchema = new Schema({
+  actorId: { type: Schema.Types.ObjectId, ref: "User" },
+  actorEmail: { type: String, default: "" },
+  actorRole: { type: String, default: "" },
+  action: { type: String, required: true, maxlength: 120 },
+  resourceType: { type: String, required: true, maxlength: 80 },
+  resourceId: { type: String, default: "", maxlength: 120 },
+  summary: { type: String, maxlength: 500, default: "" },
+  ip: { type: String, maxlength: 64, default: "" },
+}, { timestamps: true });
+
+auditLogSchema.index({ createdAt: -1 });
+auditLogSchema.index({ actorId: 1, createdAt: -1 });
+auditLogSchema.index({ resourceType: 1, createdAt: -1 });
+
+const AuditLog = mongoose.model("AuditLog", auditLogSchema);
+
+module.exports = {
+  User, Customer, ProductCategory, Product, ProductTranslation,
   Pack, PackItem,
   Offer,
   Order,
@@ -347,4 +643,33 @@ export {
   Review,
   AIKnowledge, Conversation, Message, SocialAccount, WebhookEvent,
   AdminNote,
+  MembershipLead,
+  ContactMessage,
+  NotificationLog,
+  SiteSettings,
+  EducationalArticle,
+  FaqItem,
+  ContentBlock,
+  AuditLog,
+};
+
+// Typed named exports so the rest of the TypeScript codebase can import
+// these models as `import { Order } from "../../Database/Models"`.
+export {
+  User, Customer, ProductCategory, Product, ProductTranslation,
+  Pack, PackItem,
+  Offer,
+  Order,
+  Wilaya, ShippingRate,
+  Review,
+  AIKnowledge, Conversation, Message, SocialAccount, WebhookEvent,
+  AdminNote,
+  MembershipLead,
+  ContactMessage,
+  NotificationLog,
+  SiteSettings,
+  EducationalArticle,
+  FaqItem,
+  ContentBlock,
+  AuditLog,
 };

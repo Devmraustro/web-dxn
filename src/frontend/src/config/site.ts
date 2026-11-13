@@ -34,3 +34,12 @@ export function readSiteSocialConfig(): SiteSocialConfig {
   if (typeof instagram === "string" && instagram) config.instagram = instagram;
   return config;
 }
+
+export const SITE_SOCIAL = {
+  get facebookUrl(): string {
+    return readSiteSocialConfig().facebook || "";
+  },
+  get instagramUrl(): string {
+    return readSiteSocialConfig().instagram || "";
+  },
+};

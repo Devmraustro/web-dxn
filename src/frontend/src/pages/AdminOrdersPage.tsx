@@ -20,6 +20,17 @@ import {
   statusVariant as orderStatusVariant,
 } from "../utils/orderStatus";
 import type { OrderStatus } from "../utils/orderStatus";
+import { findCanonicalWilaya } from "../../../backend/data/algerianWilayas";
+
+function formatOrderWilaya(raw: unknown, language: string): string {
+  const str = String(raw || "").trim();
+  if (!str) return "—";
+  const matched = findCanonicalWilaya(str);
+  if (!matched) return str; // Preserve non-standard historical address text verbatim
+  const codePrefix = String(matched.code).padStart(2, "0");
+  const localized = language === "ar" ? matched.nameAr || matched.name : matched.nameFr || matched.name;
+  return `${codePrefix} - ${localized}`;
+}
 
 const PAYMENT_LABELS: Record<string, [string, string]> = {
   cod: ["الدفع عند الاستلام", "Paiement à la livraison"],
@@ -55,6 +66,14 @@ interface AdminOrder {
     wilaya?: string;
     commune?: string;
     address?: string;
+    dxnMemberId?: string;
+  };
+  dxnMemberId?: string;
+  trafficSource?: {
+    source?: string;
+    campaign?: string;
+    medium?: string;
+    landingPage?: string;
   };
   deliveryMethod: "home" | "office";
   wilaya?: string;
@@ -185,7 +204,14 @@ const AdminOrdersPage = () => {
       const name = (customerFullName(o) || "").toLowerCase();
       const phone = (customerPhone(o) || "").toLowerCase();
       const wilaya = String(o.customerInfo?.wilaya || o.wilaya || "").toLowerCase();
-      return number.includes(q) || name.includes(q) || phone.includes(q) || wilaya.includes(q);
+      const memberId = String(o.dxnMemberId || o.customerInfo?.dxnMemberId || "").toLowerCase();
+      return (
+        number.includes(q) ||
+        name.includes(q) ||
+        phone.includes(q) ||
+        wilaya.includes(q) ||
+        memberId.includes(q)
+      );
     });
   })();
 
@@ -302,7 +328,7 @@ const AdminOrdersPage = () => {
                             {customerPhone(o)}
                           </small>
                         </td>
-                        <td>{String(o.customerInfo?.wilaya || o.wilaya || "—")}</td>
+                        <td>{formatOrderWilaya(o.customerInfo?.wilaya || o.wilaya, language)}</td>
                         <td className="text-center">{itemCount(o)}</td>
                         <td className="text-end fw-semibold">{formatMoney(o.total)}</td>
                         <td>
@@ -390,6 +416,16 @@ const AdminOrdersPage = () => {
                 <Badge pill bg="secondary">
                   {paymentLabel(detail.paymentMethod)}
                 </Badge>
+                {(detail.dxnMemberId || detail.customerInfo?.dxnMemberId) && (
+                  <Badge pill bg="info" text="dark">
+                    DXN ID: {detail.dxnMemberId || detail.customerInfo?.dxnMemberId}
+                  </Badge>
+                )}
+                {detail.trafficSource?.source && (
+                  <Badge pill bg="light" text="dark" className="border">
+                    {t("المصدر:", "Source:")} {detail.trafficSource.source}
+                  </Badge>
+                )}
               </div>
 
               <Row className="g-2">
@@ -408,7 +444,7 @@ const AdminOrdersPage = () => {
                         ? t("توصيل للمنزل", "À domicile")
                         : t("توصيل للمكتب", "Au bureau")
                     }
-                    sub={`${String(detail.customerInfo?.wilaya || detail.wilaya || "")} ${detail.customerInfo?.commune || detail.commune || ""}`.trim()}
+                    sub={`${formatOrderWilaya(detail.customerInfo?.wilaya || detail.wilaya, language)} ${detail.customerInfo?.commune || detail.commune || ""}`.trim()}
                     second={detail.customerInfo?.address || detail.address || ""}
                   />
                 </Col>

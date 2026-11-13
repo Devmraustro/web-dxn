@@ -34,6 +34,25 @@ export const pickProductTitle = (product: any, language: string): string => {
   return product.title || product.name || "";
 };
 
+export const pickProductCategoryLabel = (category: unknown, language: string): string => {
+  const slug = typeof category === "string" ? category.trim().toLowerCase() : "";
+  const isAr = language === "ar";
+  switch (slug) {
+    case "supplements":
+      return isAr ? "المكملات الغذائية" : "Compléments alimentaires";
+    case "cosmetics":
+      return isAr ? "الكوسميتيك" : "Cosmétiques & Soins";
+    case "beverages":
+      return isAr ? "المشروبات والقهوة" : "Boissons & Cafés";
+    case "personal-care":
+      return isAr ? "العناية الشخصية" : "Soins personnels";
+    case "general":
+      return isAr ? "منتجات متنوعة" : "Autres produits";
+    default:
+      return slug ? slug.toUpperCase() : "DXN";
+  }
+};
+
 export const pickProductImage = (product: any): string => {
   if (product?.image) return product.image;
   if (Array.isArray(product?.images) && product.images.length > 0) return product.images[0];
@@ -173,7 +192,11 @@ const ProductCard = ({ product, language }: ProductCardProps) => {
       </Link>
 
       <div className="dxn-pcard-body">
-        <span className="dxn-pcard-cat">{product.category || product.sku || "DXN"}</span>
+        <span className="dxn-pcard-cat">
+          {product.category
+            ? pickProductCategoryLabel(product.category, lang)
+            : product.sku || "DXN"}
+        </span>
 
         {productPoints > 0 && (
           <span className="dxn-chip" style={{ backgroundColor: "#f0f4f1", color: "#0b3d1f" }}>

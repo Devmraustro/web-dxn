@@ -123,6 +123,9 @@ export const idempotencyMiddleware = (key: string) => {
     const idempotencyKey: string | undefined = Array.isArray(headerValue) ? headerValue[0] : headerValue;
 
     if (!idempotencyKey) {
+      if (req.body && typeof req.body === "object" && "metadata" in req.body) {
+        delete req.body.metadata;
+      }
       return next();
     }
     if (typeof idempotencyKey !== "string" || idempotencyKey.length > 200) {
@@ -131,14 +134,18 @@ export const idempotencyMiddleware = (key: string) => {
 
     const existingOrder = await Order.findOne({ "metadata.idempotencyKey": idempotencyKey });
     if (existingOrder) {
-      // Same shape as the controller's duplicate-hit response: strip the
-      // internal metadata (stock-claims snapshot / restore marker) so clients
-      // only ever see the same payload they would get from a fresh POST.
-      const doc = existingOrder.toObject ? existingOrder.toObject() : existingOrder;
-      if (doc && doc.metadata && typeof doc.metadata === "object") {
-        doc.metadata = { ...doc.metadata };
-        delete doc.metadata.stockClaims;
-        delete doc.metadata.stockClaimsRestoredAt;
+      // Same shape as publicOrderPayload: strip internal stock-claims metadata
+      // AND protect private DXN membership IDs from unauthenticated responses.
+      const raw = existingOrder.toObject ? existingOrder.toObject() : existingOrder;
+      const doc = raw && typeof raw === "object" ? { ...raw } : raw;
+      if (doc && typeof doc === "object") {
+        if (doc.metadata && typeof doc.metadata === "object") {
+          doc.metadata = { ...doc.metadata };
+          delete doc.metadata.stockClaims;
+          delete doc.metadata.stockClaimsRestoredAt;
+        }
+        doc.hasDxnMemberId = Boolean(doc.dxnMemberId);
+        delete doc.dxnMemberId;
       }
       return res.json({
         success: true,
@@ -147,8 +154,8 @@ export const idempotencyMiddleware = (key: string) => {
       });
     }
 
-    req.body.metadata = req.body.metadata || {};
-    req.body.metadata.idempotencyKey = idempotencyKey;
+    // Never inherit client-supplied `req.body.metadata` keys.
+    req.body.metadata = { idempotencyKey };
 
     next();
   };

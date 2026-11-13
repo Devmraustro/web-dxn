@@ -5,7 +5,13 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
-import { securityHeaders, noSqlInjectionProtection, rateLimiter, validateInput } from "./middleware/security.middleware";
+import {
+  securityHeaders,
+  noSqlInjectionProtection,
+  xssSanitization,
+  rateLimiter,
+  validateInput,
+} from "./middleware/security.middleware";
 import { UPLOAD_DIR } from "./config/storage";
 import { waitForReady } from "./utils/readyState";
 import { ensureDB } from "./db";
@@ -25,6 +31,11 @@ import metaRoutes from "./routes/meta.routes";
 import seoRoutes, { serveRobots, serveSitemap } from "./seo/routes";
 import reviewRoutes from "./routes/review.routes";
 import uploadRoutes from "./routes/upload.routes";
+import categoryRoutes from "./routes/category.routes";
+import leadRoutes from "./routes/lead.routes";
+import contactRoutes from "./routes/contact.routes";
+import contentRoutes from "./routes/content.routes";
+import settingsRoutes from "./routes/settings.routes";
 import errorMiddleware from "./middleware/error.middleware";
 
 // Initialize app
@@ -120,7 +131,11 @@ app.use((req, res, next) => {
   }
 });
 
-// Input validation (body complexity bound) — runs AFTER body parsers on non-Meta routes
+// Post-body-parser NoSQL operator stripping, XSS sanitization, and complexity
+// bounds — MUST run AFTER express.json()/express.urlencoded() so parsed
+// `req.body` payloads are sanitized before reaching validation/controllers.
+app.use(noSqlInjectionProtection);
+app.use(xssSanitization);
 app.use(validateInput);
 
 // HTTP request logging: dev format in development; combined in production
@@ -166,11 +181,18 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-// Products
+// Products & Categories
 app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // Orders (with stock validation and pricing snapshot)
 app.use("/api/orders", orderRoutes);
+
+// Recruitment Leads & Contact Requests & Public CMS/Settings
+app.use("/api/leads", leadRoutes);
+app.use("/api/contact", contactRoutes);
+app.use("/api/content", contentRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // Shipping
 app.use("/api/shipping", shippingRoutes);
