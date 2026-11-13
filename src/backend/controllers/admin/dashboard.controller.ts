@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
-import { Order, Product, Pack, ProductTranslation } from "../../../Database/Models";
+import * as Models from "../../../Database/Models";
+
+const { Order, Product, Pack, ProductTranslation, Customer } = Models;
 
 /** Statuses whose orders never count toward revenue / sales analytics. */
 const EXCLUDED_STATUSES = ["cancelled", "rejected"];
@@ -150,15 +152,118 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
     const topProducts = await enrichSalesRows(await Order.aggregate(salesAggregation(5)));
 
+    // --- DXN NADZ Phase 9 & Phase 10: Real Customers, CRM Leads, Messages & Referral Analytics ---
+    const totalCustomers =
+      Customer && typeof Customer.countDocuments === "function"
+        ? await Customer.countDocuments()
+        : 0;
+
+    const MembershipLeadModel = (Models as any).MembershipLead;
+    const ContactMessageModel = (Models as any).ContactMessage;
+
+    const leadStatusCounts: Record<string, number> = {
+      new: 0,
+      contacted: 0,
+      interested: 0,
+      customer: 0,
+      registered_member: 0,
+      not_interested: 0,
+    };
+    let totalLeads = 0;
+    let leadsBySource: Array<{ source: string; count: number; registeredCount: number }> = [];
+
+    if (MembershipLeadModel && typeof MembershipLeadModel.aggregate === "function") {
+      const [leadAgg, leadSourceAgg] = await Promise.all([
+        MembershipLeadModel.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+        MembershipLeadModel.aggregate([
+          {
+            $group: {
+              _id: { $ifNull: ["$trafficSource.source", "direct"] },
+              count: { $sum: 1 },
+              registeredCount: {
+                $sum: { $cond: [{ $eq: ["$status", "registered_member"] }, 1, 0] },
+              },
+            },
+          },
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ]),
+      ]);
+
+      for (const item of leadAgg || []) {
+        if (item && item._id && item._id in leadStatusCounts) {
+          leadStatusCounts[item._id] = Number(item.count) || 0;
+        }
+        totalLeads += Number(item?.count) || 0;
+      }
+
+      leadsBySource = (leadSourceAgg || []).map((r: any) => ({
+        source: String(r._id || "direct") || "direct",
+        count: Number(r.count) || 0,
+        registeredCount: Number(r.registeredCount) || 0,
+      }));
+    }
+
+    const ordersBySourceRaw = await Order.aggregate([
+      { $match: { status: { $nin: EXCLUDED_STATUSES } } },
+      {
+        $group: {
+          _id: { $ifNull: ["$trafficSource.source", "direct"] },
+          count: { $sum: 1 },
+          revenue: {
+            $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] },
+          },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+    const ordersBySource = (ordersBySourceRaw || []).map((r: any) => ({
+      source: String(r._id || "direct") || "direct",
+      count: Number(r.count) || 0,
+      revenue: Number(r.revenue) || 0,
+    }));
+
+    const unreadMessages =
+      ContactMessageModel && typeof ContactMessageModel.countDocuments === "function"
+        ? await ContactMessageModel.countDocuments({ status: "new" })
+        : 0;
+
+    const conversionRate =
+      totalLeads > 0
+        ? Math.round((leadStatusCounts.registered_member / totalLeads) * 1000) / 10
+        : 0;
+
     res.json({
       success: true,
       data: {
         totalOrders,
+        newOrders: statusBreakdown.new || 0,
         newOrdersToday,
+        pendingOrders: (statusBreakdown.new || 0) + pendingPayment,
         pendingPayment,
         confirmed,
+        confirmedOrders: confirmed,
         delivered,
+        deliveredOrders: delivered,
+        revenue: totalRevenue,
         totalRevenue,
+        totalCustomers,
+        unreadMessages,
+        leads: {
+          total: totalLeads,
+          new: leadStatusCounts.new,
+          contacted: leadStatusCounts.contacted,
+          interested: leadStatusCounts.interested,
+          customer: leadStatusCounts.customer,
+          registeredMember: leadStatusCounts.registered_member,
+          notInterested: leadStatusCounts.not_interested,
+          conversionRate,
+        },
+        trafficSources: {
+          ordersBySource,
+          leadsBySource,
+        },
         statusBreakdown,
         recentOrders,
         topProducts,

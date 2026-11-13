@@ -4,16 +4,39 @@ import { useCart } from "../context/CartContext";
 import { CatalogEntry } from "../utils/cartReconcile";
 import { resolveOrderOutcome } from "../utils/orderFlow";
 import { pickProductTitle } from "../components/ProductCard";
+import { getStoredTrafficSource } from "../utils/referralAttribution";
+import SeoHead from "../components/SeoHead";
 import axios from "axios";
 import { Container, Row, Col, Form, Button, Alert } from "react-bootstrap";
 import * as yup from "yup";
 import { useFormik } from "formik";
 import { useNavigate } from "react-router-dom";
-import { ALGERIAN_WILAYAS } from "../../../backend/data/algerianWilayas";
+import { ALGERIAN_WILAYAS, WilayaCoverageStatus } from "../../../backend/data/algerianWilayas";
 
 interface WilayaOption {
+  code: number;
   value: string; // canonical romanized name — what the server/admin see in orders
   label: string; // localized label shown to the customer
+  coverageStatus: WilayaCoverageStatus;
+  homeDeliverySupported: boolean;
+  officeDeliverySupported: boolean;
+}
+
+function formatWilayaLabel(
+  code: number,
+  nameAr: string,
+  nameFr: string,
+  fallbackName: string,
+  language: string,
+  coverageStatus?: WilayaCoverageStatus
+): string {
+  const prefix = String(code).padStart(2, "0");
+  const base = language === "ar" ? nameAr || fallbackName : nameFr || fallbackName;
+  if (coverageStatus === "unserved") {
+    const suffix = language === "ar" ? " (غير متوفر حالياً)" : " (Indisponible)";
+    return `${prefix} - ${base}${suffix}`;
+  }
+  return `${prefix} - ${base}`;
 }
 
 // Validate Algerian phone: accept all mobile prefixes (05/06/07) for Djezzy,
@@ -38,6 +61,11 @@ const CheckoutPage = () => {
 
   const [deliveryMethod, setDeliveryMethod] = useState<"home" | "office">("home");
   const [shippingFee, setShippingFee] = useState(0);
+  const [shippingDeliverable, setShippingDeliverable] = useState(true);
+  const [shippingCoverageNotice, setShippingCoverageNotice] = useState<{
+    ar: string;
+    fr: string;
+  } | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,15 +135,68 @@ const CheckoutPage = () => {
     };
   }, [language, items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Wilaya options: canonical 58-wilaya dataset, enriched with live DB ids
-  // when available. The VALUE is always the canonical romanized name so order
-  // records and admin filters stay human-readable and stable.
+  // --- Wilaya options: canonical 69-wilaya dataset (Law 26-06), enriched with
+  // live DB courier coverage configuration when available. The VALUE is always
+  // the canonical romanized name so order records and admin filters stay stable.
   const [wilayaOptions, setWilayaOptions] = useState<WilayaOption[]>(() =>
     ALGERIAN_WILAYAS.map((w) => ({
+      code: w.code,
       value: w.name,
-      label: language === "ar" ? w.nameAr : w.nameFr || w.name,
+      label: formatWilayaLabel(w.code, w.nameAr, w.nameFr, w.name, language, w.defaultCoverageStatus),
+      coverageStatus: w.defaultCoverageStatus,
+      homeDeliverySupported: w.defaultHomeDelivery,
+      officeDeliverySupported: w.defaultOfficeDelivery,
     }))
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get("/api/shipping/wilayas", { timeout: 6000 })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+        if (rows.length === 0) return;
+        const byCode = new Map<number, any>();
+        for (const r of rows) {
+          if (typeof r.code === "number") byCode.set(r.code, r);
+        }
+        setWilayaOptions(
+          ALGERIAN_WILAYAS.map((w) => {
+            const db = byCode.get(w.code);
+            const cov: WilayaCoverageStatus =
+              (db?.coverageStatus as WilayaCoverageStatus | undefined) || w.defaultCoverageStatus;
+            return {
+              code: w.code,
+              value: w.name,
+              label: formatWilayaLabel(
+                w.code,
+                db?.nameAr || w.nameAr,
+                db?.nameFr || w.nameFr,
+                w.name,
+                language,
+                cov
+              ),
+              coverageStatus: cov,
+              homeDeliverySupported:
+                typeof db?.homeDeliverySupported === "boolean"
+                  ? db.homeDeliverySupported
+                  : w.defaultHomeDelivery,
+              officeDeliverySupported:
+                typeof db?.officeDeliverySupported === "boolean"
+                  ? db.officeDeliverySupported
+                  : w.defaultOfficeDelivery,
+            };
+          })
+        );
+      })
+      .catch(() => {
+        // Canonical 69-wilaya dataset remains active if endpoint fails
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Re-label options when the UI language changes without re-fetching.
@@ -123,16 +204,28 @@ const CheckoutPage = () => {
       current.map((o) => {
         const wil = ALGERIAN_WILAYAS.find((w) => w.name === o.value);
         return wil
-          ? { value: wil.name, label: language === "ar" ? wil.nameAr : wil.nameFr || wil.name }
+          ? {
+              ...o,
+              label: formatWilayaLabel(
+                wil.code,
+                wil.nameAr,
+                wil.nameFr,
+                wil.name,
+                language,
+                o.coverageStatus
+              ),
+            }
           : o;
       })
     );
   }, [language]);
 
-  // Shipping calculation based on wilaya and delivery method
+  // Shipping & courier coverage calculation based on wilaya and delivery method
   const calculateShipping = async (wilaya: string, method: "home" | "office") => {
     if (!wilaya) {
       setShippingFee(0);
+      setShippingDeliverable(true);
+      setShippingCoverageNotice(null);
       setShippingError(null);
       return;
     }
@@ -141,15 +234,43 @@ const CheckoutPage = () => {
         params: { wilayaId: wilaya, deliveryMethod: method },
         timeout: 8000,
       });
-      const fee = Number(response.data?.data?.shippingFee);
+      const data = response.data?.data || {};
+      const fee = Number(data.shippingFee);
       setShippingFee(Number.isFinite(fee) ? fee : 0);
+      setShippingDeliverable(data.deliverable !== false);
+      if (data.coverageNoticeAr || data.coverageNoticeFr) {
+        setShippingCoverageNotice({
+          ar: String(data.coverageNoticeAr || ""),
+          fr: String(data.coverageNoticeFr || ""),
+        });
+      } else {
+        setShippingCoverageNotice(null);
+      }
       setShippingError(null);
-    } catch (err) {
+    } catch (err: any) {
+      const errData = err?.response?.data?.data;
+      const errCode = err?.response?.data?.code;
+      if (errCode === "wilaya_unserved" || errCode === "delivery_method_unavailable") {
+        setShippingFee(0);
+        setShippingDeliverable(false);
+        setShippingCoverageNotice(null);
+        setShippingError(
+          language === "ar"
+            ? errData?.coverageNoticeAr ||
+                "التوصيل غير متوفر حالياً لهذه الولاية أو طريقة التوصيل المختارة عبر شركة التوصيل المعتمدة."
+            : errData?.coverageNoticeFr ||
+                err?.response?.data?.message ||
+                "La livraison n'est pas disponible actuellement pour cette wilaya ou ce mode de livraison."
+        );
+        return;
+      }
       // Do NOT silently fall back to a hardcoded fee — the customer must know
       // the shipping cost could not be retrieved. The server still computes the
       // authoritative value at order-creation time.
       console.error("Error calculating shipping:", err);
       setShippingFee(0);
+      setShippingDeliverable(true);
+      setShippingCoverageNotice(null);
       setShippingError(
         t("تعذر حساب رسوم الشحن. سيتم احتسابها عند تأكيد الطلب.", "Impossible de calculer les frais de port. Ils seront calculés à la confirmation.")
       );
@@ -178,6 +299,20 @@ const CheckoutPage = () => {
         // delivery-method rule lives in `validate` below because the delivery
         // method is not part of the Formik field set.
         address: yup.string().max(500),
+        dxnMemberId: yup
+          .string()
+          .max(32)
+          .test(
+            "optional-dxn-id",
+            language === "ar"
+              ? "رقم العضوية يجب أن يتكون من 5 إلى 24 حرفاً أو رقماً (أو اتركه فارغاً)"
+              : "Le numéro de membre doit contenir 5 à 24 lettres ou chiffres (ou laissez vide)",
+            (val?: string) => {
+              if (!val || val.trim() === "") return true;
+              const compact = val.trim().replace(/[\s-]+/g, "");
+              return /^[A-Za-z0-9]{5,24}$/.test(compact);
+            }
+          ),
       }),
     // deliveryMethod lives outside Formik; reflect it in the validation below.
     [language, deliveryMethod, msg.required, msg.phone]
@@ -188,6 +323,7 @@ const CheckoutPage = () => {
     lastName: string;
     phone: string;
     secondPhone: string;
+    dxnMemberId: string;
     wilaya: string;
     commune: string;
     address: string;
@@ -213,6 +349,7 @@ const CheckoutPage = () => {
     lastName: "",
     phone: "",
     secondPhone: "",
+    dxnMemberId: "",
     wilaya: "",
     commune: "",
     address: "",
@@ -248,6 +385,17 @@ const CheckoutPage = () => {
           setIsSubmitting(false);
           return;
         }
+        if (!shippingDeliverable) {
+          setSubmitError(
+            shippingError ||
+              t(
+                "التوصيل غير متوفر حالياً للولاية أو طريقة التوصيل المختارة.",
+                "La livraison n'est pas disponible actuellement pour la wilaya ou le mode choisi."
+              )
+          );
+          setIsSubmitting(false);
+          return;
+        }
         const response = await axios.post(
           "/api/orders",
           {
@@ -270,6 +418,8 @@ const CheckoutPage = () => {
             address: deliveryMethod === "home" ? values.address : "",
             paymentMethod,
             confirmed: true,
+            dxnMemberId: values.dxnMemberId && values.dxnMemberId.trim() ? values.dxnMemberId.trim() : null,
+            trafficSource: getStoredTrafficSource(),
           },
           { headers: { "Idempotency-Key": idempotencyKey.current } }
         );
@@ -321,6 +471,11 @@ const CheckoutPage = () => {
 
   return (
     <Container className="mt-4 mb-5">
+      <SeoHead
+        title={t("إتمام الطلب", "Validation de commande")}
+        canonicalPath="/checkout"
+        noindex
+      />
       <h2 className="dxn-section-title h3 mb-4">{t("إتمام الطلب", "Commande")}</h2>
 
       {submitError && (
@@ -432,6 +587,37 @@ const CheckoutPage = () => {
                   </Col>
                 </Row>
 
+                {/* Phase 5: Optional DXN Membership Number */}
+                <Row>
+                  <Col xs={12}>
+                    <Form.Group controlId="formDxnMemberId" className="mb-3">
+                      <Form.Label>
+                        {t("رقم عضوية DXN (اختياري)", "Numéro de membre DXN (optionnel)")}
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="dxnMemberId"
+                        value={formik.values.dxnMemberId}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        placeholder={t(
+                          "أدخل رقم عضويتك إن وجد",
+                          "Saisissez votre numéro de membre si vous en avez un"
+                        )}
+                        autoComplete="off"
+                        isInvalid={!!(formik.touched.dxnMemberId && formik.errors.dxnMemberId)}
+                      />
+                      <Form.Text className="text-muted">
+                        {t(
+                          "الشراء متاح للجميع بدون عضوية. إذا كنت عضواً حالياً في DXN يمكنك كتابة رقمك هنا ليُرفق بطلبك.",
+                          "L'achat est ouvert à tous sans adhésion. Si vous êtes déjà membre DXN, indiquez votre numéro ici (facultatif)."
+                        )}
+                      </Form.Text>
+                      <Form.Control.Feedback type="invalid">{formik.errors.dxnMemberId}</Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
                 <Row>
                   <Col xs={12} sm={6}>
                     <Form.Group controlId="formWilaya" className="mb-3">
@@ -472,6 +658,20 @@ const CheckoutPage = () => {
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {shippingError && (
+                  <Alert variant={!shippingDeliverable ? "warning" : "secondary"} className="py-2 small mb-3">
+                    {shippingError}
+                  </Alert>
+                )}
+
+                {!shippingError &&
+                  shippingCoverageNotice &&
+                  (language === "ar" ? shippingCoverageNotice.ar : shippingCoverageNotice.fr) && (
+                    <Alert variant="info" className="py-2 small mb-3">
+                      {language === "ar" ? shippingCoverageNotice.ar : shippingCoverageNotice.fr}
+                    </Alert>
+                  )}
 
                 {deliveryMethod === "home" && (
                   <Form.Group controlId="formAddress" className="mb-3">
@@ -582,7 +782,14 @@ const CheckoutPage = () => {
                   type="submit"
                   variant="primary"
                   className="w-100 dxn-btn dxn-btn-gold"
-                  disabled={isSubmitting || !confirmed || items.length === 0 || hasInvalid || !catalogChecked}
+                  disabled={
+                    isSubmitting ||
+                    !confirmed ||
+                    items.length === 0 ||
+                    hasInvalid ||
+                    !catalogChecked ||
+                    !shippingDeliverable
+                  }
                   aria-busy={isSubmitting}
                 >
                   {isSubmitting ? (

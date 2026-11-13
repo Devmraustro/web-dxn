@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useNavigate, Navigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
+import SeoHead from "./SeoHead";
 
 const ShieldIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -23,6 +24,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   if (!isAdmin) {
     return (
       <div className="container mt-5" style={{ maxWidth: 480 }}>
+        <SeoHead title="Admin Restricted" canonicalPath="/admin" noindex />
         <div className="dxn-feedback-error p-3">
           {t("ليس لديك صلاحيات أدمن", "Vous n'avez pas les droits d'administrateur")}
         </div>
@@ -35,41 +37,45 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     navigate("/");
   };
 
+  const linkCls = ({ isActive }: { isActive: boolean }) =>
+    isActive ? "admin-link active" : "admin-link";
+
   return (
     <div className="admin-shell">
+      <SeoHead title="DXN NADZ — لوحة التحكم" canonicalPath="/admin" noindex />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-title">
           <ShieldIcon />
-          {t("لوحة التحكم", "Administration")}
+          <span>DXN NADZ Admin</span>
         </div>
         <nav className="admin-sidebar-nav" aria-label="Admin navigation">
-          <NavLink
-            to="/admin"
-            end
-            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
-          >
-            {t("لوحة التحكم", "Tableau de bord")}
+          <NavLink to="/admin" end className={linkCls}>
+            {t("نظرة عامة وتحليلات", "Tableau de bord")}
           </NavLink>
-          <NavLink
-            to="/admin/products"
-            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
-          >
-            {t("المنتجات", "Produits")}
+          <NavLink to="/admin/products" className={linkCls}>
+            {t("المنتجات والتصنيفات", "Produits & Catégories")}
           </NavLink>
-          <NavLink
-            to="/admin/orders"
-            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
-          >
-            {t("الطلبات", "Commandes")}
+          <NavLink to="/admin/orders" className={linkCls}>
+            {t("إدارة الطلبات", "Commandes")}
           </NavLink>
-          <NavLink
-            to="/admin/reviews"
-            className={({ isActive }) => (isActive ? "admin-link active" : "admin-link")}
-          >
-            {t("التقييمات", "Avis")}
+          <NavLink to="/admin/leads" className={linkCls}>
+            {t("طلبات الانضمام (CRM)", "CRM Adhésions")}
           </NavLink>
+          <NavLink to="/admin/messages" className={linkCls}>
+            {t("رسائل التواصل", "Messages contact")}
+          </NavLink>
+          <NavLink to="/admin/content" className={linkCls}>
+            {t("إدارة المحتوى والتثقيف", "Contenu & Éducation")}
+          </NavLink>
+          <NavLink to="/admin/reviews" className={linkCls}>
+            {t("تقييمات العملاء", "Avis clients")}
+          </NavLink>
+          <NavLink to="/admin/settings" className={linkCls}>
+            {t("الإعدادات والربط", "Paramètres & Liens")}
+          </NavLink>
+          <hr className="border-light opacity-25 my-2" />
           <NavLink to="/" className="admin-link">
-            {t("العودة للمتجر", "Voir la boutique")}
+            {t("معاينة المنصة العامة ↗", "Voir le site public ↗")}
           </NavLink>
         </nav>
         <button type="button" className="admin-logout" onClick={handleLogout}>

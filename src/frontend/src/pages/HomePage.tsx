@@ -1,625 +1,640 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
-import { Container, Row, Col } from "react-bootstrap";
+import api from "../services/api";
+import ProductCard, { pickProductImage, pickProductTitle } from "../components/ProductCard";
+import ReviewCard from "../components/ReviewCard";
+import SeoHead from "../components/SeoHead";
 import { useLanguage } from "../context/LanguageContext";
-import ProductCard, {
-  pickProductTitle,
-  pickProductDescription,
-  pickProductImage,
-} from "../components/ProductCard";
-import { STORE_EMAIL, STORE_EMAIL_MAILTO } from "../config/site";
+import { useSiteSettings } from "../context/SiteSettingsContext";
+import { usePublicContent } from "../hooks/usePublicContent";
+import { STORE_EMAIL } from "../config/site";
 
-const MAX_FEATURED = 8;
-const MAX_HERO_SHOTS = 3;
-// A real product-image collage only makes sense once there is a small genuine
-// collection (>= 2 distinct images). A single upload-test image is not a
-// collection, so the elegant abstract DXN panel is preferred instead.
-const MIN_HERO_SHOTS = 2;
-
-const PinIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
-
-const CardIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-    <line x1="1" y1="10" x2="23" y2="10" />
-  </svg>
-);
-
-const ShieldIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const SparkIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z" />
-  </svg>
-);
-
-const LeafIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" />
-    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-  </svg>
-);
-
-const TruckIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="1" y="3" width="15" height="13" rx="1" />
-    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-    <circle cx="5.5" cy="18.5" r="2.5" />
-    <circle cx="18.5" cy="18.5" r="2.5" />
-  </svg>
-);
-
-const BagIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <path d="M16 10a4 4 0 0 1-8 0" />
-  </svg>
-);
-
-const HomePage = () => {
+const HomePage: React.FC = () => {
   const { language } = useLanguage();
+  const { settings } = useSiteSettings();
+  const { articles, faqs } = usePublicContent();
   const [products, setProducts] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number>(0);
 
-  const t = (ar: string, fr: string) => (language === "ar" ? ar : fr);
+  const tx = (ar: string, fr: string) => (language === "ar" ? ar : fr);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    let active = true;
+    const loadHomeData = async () => {
       try {
-        const [productsRes, offersRes] = await Promise.all([
-          axios.get(`/api/products?language=${language}`),
-          axios.get("/api/offers"),
+        setLoading(true);
+        const [productsRes, offersRes, reviewsRes] = await Promise.all([
+          api.get(`/products?language=${language}`),
+          api.get("/offers").catch(() => ({ data: { data: [] } })),
+          api.get("/reviews?limit=3").catch(() => ({ data: { data: [] } })),
         ]);
-        if (cancelled) return;
-        setProducts(Array.isArray(productsRes.data?.data) ? productsRes.data.data : []);
-        const rawOffers = Array.isArray(offersRes.data?.data) ? offersRes.data.data : [];
-        // Only real, currently-enabled offers that still reference a public item.
-        setOffers(rawOffers.filter((offer: any) => offer && offer.relatedEntity));
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error loading home data:", err);
-        setError("Failed to load home data");
+        if (!active) return;
+        setProducts(productsRes.data?.data || []);
+        setOffers(offersRes.data?.data || []);
+        setReviews(reviewsRes.data?.data || []);
+      } catch {
+        // Keep clean empty states on transient error
       } finally {
-        if (!cancelled) setLoading(false);
+        if (active) setLoading(false);
       }
-    })();
+    };
+    void loadHomeData();
     return () => {
-      cancelled = true;
+      active = false;
     };
   }, [language]);
 
-  const featured = useMemo(() => {
-    if (products.length === 0) return [];
-    const flagged = products.filter((p) => p.isFeatured);
-    // Real "featured" data when the admin has flagged products; otherwise the
-    // section is still genuine catalog data, just labeled as "our products".
-    const base = (flagged.length > 0 ? flagged : products).slice(0, MAX_FEATURED);
-    return base;
-  }, [products]);
+  const featuredProducts = products.filter((p) => p.isFeatured);
+  const displayProducts = (featuredProducts.length > 0 ? featuredProducts : products).slice(0, 8);
+  const heroProductWithGenuinePhoto = displayProducts.find((p) => Boolean(pickProductImage(p)));
 
-  // Hero visuals come from the real, publicly-listed product images (max 3,
-  // de-duplicated). No stock photos, no invented products.
-  const heroShots = useMemo(() => {
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const product of products) {
-      const img = pickProductImage(product);
-      if (!img || seen.has(img)) continue;
-      seen.add(img);
-      out.push(product);
-      if (out.length >= MAX_HERO_SHOTS) break;
-    }
-    return out.length >= MIN_HERO_SHOTS ? out : [];
-  }, [products]);
+  const categories = [
+    {
+      slug: "all",
+      title: tx("الكل", "Tous les produits"),
+      desc: tx("استعرض كامل تشكيلة المنتجات المتوفرة حالياً في المتجر.", "Parcourez l'ensemble des produits actuellement disponibles."),
+      badge: "DXN",
+    },
+    {
+      slug: "supplements",
+      title: tx("المكملات الغذائية", "Compléments alimentaires"),
+      desc: tx("مكملات غذائية لدعم النظام الغذائي المتوازن وفق إرشادات العبوة الرسمية.", "Compléments nutritionnels pour accompagner une alimentation équilibrée."),
+      badge: tx("تغذية", "Nutrition"),
+    },
+    {
+      slug: "cosmetics",
+      title: tx("الكوسميتيك", "Cosmétiques & Soins"),
+      desc: tx("منتجات العناية بالبشرة والعناية الشخصية للاستخدام الظاهري اليومي.", "Soins cosmétiques et produits d'hygiène pour l'usage externe quotidien."),
+      badge: tx("عناية", "Soins"),
+    },
+    {
+      slug: "beverages",
+      title: tx("المشروبات والقهوة", "Boissons & Cafés"),
+      desc: tx("مشروبات يومية ساخنة وباردة بنكهات مميزة.", "Boissons chaudes et froides savoureuses pour le quotidien."),
+      badge: tx("مشروبات", "Boissons"),
+    },
+  ];
 
-  const realOffer = offers[0] || null;
+  const whyPillars = [
+    {
+      title: tx("تأسيس عريق منذ 1993", "Fondée en Malaisie en 1993"),
+      body: tx(
+        "انطلقت شركة DXN من ماليزيا وتوسعت عبر شبكة توزيع دولية منظمة في عشرات الأسواق.",
+        "Née en Malaisie en 1993, DXN s'est développée à travers un réseau international structuré."
+      ),
+    },
+    {
+      title: tx("تنوع فئات المنتجات", "Gamme de produits diversifiée"),
+      body: tx(
+        "مكملات غذائية، مشروبات يومية، ومنتجات كوسميتيك وعناية شخصية تلبي احتياجات الأسرة.",
+        "Compléments alimentaires, boissons quotidiennes et soins cosmétiques adaptés au quotidien."
+      ),
+    },
+    {
+      title: tx("تكامل الزراعة والتصنيع", "Production intégrée « One Dragon »"),
+      body: tx(
+        "إشراف متكامل من الزراعة والمعالجة إلى التعبئة والتغليف لضمان ثبات المواصفات.",
+        "Maîtrise des étapes de culture, transformation et conditionnement au sein du groupe."
+      ),
+    },
+    {
+      title: tx("تثقيف مسؤول وشفاف", "Information responsable et conforme"),
+      body: tx(
+        "نقدم شرحاً علمياً متزناً للمكونات وطريقة الاستخدام دون أي مبالغات أو ادعاءات طبية.",
+        "Une approche éducative rigoureuse sans aucune promesse médicale exagérée."
+      ),
+    },
+  ];
 
-  const singleProduct = featured.length === 1 ? featured[0] : null;
-  const singleTitle = singleProduct ? pickProductTitle(singleProduct, language) : "";
-  const singleDesc = singleProduct ? pickProductDescription(singleProduct, language) : "";
-  const singlePrice = singleProduct ? Number(singleProduct.price) || 0 : 0;
-  const singleCompare = singleProduct ? Number(singleProduct.compareAtPrice) || 0 : 0;
-  const singleSlug = singleProduct?.slug ?? "";
+  const businessSteps = [
+    {
+      num: "01",
+      title: tx("تعرّف على المنتجات والشركة", "Découvrir l'entreprise et les produits"),
+      body: tx("اطلع على تاريخ DXN ومكونات منتجاتها والفرق الواضح بين التسوق كعميل والعمل كعضو.", "Comprenez l'histoire de DXN, ses produits et la distinction entre client et distributeur."),
+    },
+    {
+      num: "02",
+      title: tx("أرسل طلب الانضمام عبر المنصة", "Envoyer une demande d'accompagnement"),
+      body: tx("عبّئ نموذج الانضمام ليتواصل معك فريق DXN NADZ عبر وسيلتك المفضلة دون أي التزام مسبق.", "Remplissez le formulaire pour être recontacté par notre équipe via votre canal préféré."),
+    },
+    {
+      num: "03",
+      title: tx("الإرشاد والتسجيل الرسمي", "Orientation et inscription officielle"),
+      body: tx("نرافقك خطوة بخطوة في إجراءات التسجيل الرسمي الصحيح وشرح نظام النقاط (PV).", "Accompagnement personnalisé pour effectuer votre inscription officielle et comprendre les points PV."),
+    },
+    {
+      num: "04",
+      title: tx("التدريب وبناء النشاط بمسؤولية", "Formation et développement progressif"),
+      body: tx("النتائج تعتمد على المبيعات الفعلية للمنتجات والمتابعة المستمرة دون وعود بأرباح تلقائية.", "Le développement repose sur les ventes réelles et la formation continue, sans promesse de gain automatique."),
+    },
+  ];
 
-  if (loading) {
-    return (
-      <div className="dxn-loading" role="status" aria-live="polite">
-        <div className="dxn-loading-ring"></div>
-        <div>{t("جارٍ تحميل الصفحة الرئيسية...", "Chargement de la page d'accueil...")}</div>
-      </div>
-    );
-  }
+  const previewArticles = articles.slice(0, 3);
+  const previewFaqs = faqs.slice(0, 4);
+
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: settings.brandName || "DXN NADZ",
+    url: "https://dxnnadz.vercel.app/",
+    email: settings.contactEmail || STORE_EMAIL,
+    description: tx(
+      "منصة DXN NADZ للتسوق المباشر، التثقيف الموثوق بالمنتجات، والانضمام إلى فريق البيع المباشر.",
+      "Plateforme DXN NADZ — Boutique, éducation produits et accompagnement d'équipe."
+    ),
+  };
 
   return (
-    <>
-      {/* C — Hero (A announcement bar and B header live in Header.tsx) */}
-      <section className="dxn-hero dxn-hero-home dxn-anim-fade-up">
-        <div className="dxn-hero-grid">
-          <div className="dxn-hero-inner">
-            <span className="dxn-hero-kicker">
-              {t("مكملات غذائية طبيعية من DXN", "Compléments alimentaires naturels DXN")}
-            </span>
-            <h1 className="dxn-hero-title">
-              {language === "ar" ? (
-                <>
-                  منتجات DXN الطبيعية
-                  <span className="dxn-hero-gold"> توصلكم إلى كل الولايات</span>
-                </>
-              ) : (
-                <>
-                  Des produits naturellement DXN,{" "}
-                  <span className="dxn-hero-gold">livrés dans les 69 wilayas</span>
-                </>
-              )}
-            </h1>
-            <p className="dxn-hero-text">
-              {t(
-                "اكتشف تشكيلة DXN من المكملات الغذائية والقَهوة. توصيل إلى جميع ولايات الجزائر، الدفع عند الاستلام وتأكيد الطلب عبر الهاتف.",
-                "Découvrez la gamme DXN de compléments alimentaires et de cafés. Livraison vers toutes les wilayas d'Algérie, paiement à la livraison et confirmation par téléphone."
-              )}
-            </p>
-            <div className="dxn-hero-cta">
-              <Link to="/products" className="dxn-btn dxn-btn-gold">
-                {t("تصفح المنتجات", "Parcourir les produits")}
-              </Link>
-              <a href="#how-to-order" className="dxn-btn dxn-btn-outline-light">
-                {t("كيفية الطلب", "Comment commander")}
-              </a>
-            </div>
-          </div>
+    <div className="dxn-page">
+      <SeoHead
+        title={tx("DXN NADZ — اكتشف عالم DXN", "DXN NADZ — Découvrez l'univers DXN")}
+        description={tx(
+          "اكتشف عالم DXN مع منصة DXN NADZ: منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري مع التوصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية التوصيل).",
+          "Découvrez l'univers DXN avec DXN NADZ : produits variés, savoir fiable et opportunité de développer votre activité à travers les 69 wilayas d'Algérie."
+        )}
+        canonicalPath="/"
+        jsonLd={orgJsonLd}
+      />
 
-          <div className="dxn-hero-visuals" aria-hidden="true">
-            {heroShots.length > 0 ? (
-              <div className="dxn-hero-collage">
-                {heroShots.map((product, i) =>
-                  product.slug ? (
-                    <Link
-                      key={product._id}
-                      to={`/product/${encodeURIComponent(product.slug)}`}
-                      className="dxn-hero-shot"
-                      tabIndex={-1}
-                    >
-                      <img
-                        src={pickProductImage(product)}
-                        alt=""
-                        loading={i === 0 ? "eager" : "lazy"}
-                      />
-                    </Link>
-                  ) : (
-                    <div key={product._id} className="dxn-hero-shot">
-                      <img src={pickProductImage(product)} alt="" loading="lazy" />
+      {/* 1. HERO BANNER (Phase 2.1) */}
+      <section className="dxn-hero">
+        <div className="container dxn-hero-inner">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-7">
+              <span className="dxn-hero-eyebrow">
+                <span aria-hidden="true">✦</span>
+                {settings.brandName || "DXN NADZ"} — {tx("منصة التسوق والمعرفة والفريق", "Boutique • Savoir • Équipe")}
+              </span>
+              <h1>{tx("اكتشف عالم DXN", "Découvrez l'univers DXN")}</h1>
+              <p className="dxn-hero-lead">
+                {tx(
+                  "منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري.",
+                  "Des produits variés, une information fiable et une opportunité structurée pour développer votre activité commerciale."
+                )}
+              </p>
+              <div className="dxn-hero-cta">
+                <Link to="/products" className="dxn-btn dxn-btn-gold dxn-btn-lg">
+                  {tx("اكتشف المنتجات", "Découvrir les produits")}
+                </Link>
+                <Link to="/join" className="dxn-btn dxn-btn-ghost dxn-btn-lg">
+                  {tx("انضم إلى فريقنا", "Rejoindre notre équipe")}
+                </Link>
+              </div>
+              <div className="mt-4 d-flex flex-wrap gap-3 small" style={{ color: "rgba(255,255,255,0.86)" }}>
+                <span>✓ {tx("شراء مباشر بدون اشتراط عضوية", "Achat libre sans adhésion obligatoire")}</span>
+                <span>✓ {tx("الدفع نقداً عند الاستلام", "Paiement à la livraison")}</span>
+                <span>✓ {tx("محتوى تثقيفي مسؤول وموثوق", "Contenu éducatif conforme")}</span>
+              </div>
+            </div>
+
+            <div className="col-lg-5">
+              <div className="dxn-hero-showcase">
+                {heroProductWithGenuinePhoto ? (
+                  <div className="text-center">
+                    <img
+                      src={pickProductImage(heroProductWithGenuinePhoto)}
+                      alt={pickProductTitle(heroProductWithGenuinePhoto, language)}
+                      className="dxn-hero-showcase-img mb-3"
+                    />
+                    <div className="small text-uppercase fw-bold" style={{ color: "#fce588" }}>
+                      {tx("من تشكيلة المتجر الأصلية", "Sélection officielle en boutique")}
                     </div>
-                  )
+                    <h2 className="h5 fw-bold text-white mt-1 mb-2">
+                      {pickProductTitle(heroProductWithGenuinePhoto, language)}
+                    </h2>
+                    <Link
+                      to={`/product/${encodeURIComponent(heroProductWithGenuinePhoto.slug)}`}
+                      className="dxn-btn dxn-btn-light btn-sm"
+                    >
+                      {tx("عرض تفاصيل المنتج", "Voir la fiche produit")}
+                    </Link>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="small fw-bold mb-2" style={{ color: "#fce588" }}>
+                      {settings.brandName || "DXN NADZ"}
+                    </div>
+                    <h2 className="h4 fw-bold text-white mb-3">
+                      {tx("منصة متكاملة للتسوق والتثقيف وبناء الفريق", "Une plateforme complète : Produits, Éducation & Réseau")}
+                    </h2>
+                    <ul className="list-unstyled mb-0 d-grid gap-2 small" style={{ color: "rgba(255,255,255,0.9)" }}>
+                      <li>• {tx("تسوّق المكملات الغذائية والكوسميتيك بأسعار واضحة", "Commandez compléments et cosmétiques en toute clarté")}</li>
+                      <li>• {tx("حقل اختياري لإدخال رقم عضويتك الحالية عند الطلب", "Champ optionnel pour votre numéro de membre DXN au paiement")}</li>
+                      <li>• {tx("مركز معرفة علمي يشرح المكونات وطريقة الحفظ والاستخدام", "Centre éducatif détaillant ingrédients, usage et conservation")}</li>
+                      <li>• {tx("مرافقة شخصية للراغبين في الانضمام إلى فريق DXN NADZ", "Accompagnement personnalisé pour rejoindre l'équipe DXN NADZ")}</li>
+                    </ul>
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="dxn-hero-pattern">
-                <span className="dxn-hero-pattern-brand">DXN</span>
-              </div>
-            )}
-            <span className="dxn-hero-pill">
-              <PinIcon />
-              {t("توصيل إلى 69 ولاية", "Livraison en 69 wilayas")}
-            </span>
+            </div>
           </div>
         </div>
       </section>
 
-      <Container>
-        {/* D — Trust strip (3 real store commitments) */}
-        <section className="dxn-trust" aria-label={t("مزايا المتجر", "Nos garanties")}>
-          <div className="dxn-trust-item">
-            <div className="dxn-trust-icon">
-              <PinIcon />
-            </div>
+      {/* 2. FEATURED PRODUCTS SECTION */}
+      <section className="dxn-section">
+        <div className="container">
+          <div className="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-2">
             <div>
-              <div className="dxn-trust-title">{t("التوصيل إلى 69 ولاية", "Livraison en 69 wilayas")}</div>
-              <div className="dxn-trust-sub">{t("إلى جميع ولايات الجزائر", "Partout en Algérie")}</div>
+              <span className="dxn-section-eyebrow">{tx("المتجر الإلكتروني", "Boutique en ligne")}</span>
+              <h2 className="dxn-section-title mb-1">{tx("منتجات مختارة من DXN", "Produits DXN à découvrir")}</h2>
+              <p className="dxn-section-sub mb-0">
+                {tx("اطلب مباشرة بدون الحاجة لعضوية، مع إمكانية إضافة رقم عضويتك اختيارياً عند الدفع.", "Commandez directement sans obligation d'adhésion, avec paiement à la livraison.")}
+              </p>
             </div>
+            <Link to="/products" className="dxn-btn dxn-btn-outline">
+              {tx("عرض كل المنتجات", "Voir tout le catalogue")}
+            </Link>
           </div>
-          <div className="dxn-trust-item">
-            <div className="dxn-trust-icon gold">
-              <CardIcon />
-            </div>
-            <div>
-              <div className="dxn-trust-title">{t("الدفع عند الاستلام", "Paiement à la livraison")}</div>
-              <div className="dxn-trust-sub">{t("ادفع عند وصول طلبك", "Payez à la réception")}</div>
-            </div>
-          </div>
-          <div className="dxn-trust-item">
-            <div className="dxn-trust-icon">
-              <ShieldIcon />
-            </div>
-            <div>
-              <div className="dxn-trust-title">{t("متجر متخصص في منتجات DXN", "Boutique spécialisée DXN")}</div>
-              <div className="dxn-trust-sub">{t("كتالوج حقيقي مُدار من المتجر", "Catalogue réel géré par la boutique")}</div>
-            </div>
-          </div>
-        </section>
 
-        {error ? (
-          <div className="dxn-feedback-error p-3 mt-4" role="alert">
-            {t(
-              "تعذر تحميل الكتالوج حالياً. يرجى المحاولة لاحقاً.",
-              "Impossible de charger le catalogue pour le moment. Veuillez réessayer."
-            )}
-          </div>
-        ) : (
-          <>
-            {/* F — Featured products (real catalog, honor stock status) */}
-            <section className="mt-5" aria-labelledby="home-featured-title">
-              <div className="d-flex align-items-center gap-3 flex-wrap mb-3">
-                <div>
-                  <span className="dxn-chip">{language === "ar" ? "التشكيلة" : "La gamme"}</span>
-                  <h2 className="dxn-section-title h3" id="home-featured-title">
-                    {products.some((p) => p.isFeatured)
-                      ? t("منتجات مميزة", "Produits en vedette")
-                      : t("منتجاتنا", "Nos produits")}
-                  </h2>
+          {loading ? (
+            <div className="row g-3 g-md-4">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="col-6 col-md-4 col-lg-3">
+                  <div className="dxn-skeleton-card">
+                    <div className="dxn-skeleton dxn-skeleton-media" />
+                    <div className="p-3">
+                      <div className="dxn-skeleton dxn-skeleton-line sm" />
+                      <div className="dxn-skeleton dxn-skeleton-line lg" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <p className="dxn-section-sub">
-                {t(
-                  "جميع الأسعار بالدينار الجزائري (دج). الأسعار والمخزون قابلة للتحديث بشكل مستمر.",
-                  "Tous les prix sont en dinars algériens (DA). Prix et stocks peuvent être mis à jour à tout moment."
+              ))}
+            </div>
+          ) : displayProducts.length === 0 ? (
+            <div className="dxn-empty">
+              <h3>{tx("تشكيلة المنتجات قيد التحديث", "Catalogue en cours de mise à jour")}</h3>
+              <p className="mb-3">
+                {tx(
+                  "تُعرض هنا المنتجات الأصلية المعتمدة فور تفعيلها من إدارة المتجر. يمكنك التواصل معنا للاستفسار عن التوفر الحالي.",
+                  "Les produits officiels s'affichent ici dès leur activation par l'administration. Contactez-nous pour toute demande."
                 )}
               </p>
-
-              {products.length === 0 ? (
-                <div className="dxn-empty">
-                  <div className="dxn-empty-icon">
-                    <SparkIcon />
-                  </div>
-                  <p className="mb-1">
-                    {t(
-                      "نعمل حالياً على تحضير الكتالوج.",
-                      "Nous préparons actuellement le catalogue."
-                    )}
-                  </p>
-                  <p className="mb-3">
-                    {t(
-                      "يمكنك التواصل معنا مباشرة عبر البريد الإلكتروني لأي استفسار.",
-                      "Vous pouvez nous contacter directement par e-mail pour toute question."
-                    )}
-                  </p>
-                  <a href={STORE_EMAIL_MAILTO} className="dxn-btn dxn-btn-outline">
-                    {t("راسلنا الآن", "Contactez-nous")}
-                  </a>
+              <Link to="/contact" className="dxn-btn dxn-btn-primary">
+                {tx("تواصل معنا للاستفسار", "Nous contacter")}
+              </Link>
+            </div>
+          ) : (
+            <div className="row g-3 g-md-4">
+              {displayProducts.map((product: any) => (
+                <div key={product._id} className="col-6 col-md-4 col-lg-3">
+                  <ProductCard product={product} language={language} />
                 </div>
-              ) : singleProduct ? (
-                /* One product: intentional split composition (product + info
-                   panel). It never stretches into a lone floating card. */
-                <div className="dxn-featured-single dxn-anim-fade-up">
-                  <div className="dxn-single-card">
-                    <ProductCard product={singleProduct} language={language} />
-                  </div>
-                  <aside className="dxn-single-info">
-                    <span className="dxn-chip dxn-chip-gold">
-                      {t("منتج مميز", "Produit vedette")}
-                    </span>
-                    <h3 className="dxn-single-title">{singleTitle}</h3>
-                    {singleDesc && <p className="dxn-single-desc">{singleDesc}</p>}
-                    {singlePrice > 0 && (
-                      <div className="dxn-single-price">
-                        <span className="dxn-single-price-now">
-                          {singlePrice.toLocaleString("fr-DZ")} DA
+              ))}
+            </div>
+          )}
+
+          {offers.length > 0 && (
+            <div className="mt-4 pt-2">
+              <div className="row g-3">
+                {offers.slice(0, 2).map((offer: any) => (
+                  <div key={offer._id} className="col-md-6">
+                    <div className="dxn-offer-card">
+                      <div>
+                        <span className="dxn-offer-badge">
+                          {offer.type === "percentage" ? `-${offer.value}%` : `-${offer.value} DA`}
                         </span>
-                        {singleCompare > singlePrice && (
-                          <span className="dxn-single-price-old">
-                            {singleCompare.toLocaleString("fr-DZ")} DA
-                          </span>
-                        )}
+                        <h3 className="h6 fw-bold mt-2 mb-1">{offer.title}</h3>
                       </div>
-                    )}
-                    <ul className="dxn-single-points">
-                      <li>
-                        {t("السعر معروض بوضوح بالدينار الجزائري.", "Prix clair en dinars algériens.")}
-                      </li>
-                      <li>
-                        {t("توصيل إلى ولايات الجزائر الـ 69.", "Livraison dans les 69 wilayas d'Algérie.")}
-                      </li>
-                      <li>
-                        {t("الدفع عند الاستلام.", "Paiement à la livraison.")}
-                      </li>
-                    </ul>
-                    <Link
-                      to={singleSlug ? `/product/${encodeURIComponent(singleSlug)}` : "/products"}
-                      className="dxn-btn dxn-btn-outline-light dxn-single-cta"
-                    >
-                      {t("عرض المنتج", "Voir le produit")}
-                    </Link>
-                  </aside>
-                </div>
-              ) : (
-                <Row>
-                  {featured.map((product, index) => (
-                    <Col key={product._id} xs={12} sm={6} lg={4} xl={3} className="mb-4 d-flex">
-                      <div className={`w-100 dxn-anim-fade-up dxn-stagger-${(index % 6) + 1}`}>
-                        <ProductCard product={product} language={language} />
-                      </div>
-                    </Col>
-                  ))}
-                </Row>
-              )}
-            </section>
+                      <Link to="/products" className="dxn-btn dxn-btn-outline btn-sm">
+                        {tx("استفد من العرض", "Voir l'offre")}
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-            {/* G1 — Real-offer band (only real offers linked to a public item) */}
-            {realOffer && (
-              <section className="dxn-promo dxn-anim-fade-up" aria-labelledby="home-promo-title">
-                <div className="dxn-promo-content">
-                  <span className="dxn-promo-chip">
-                    {realOffer.type === "percentage"
-                      ? `-${realOffer.value}%`
-                      : realOffer.type === "fixed"
-                        ? `-${realOffer.value} DA`
-                        : t("عرض", "Offre")}
-                  </span>
-                  <h3 className="dxn-promo-title" id="home-promo-title">
-                    {realOffer.title || t("عرض حقيقي من متجر DXN", "Offre réelle de la boutique DXN")}
-                  </h3>
-                  <p className="dxn-promo-text">
-                    {t(
-                      "عرض فعلي على أحد منتجات التشكيلة. الأسعار تُحدَّث من لوحة التحكم.",
-                      "Une offre réelle sur un produit de la gamme. Prix mis à jour depuis le tableau de bord."
+      {/* 3. PRODUCT CATEGORIES SECTION */}
+      <section className="dxn-section dxn-section-alt">
+        <div className="container">
+          <div className="dxn-section-head">
+            <span className="dxn-section-eyebrow">{tx("تصنيفات المتجر", "Catégories")}</span>
+            <h2 className="dxn-section-title">{tx("تصفّح حسب الفئة", "Explorer par catégorie")}</h2>
+          </div>
+          <div className="row g-3 g-md-4">
+            {categories.map((cat) => (
+              <div key={cat.slug} className="col-sm-6 col-lg-3">
+                <Link
+                  to={cat.slug === "all" ? "/products" : `/products?category=${cat.slug}`}
+                  className="text-decoration-none text-reset d-block h-100"
+                >
+                  <div className="dxn-info-card d-flex flex-column justify-content-between">
+                    <div>
+                      <span className="badge rounded-pill mb-2" style={{ background: "#e6f4ec", color: "#0b3d1f" }}>
+                        {cat.badge}
+                      </span>
+                      <h3 className="h5 fw-bold mb-2">{cat.title}</h3>
+                      <p className="text-muted small mb-3">{cat.desc}</p>
+                    </div>
+                    <span className="fw-bold small" style={{ color: "var(--dxn-green-700)" }}>
+                      {tx("استعراض الفئة ←", "Voir la catégorie →")}
+                    </span>
+                  </div>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. WHY DXN SECTION */}
+      <section className="dxn-section">
+        <div className="container">
+          <div className="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-2">
+            <div>
+              <span className="dxn-section-eyebrow">{tx("القيمة والجودة", "Valeur & Qualité")}</span>
+              <h2 className="dxn-section-title mb-0">{tx("لماذا يختار الكثيرون DXN؟", "Pourquoi tant de personnes choisissent DXN ?")}</h2>
+            </div>
+            <Link to="/why-dxn" className="dxn-btn dxn-btn-outline">
+              {tx("تفاصيل أكثر", "En savoir plus")}
+            </Link>
+          </div>
+          <div className="row g-3 g-md-4">
+            {whyPillars.map((p, idx) => (
+              <div key={idx} className="col-md-6 col-lg-3">
+                <div className="dxn-info-card">
+                  <div className="dxn-step-num mb-3">{idx + 1}</div>
+                  <h3 className="h6 fw-bold mb-2">{p.title}</h3>
+                  <p className="text-muted small mb-0">{p.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5 & 6. ABOUT DXN PREVIEW & MEET THE FOUNDER PREVIEW */}
+      <section className="dxn-section dxn-section-alt">
+        <div className="container">
+          <div className="row g-4">
+            <div className="col-lg-6">
+              <div className="dxn-info-card d-flex flex-column justify-content-between">
+                <div>
+                  <span className="dxn-section-eyebrow">{tx("نبذة تعريفية", "Présentation")}</span>
+                  <h2 className="h4 fw-bold mt-1 mb-3">{tx("من هي شركة DXN؟", "Qui est l'entreprise DXN ?")}</h2>
+                  <p className="text-muted" style={{ lineHeight: 1.8 }}>
+                    {tx(
+                      "تأسست شركة DXN في ماليزيا عام 1993 بولاية قدح (Kedah)، وتُعرف بنموذج «التنين الواحد» (One Dragon) الذي يجمع بين زراعة المواد الخام، التصنيع، التعبئة، والتسويق المباشر ضمن منظومة متكاملة.",
+                      "Fondée en 1993 dans l'État de Kedah en Malaisie, DXN s'appuie sur le modèle intégré « One Dragon » couvrant la culture, la transformation industrielle et la distribution internationale."
                     )}
                   </p>
-                  <Link to="/products" className="dxn-btn dxn-btn-gold">
-                    {t("تصفح المنتجات", "Voir les produits")}
+                </div>
+                <div className="mt-3">
+                  <Link to="/about" className="dxn-btn dxn-btn-primary">
+                    {tx("اقرأ قصة شركة DXN", "Découvrir l'histoire de DXN")}
                   </Link>
                 </div>
-              </section>
+              </div>
+            </div>
+
+            <div className="col-lg-6">
+              <div className="dxn-info-card d-flex flex-column justify-content-between">
+                <div>
+                  <span className="dxn-section-eyebrow">{tx("القيادة والتأسيس", "Fondateur")}</span>
+                  <h2 className="h4 fw-bold mt-1 mb-3">{tx("تعرّف على مؤسس DXN", "Rencontrez le fondateur de DXN")}</h2>
+                  <p className="text-muted" style={{ lineHeight: 1.8 }}>
+                    {tx(
+                      "أسس داتوك الدكتور ليم سيو جين (Datuk Dr. Lim Siow Jin)، خريج المعهد الهندي للتكنولوجيا (IIT)، شركة DXN عام 1993 بعد اهتمام بحثي طويل باستزراع الفطريات الغذائية وتطوير منتجات استهلاكية ذات جودة منضبطة.",
+                      "Diplômé de l'Indian Institute of Technology (IIT), Datuk Dr. Lim Siow Jin a fondé DXN en 1993 avec une vision axée sur la culture contrôlée du Ganoderma et la qualité industrielle."
+                    )}
+                  </p>
+                </div>
+                <div className="mt-3">
+                  <Link to="/founder" className="dxn-btn dxn-btn-outline">
+                    {tx("السيرة الكاملة للمؤسس", "Lire la biographie du fondateur")}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. PRODUCT EDUCATION PREVIEW */}
+      <section className="dxn-section">
+        <div className="container">
+          <div className="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-2">
+            <div>
+              <span className="dxn-section-eyebrow">{tx("معرفة موثوقة", "Centre éducatif")}</span>
+              <h2 className="dxn-section-title mb-1">{tx("مركز التثقيف بالمنتجات والمكونات", "Comprendre les ingrédients et le bon usage")}</h2>
+              <p className="dxn-section-sub mb-0">
+                {tx("مقالات علمية متوازنة تفصل بوضوح بين الحقائق الغذائية المثبتة والاستخدامات التقليدية وطريقة الحفظ.", "Guides éducatifs distinguant données nutritionnelles établies, usages traditionnels et conseils de conservation.")}
+              </p>
+            </div>
+            <Link to="/education" className="dxn-btn dxn-btn-primary">
+              {tx("تصفّح مركز المعرفة", "Accéder au centre éducatif")}
+            </Link>
+          </div>
+
+          <div className="row g-3 g-md-4">
+            {previewArticles.map((art) => {
+              const loc = language === "ar" ? art.ar : art.fr;
+              return (
+                <div key={art.slug} className="col-md-4">
+                  <div className="dxn-info-card d-flex flex-column justify-content-between">
+                    <div>
+                      <span className="dxn-evidence-badge science">
+                        {tx("دليل تثقيفي", "Guide éducatif")} • {art.readingMinutes} {tx("دقائق", "min")}
+                      </span>
+                      <h3 className="h5 fw-bold mb-2">{loc.title}</h3>
+                      <p className="text-muted small mb-3">{loc.summary}</p>
+                    </div>
+                    <Link
+                      to={`/education/${encodeURIComponent(art.slug)}`}
+                      className="fw-bold small text-decoration-none"
+                      style={{ color: "var(--dxn-green-700)" }}
+                    >
+                      {tx("اقرأ المقال كاملاً ←", "Lire l'article complet →")}
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="dxn-compliance-banner mt-4">
+            <strong>{tx("تنبيه صحي:", "Note sanitaire :")}</strong>{" "}
+            {tx(
+              "جميع المكملات الغذائية المعروضة هي منتجات غذائية لدعم نمط الحياة المتوازن وليست أدوية طبية، ولا تُستخدم لتشخيص أو علاج أو الوقاية من الأمراض.",
+              "Les compléments alimentaires présentés ne sont pas des médicaments et ne remplacent ni une alimentation équilibrée ni un avis médical."
             )}
-
-            {/* G — DXN brand / discovery (no fake categories) */}
-            <section className="dxn-brand-discovery dxn-anim-fade-up" aria-labelledby="home-discovery-title">
-              <div className="dxn-discovery-head">
-                <span className="dxn-chip">
-                  {t("اكتشف عالم DXN", "Découvrez l'univers DXN")}
-                </span>
-                <h2 className="dxn-section-title h3 mb-0" id="home-discovery-title">
-                  {t("متجر متخصص في منتجات DXN", "Une boutique spécialisée dans les produits DXN")}
-                </h2>
-                <p className="dxn-discovery-lead">
-                  {t(
-                    "نقدّم لكم منتجات DXN الحقيقية: تشكيلة متاحة فعلياً، توصيل إلى جميع ولايات الجزائر، وطلب سهل مع الدفع عند الاستلام.",
-                    "Nous vous proposons les véritables produits DXN : une gamme réellement disponible, une livraison vers toutes les wilayas d'Algérie et une commande simple avec paiement à la livraison."
-                  )}
-                </p>
-              </div>
-              <div className="dxn-discovery-grid">
-                <div className="dxn-discovery-item">
-                  <span className="dxn-discovery-icon">
-                    <LeafIcon />
-                  </span>
-                  <h3 className="dxn-discovery-title">
-                    {t("معلومات واضحة عن المنتجات", "Informations claires sur les produits")}
-                  </h3>
-                  <p className="dxn-discovery-text">
-                    {t(
-                      "اسم المنتج ووصفه ومواصفاته تظهر في بطاقته قبل الشراء.",
-                      "Le nom, la description et les caractéristiques sont affichés avant l'achat."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-discovery-item">
-                  <span className="dxn-discovery-icon gold">
-                    <TruckIcon />
-                  </span>
-                  <h3 className="dxn-discovery-title">
-                    {t("التوصيل عبر الجزائر", "Livraison à travers l'Algérie")}
-                  </h3>
-                  <p className="dxn-discovery-text">
-                    {t(
-                      "التوصيل متاح إلى ولايات الجزائر الـ 69.",
-                      "La livraison est disponible vers les 69 wilayas."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-discovery-item">
-                  <span className="dxn-discovery-icon">
-                    <BagIcon />
-                  </span>
-                  <h3 className="dxn-discovery-title">
-                    {t("الطلب بسهولة", "Commander en toute simplicité")}
-                  </h3>
-                  <p className="dxn-discovery-text">
-                    {t(
-                      "اختر المنتج، أضفه إلى السلة، وأدخل معلومات التوصيل.",
-                      "Choisissez le produit, ajoutez-le au panier et renseignez la livraison."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-discovery-item">
-                  <span className="dxn-discovery-icon gold">
-                    <CardIcon />
-                  </span>
-                  <h3 className="dxn-discovery-title">
-                    {t("الدفع عند الاستلام", "Paiement à la livraison")}
-                  </h3>
-                  <p className="dxn-discovery-text">
-                    {t(
-                      "لا دفع مسبق؛ تدفع عندما يصلك طلبك.",
-                      "Aucun prépaiement ; payez à la réception."
-                    )}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* H — Trust / transparency (only factual claims) */}
-            <section className="mt-5" aria-labelledby="home-trust-title">
-              <div className="text-center mb-4">
-                <span className="dxn-chip">
-                  {t("ثقة وشفافية", "Confiance et transparence")}
-                </span>
-                <h2 className="dxn-section-title h3 mb-0" id="home-trust-title">
-                  {t("كيف تسير طلباتك بثقة", "Commander en toute confiance")}
-                </h2>
-              </div>
-              <div className="dxn-why-grid">
-                <div className="dxn-why-card">
-                  <span className="dxn-why-icon"><CheckIcon /></span>
-                  <h3 className="dxn-why-title">
-                    {t("معلومات المنتج واضحة", "Informations produit claires")}
-                  </h3>
-                  <p className="dxn-why-text">
-                    {t(
-                      "الوصف والمواصفات معروضان قبل إضافة أي منتج إلى السلة.",
-                      "Description et caractéristiques sont visibles avant l'ajout au panier."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-why-card">
-                  <span className="dxn-why-icon"><CheckIcon /></span>
-                  <h3 className="dxn-why-title">
-                    {t("السعر واضح", "Prix clair")}
-                  </h3>
-                  <p className="dxn-why-text">
-                    {t(
-                      "كل سعر يُعرض بالدينار الجزائري منذ بطاقة المنتج حتى تأكيد الطلب.",
-                      "Chaque prix est affiché en dinars algériens, de la fiche produit à la confirmation."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-why-card">
-                  <span className="dxn-why-icon"><CheckIcon /></span>
-                  <h3 className="dxn-why-title">
-                    {t("تأكيد الطلب", "Confirmation de commande")}
-                  </h3>
-                  <p className="dxn-why-text">
-                    {t(
-                      "نعاود الاتصال بك لتأكيد الطلب قبل الشحن.",
-                      "Nous vous rappelons pour confirmer la commande avant l'expédition."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-why-card">
-                  <span className="dxn-why-icon"><CheckIcon /></span>
-                  <h3 className="dxn-why-title">
-                    {t("متابعة حالة الطلب", "Suivi de la commande")}
-                  </h3>
-                  <p className="dxn-why-text">
-                    {t(
-                      "بعد التأكيد يمكنك مراسلتنا مباشرة للاستفسار عن طلبك في أي وقت.",
-                      "Après confirmation, vous pouvez nous écrire pour toute question sur votre commande."
-                    )}
-                  </p>
-                </div>
-                <div className="dxn-why-card">
-                  <span className="dxn-why-icon"><CheckIcon /></span>
-                  <h3 className="dxn-why-title">
-                    {t("الدفع عند الاستلام", "Paiement à la livraison")}
-                  </h3>
-                  <p className="dxn-why-text">
-                    {t(
-                      "تدفع فقط عند استلام طلبك.",
-                      "Vous payez uniquement à la réception de votre commande."
-                    )}
-                  </p>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-
-        {/* How to order (real checkout flow, no invented routes) */}
-        <section className="mt-5" id="how-to-order" aria-labelledby="home-howto-title">
-          <div className="text-center mb-4">
-            <span className="dxn-chip">
-              {t("الطلب خطوة بخطوة", "Commander pas à pas")}
-            </span>
-            <h2 className="dxn-section-title h3 mb-0" id="home-howto-title">
-              {t("كيفية الطلب", "Comment commander")}
-            </h2>
           </div>
-          <div className="dxn-howto-grid">
-            <div className="dxn-howto-step">
-              <span className="dxn-howto-num">1</span>
-              <h3 className="dxn-howto-title">{t("اختر المنتج", "Choisissez le produit")}</h3>
-              <p className="dxn-howto-text">
-                {t(
-                  "تصفح التشكيلة من صفحة المنتجات واختر ما يناسبك.",
-                  "Parcourez la gamme et choisissez le produit qui vous convient."
-                )}
-              </p>
-            </div>
-            <div className="dxn-howto-step">
-              <span className="dxn-howto-num">2</span>
-              <h3 className="dxn-howto-title">{t("أضفه إلى السلة", "Ajoutez-le au panier")}</h3>
-              <p className="dxn-howto-text">
-                {t(
-                  "اضغط «أضف إلى السلة» على بطاقة المنتج ليُضاف إلى طلبك.",
-                  "Appuyez sur « Ajouter au panier » sur la fiche du produit."
-                )}
-              </p>
-            </div>
-            <div className="dxn-howto-step">
-              <span className="dxn-howto-num">3</span>
-              <h3 className="dxn-howto-title">{t("أدخل معلومات التوصيل", "Renseignez la livraison")}</h3>
-              <p className="dxn-howto-text">
-                {t(
-                  "الاسم، الهاتف، الولاية، البلدية وعنوان التوصيل.",
-                  "Nom, téléphone, wilaya, commune et adresse de livraison."
-                )}
-              </p>
-            </div>
-            <div className="dxn-howto-step">
-              <span className="dxn-howto-num">4</span>
-              <h3 className="dxn-howto-title">{t("أكد الطلب", "Confirmez la commande")}</h3>
-              <p className="dxn-howto-text">
-                {t(
-                  "راجع طلبك وأكّده؛ سيتصل بك فريقنا لتأكيد الشحن.",
-                  "Vérifiez votre commande et confirmez-la ; notre équipe vous rappelle pour valider l'expédition."
-                )}
-              </p>
-            </div>
-          </div>
-        </section>
+        </div>
+      </section>
 
-        {/* I — Final CTA */}
-        <section className="dxn-cta-final dxn-anim-fade-up" aria-labelledby="home-final-title">
-          <div className="dxn-cta-final-inner">
-            <h2 className="dxn-cta-final-title" id="home-final-title">
-              {t("جاهز لاكتشاف منتجات DXN؟", "Prêt à découvrir les produits DXN ?")}
-            </h2>
-            <p className="dxn-cta-final-text">
-              {t(
-                "تصفح التشكيلة الكاملة وأضف ما يعجبك إلى السلة.",
-                "Parcourez la gamme complète et ajoutez vos favoris au panier."
+      {/* 8. HOW DXN BUSINESS WORKS */}
+      <section className="dxn-section dxn-section-alt">
+        <div className="container">
+          <div className="dxn-section-head">
+            <span className="dxn-section-eyebrow">{tx("فرصة العمل المنظم", "Modèle d'activité")}</span>
+            <h2 className="dxn-section-title">{tx("كيف يعمل نظام العمل والعضوية في DXN؟", "Comment fonctionne l'activité DXN ?")}</h2>
+            <p className="dxn-section-sub">
+              {tx(
+                "شرح شفاف وواقعي لنموذج البيع المباشر خطوة بخطوة دون أي مبالغات.",
+                "Une présentation claire et transparente du fonctionnement de la vente directe."
               )}
             </p>
-            <div className="dxn-cta-final-actions">
-              <Link to="/products" className="dxn-btn dxn-btn-gold">
-                {t("تصفح المنتجات", "Parcourir les produits")}
+          </div>
+          <div className="row g-3 g-md-4">
+            {businessSteps.map((s) => (
+              <div key={s.num} className="col-sm-6 col-lg-3">
+                <div className="dxn-step-card">
+                  <div className="dxn-step-num">{s.num}</div>
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 9. JOIN OUR TEAM BANNER */}
+      <section className="dxn-section">
+        <div className="container">
+          <div className="dxn-cta-band">
+            <h2 className="mb-2">{tx("انضم إلى فريق DXN NADZ", "Rejoignez l'équipe DXN NADZ")}</h2>
+            <p className="mb-4">
+              {tx(
+                "سواء كنت ترغب في التعرف على نظام العضوية أو بدء نشاطك التجاري في البيع المباشر بمرافقة وتدريب مستمر، سيسعد فريقنا بالتواصل معك والإجابة عن جميع استفساراتك.",
+                "Vous souhaitez comprendre les avantages membres ou développer une activité de vente directe encadrée ? Notre équipe vous accompagne étape par étape."
+              )}
+            </p>
+            <div className="d-flex flex-wrap justify-content-center gap-3">
+              <Link to="/join" className="dxn-btn dxn-btn-gold dxn-btn-lg">
+                {tx("قدّم طلب الانضمام الآن", "Remplir le formulaire d'adhésion")}
               </Link>
-              <a href={STORE_EMAIL_MAILTO} className="dxn-btn dxn-btn-outline-light">
-                {t("تواصل معنا", "Contactez-nous")}
-              </a>
+              <Link to="/faq" className="dxn-btn dxn-btn-ghost dxn-btn-lg">
+                {tx("اطلع على الأسئلة الشائعة", "Consulter la FAQ")}
+              </Link>
             </div>
           </div>
-        </section>
-      </Container>
-    </>
+        </div>
+      </section>
+
+      {/* 10. FREQUENTLY ASKED QUESTIONS PREVIEW */}
+      <section className="dxn-section dxn-section-alt">
+        <div className="container">
+          <div className="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-2">
+            <div>
+              <span className="dxn-section-eyebrow">{tx("إجابات واضحة", "Questions fréquentes")}</span>
+              <h2 className="dxn-section-title mb-0">{tx("الأسئلة الشائعة", "Questions fréquemment posées")}</h2>
+            </div>
+            <Link to="/faq" className="dxn-btn dxn-btn-outline">
+              {tx("كل الأسئلة الشائعة", "Voir toutes les questions")}
+            </Link>
+          </div>
+          <div className="d-grid gap-3">
+            {previewFaqs.map((item, idx) => {
+              const loc = language === "ar" ? item.ar : item.fr;
+              const isOpen = openFaqIndex === idx;
+              return (
+                <div key={item.slug} className="bg-white border rounded-3 p-3 shadow-xs">
+                  <button
+                    type="button"
+                    className="btn w-100 text-start d-flex justify-content-between align-items-center p-0 fw-bold"
+                    onClick={() => setOpenFaqIndex(isOpen ? -1 : idx)}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{loc.question}</span>
+                    <span style={{ color: "var(--dxn-green-700)", fontSize: "1.25rem" }}>
+                      {isOpen ? "−" : "+"}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <p className="text-muted mb-0 mt-3 pt-2 border-top" style={{ lineHeight: 1.75 }}>
+                      {loc.answer}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* 11. CUSTOMER TESTIMONIALS (GENUINE AUTHORIZED ONLY — Phase 2.2 #11) */}
+      <section className="dxn-section">
+        <div className="container">
+          <div className="dxn-section-head">
+            <span className="dxn-section-eyebrow">{tx("تجارب العملاء", "Avis vérifiés")}</span>
+            <h2 className="dxn-section-title">{tx("آراء وتقييمات العملاء", "Témoignages de nos clients")}</h2>
+          </div>
+          {reviews.length > 0 ? (
+            <div className="row g-3 g-md-4">
+              {reviews.slice(0, 3).map((rev: any) => (
+                <div key={rev._id} className="col-md-4">
+                  <ReviewCard review={rev} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="dxn-info-card text-center py-4">
+              <p className="mb-1 fw-bold">
+                {tx(
+                  "نلتزم بعرض التقييمات الحقيقية والمعتمدة من عملائنا الفعليين فقط.",
+                  "Nous publions exclusivement des avis authentiques vérifiés de clients réels."
+                )}
+              </p>
+              <p className="text-muted small mb-0">
+                {tx(
+                  "لا نستخدم أي شهادات أو مراجعات مصطنعة حفاظاً على المصداقية والشفافية.",
+                  "Aucun témoignage fictif n'est affiché afin de garantir une transparence totale."
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 12. CONTACT SECTION */}
+      <section className="dxn-section dxn-section-alt">
+        <div className="container">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-7">
+              <span className="dxn-section-eyebrow">{tx("نحن في خدمتك", "À votre écoute")}</span>
+              <h2 className="dxn-section-title mb-2">{tx("هل لديك استفسار حول المنتجات أو الانضمام؟", "Une question sur nos produits ou l'équipe ?")}</h2>
+              <p className="text-muted mb-3">
+                {tx(
+                  "تواصل مباشرة مع فريق DXN NADZ عبر نموذج المراسلة السريع أو البريد الإلكتروني الرسمي، وسنرد عليك في أقرب وقت.",
+                  "Écrivez directement à l'équipe DXN NADZ via notre formulaire de contact ou par e-mail."
+                )}
+              </p>
+              <div className="small text-muted">
+                <strong>{tx("البريد الإلكتروني الرسمي:", "Email officiel :")}</strong>{" "}
+                <a href={`mailto:${settings.contactEmail || STORE_EMAIL}`}>
+                  {settings.contactEmail || STORE_EMAIL}
+                </a>
+              </div>
+            </div>
+            <div className="col-lg-5 text-lg-end">
+              <div className="d-flex flex-wrap gap-3 justify-content-lg-end">
+                <Link to="/contact" className="dxn-btn dxn-btn-primary dxn-btn-lg">
+                  {tx("أرسل رسالة الآن", "Envoyer un message")}
+                </Link>
+                {settings.whatsappUrl && (
+                  <a
+                    href={settings.whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="dxn-btn dxn-btn-outline dxn-btn-lg"
+                  >
+                    {tx("تواصل عبر واتساب", "WhatsApp direct")}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 };
 

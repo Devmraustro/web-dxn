@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useSiteSettings } from "../context/SiteSettingsContext";
 import LanguageSelector from "./LanguageSelector";
 
 const CartIcon = ({ size = 18 }: { size?: number }) => (
@@ -58,7 +59,8 @@ const CloseIcon = () => (
 const Header = () => {
   const { language } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
-  const { items, total } = useCart();
+  const { items } = useCart();
+  const { settings } = useSiteSettings();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin = isAuthenticated && (user?.role === "owner" || user?.role === "admin");
@@ -79,51 +81,64 @@ const Header = () => {
   const navItems = [
     { to: "/", label: t("الرئيسية", "Accueil"), end: true },
     { to: "/products", label: t("المنتجات", "Produits") },
+    { to: "/about", label: t("من هي DXN؟", "Qui est DXN ?") },
+    { to: "/education", label: t("مركز المعرفة", "Éducation") },
+    { to: "/faq", label: t("الأسئلة الشائعة", "FAQ") },
+    { to: "/contact", label: t("تواصل معنا", "Contact") },
+    { to: "/join", label: t("انضم إلى فريقنا", "Rejoindre l'équipe"), highlight: true },
     { to: "/cart", label: t("السلة", "Panier"), badge: cartCount },
-    { to: "/checkout", label: t("إتمام الطلب", "Commande") },
     ...(isAdmin ? [{ to: "/admin", label: t("لوحة التحكم", "Admin") }] : []),
   ];
 
   return (
     <>
-      {/* Announcement bar */}
       <div className="dxn-topbar">
         <div className="dxn-topbar-inner">
           <span className="dxn-topbar-item">
             <PinIcon />
-            {t("توصيل إلى جميع ولايات الجزائر (69 ولاية)", "Livraison vers les 69 wilayas d'Algérie")}
+            {t(
+              "توصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية شركة التوصيل)",
+              "Livraison en Algérie (69 wilayas — selon couverture du transporteur)"
+            )}
           </span>
           <span className="dxn-topbar-item dxn-topbar-gold">
-            {t("الدفع عند الاستلام متاح", "Paiement à la livraison disponible")}
+            {t("الدفع عند الاستلام متاح — الشراء متاح للجميع بدون اشتراط عضوية", "Paiement à la livraison — Achat ouvert sans adhésion")}
           </span>
         </div>
       </div>
 
       <header className="dxn-header">
         <nav className="dxn-nav" aria-label="Main navigation">
-          {/* Brand */}
           <Link to="/" className="dxn-brand" onClick={() => setMenuOpen(false)}>
             <span className="dxn-brand-badge">DXN</span>
             <span>
-              <span className="dxn-brand-name d-block">DXN Store</span>
-              <span className="dxn-brand-sub">{t("صحتك هي الصح", "Votre santé d'abord")}</span>
+              <span className="dxn-brand-name d-block">{settings.brandName || "DXN NADZ"}</span>
+              <span className="dxn-brand-sub">
+                {t("منتجات متنوعة • معرفة موثوقة", "Produits • Savoir • Équipe")}
+              </span>
             </span>
           </Link>
 
-          {/* Desktop nav */}
           <ul className="dxn-nav-links" role="menubar">
             {navItems.map((item: any) => (
               <li role="menuitem" key={item.to}>
                 <NavLink
                   to={item.to}
                   end={item.end}
-                  className={linkClass}
+                  className={({ isActive }) =>
+                    item.highlight
+                      ? `dxn-link dxn-nav-cta-pill${isActive ? " active" : ""}`
+                      : linkClass({ isActive })
+                  }
                   onClick={() => setMenuOpen(false)}
                 >
                   {item.to === "/cart" && <CartIcon size={16} />}
                   <span>{item.label}</span>
                   {typeof item.badge === "number" && item.badge > 0 && (
-                    <span className="dxn-nav-badge dxn-nav-badge-glow" aria-label={`${item.badge} ${t("عناصر", "articles")}`}>
+                    <span
+                      className="dxn-nav-badge dxn-nav-badge-glow"
+                      aria-label={`${item.badge} ${t("عناصر", "articles")}`}
+                    >
                       {item.badge}
                     </span>
                   )}
@@ -132,7 +147,6 @@ const Header = () => {
             ))}
           </ul>
 
-          {/* Actions */}
           <div className="dxn-header-actions">
             <LanguageSelector />
             {isAdmin ? (
@@ -141,7 +155,7 @@ const Header = () => {
               </button>
             ) : (
               <Link to="/admin/login" className="dxn-login-btn">
-                {t("دخول الأدمن", "Admin")}
+                {t("الإدارة", "Admin")}
               </Link>
             )}
             <button
@@ -156,7 +170,6 @@ const Header = () => {
           </div>
         </nav>
 
-        {/* Mobile menu */}
         <div className={menuOpen ? "dxn-mobile-menu open dxn-anim-fade-in" : "dxn-mobile-menu"}>
           {navItems.map((item: any) => (
             <NavLink
@@ -172,6 +185,12 @@ const Header = () => {
               )}
             </NavLink>
           ))}
+          <NavLink to="/founder" className={linkClass} onClick={() => setMenuOpen(false)}>
+            <span>{t("تعرّف على مؤسس DXN", "Fondateur de DXN")}</span>
+          </NavLink>
+          <NavLink to="/why-dxn" className={linkClass} onClick={() => setMenuOpen(false)}>
+            <span>{t("لماذا يختار الكثيرون DXN؟", "Pourquoi choisir DXN ?")}</span>
+          </NavLink>
           <div className="dxn-mobile-menu-row">
             {isAdmin ? (
               <button type="button" className="dxn-logout-btn" onClick={handleLogout}>
@@ -179,25 +198,11 @@ const Header = () => {
               </button>
             ) : (
               <Link to="/admin/login" className="dxn-login-btn" onClick={() => setMenuOpen(false)}>
-                {t("دخول الأدمن", "Admin")}
+                {t("دخول الإدارة", "Espace Admin")}
               </Link>
             )}
           </div>
         </div>
-
-        {/* Cart summary bar */}
-        {items.length > 0 && (
-          <div className="dxn-cartbar dxn-anim-fade-in" aria-live="polite">
-            <div className="dxn-cartbar-inner">
-              <span>
-                <CartIcon size={15} /> {t("المجموع", "Total")}:
-              </span>
-              <span className="dxn-cartbar-total">
-                {total.toLocaleString("fr-DZ")} DA
-              </span>
-            </div>
-          </div>
-        )}
       </header>
     </>
   );

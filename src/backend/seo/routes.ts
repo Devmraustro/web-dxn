@@ -11,6 +11,7 @@ import {
   getBreadcrumbSchema,
 } from "./utils";
 import { Product } from "../../Database/Models";
+import { DEFAULT_EDUCATIONAL_ARTICLES } from "../data/dxnEducationalContent";
 
 const router = Router();
 
@@ -18,22 +19,29 @@ const router = Router();
 const publicSitemapUrl = (): string =>
   `${normalizeBaseUrl(process.env.BASE_URL, "https://dxn.dz")}/sitemap.xml`;
 
-/** GET sitemap.xml (queries active products; needs the DB). */
+/** GET sitemap.xml (queries active products + published educational guides).
+ *  Gracefully degrades to the static educational-article entries when the DB
+ *  is unavailable, so crawlers still receive a valid sitemap instead of a 500. */
 export const serveSitemap = async (_req: Request, res: Response): Promise<void> => {
+  const baseUrl = normalizeBaseUrl(process.env.BASE_URL, "https://dxn.dz");
+  const articles = DEFAULT_EDUCATIONAL_ARTICLES.filter((a) => a.isPublished).map((a) => ({
+    slug: a.slug,
+  }));
   try {
     const products = await Product.find({ isActive: true })
       .select("slug updatedAt isActive")
       .lean();
 
-    const sitemap = generateSitemap(
-      products,
-      normalizeBaseUrl(process.env.BASE_URL, "https://dxn.dz")
-    );
+    const sitemap = generateSitemap(products, baseUrl, articles);
 
     res.type("application/xml").send(sitemap);
   } catch (error) {
-    console.error("Generate sitemap error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.warn(
+      "Generate sitemap error (serving article-only fallback):",
+      (error as Error)?.message || error
+    );
+    const fallback = generateSitemap([], baseUrl, articles);
+    res.type("application/xml").send(fallback);
   }
 };
 

@@ -1,18 +1,25 @@
 /**
- * Fast unit-test config for pure (DB-independent) suites such as the
- * AI safety-guard test. Uses ts-jest with isolatedModules (transpile-only)
- * so pure unit tests can verify runtime behaviour quickly without either
- * full-project type-checking or a MongoDB dependency. Full type-safety is
- * still enforced by the repository-wide `npm run typecheck`.
+ * Fast unit & DB-free integration test config covering:
+ *  - Backend unit suites (commerce, SEO, security fixes, AI guardrails, launch prep, Telegram)
+ *  - DB-free HTTP integration suites (Phase 23 product admin, DXN NADZ platform, Final Release Audit)
+ *  - Frontend utility suites (cart reconciliation, language switcher, order flow)
+ *
+ * Full project-wide TypeScript type-checking is enforced separately by `npm run typecheck`.
  */
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  roots: ["<rootDir>/src/backend/tests"],
+  roots: ["<rootDir>/src/backend/tests", "<rootDir>/src/frontend/src/utils"],
   testMatch: [
     "<rootDir>/src/backend/tests/ai-guardrail.test.ts",
     "<rootDir>/src/backend/tests/security-fixes-v2.test.ts",
     "<rootDir>/src/backend/tests/commerce-unit.test.ts",
+    "<rootDir>/src/backend/tests/launch-prep.test.ts",
+    "<rootDir>/src/backend/tests/telegram.service.test.ts",
+    "<rootDir>/src/backend/tests/phase23-product-admin.dbfree.test.ts",
+    "<rootDir>/src/backend/tests/dxn-nadz-platform.dbfree.test.ts",
+    "<rootDir>/src/backend/tests/final-release-audit.dbfree.test.ts",
+    "<rootDir>/src/frontend/src/utils/*.test.ts",
   ],
   transform: {
     "^.+\\.ts$": [
@@ -21,7 +28,7 @@ module.exports = {
         tsconfig: {
           target: "ES2020",
           module: "CommonJS",
-          lib: ["ES2020"],
+          lib: ["ES2020", "DOM"],
           strict: true,
           esModuleInterop: true,
           skipLibCheck: true,

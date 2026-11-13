@@ -9,13 +9,17 @@ import {
   normalizeQuantity,
   roundMoney,
 } from "../services/commerce";
-import { resolveShippingFeeStrict } from "../services/shipping.service";
+import { resolveShippingQuote } from "../services/shipping.service";
+import { findCanonicalWilaya } from "../data/algerianWilayas";
 import { sendNewOrderNotification, sendOrderStatusUpdate } from "../services/telegram.service";
 import type { TelegramSendResult } from "../services/telegram.service";
 import { canTransition, isRestockStatus } from "../../shared/orderStatus";
 import type { AuthRequest } from "../middleware/auth.middleware";
+import { normalizeOptionalDxnMemberId, normalizeTrafficSource } from "../services/attribution.service";
+import { recordAuditLog } from "../services/audit.service";
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+const escapeOrderRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function cleanCustomerInfo(body: any) {
   const ci = body?.customerInfo || {};
@@ -48,40 +52,90 @@ function logNotificationResult(orderNumber: string, result: TelegramSendResult):
 
 /** Order payload for API responses ظ¤ strips internal metadata (e.g. the stock
  * claims snapshot used for cancellation restock) from what clients see. */
-function publicOrderPayload(order: any): any {
-  const doc = order && typeof order.toObject === "function" ? order.toObject() : order;
-  if (doc && doc.metadata && typeof doc.metadata === "object") {
+/** Order payload for API responses — strips internal metadata (e.g. the stock
+ * claims snapshot used for cancellation restock) and protects private DXN
+ * membership IDs from unauthenticated/public responses. */
+function sanitizeOrderPayload(order: any, includePrivateAdminFields: boolean): any {
+  const raw = order && typeof order.toObject === "function" ? order.toObject() : order;
+  if (!raw || typeof raw !== "object") return raw;
+  const doc = { ...raw };
+  if (doc.metadata && typeof doc.metadata === "object") {
     doc.metadata = { ...doc.metadata };
     delete doc.metadata.stockClaims;
     delete doc.metadata.stockClaimsRestoredAt;
   }
+  if (!includePrivateAdminFields) {
+    doc.hasDxnMemberId = Boolean(doc.dxnMemberId);
+    delete doc.dxnMemberId;
+  }
   return doc;
+}
+
+function publicOrderPayload(order: any): any {
+  return sanitizeOrderPayload(order, false);
+}
+
+function adminOrderPayload(order: any): any {
+  return sanitizeOrderPayload(order, true);
 }
 
 /** GET /api/orders - List orders with filtering (admin) */
 export const getOrders = async (req: Request, res: Response) => {
   try {
-    const { status, paymentMethod, wilaya, page = 1, limit = 20 } = req.query;
+    const { status, paymentMethod, wilaya, source, search, page = 1, limit = 20 } = req.query;
     const pageNum = Math.min(Math.max(parseInt(page as string) || 1, 1), 1000);
     const limitNum = Math.min(Math.max(parseInt(limit as string) || 20, 1), 100);
 
     const filter: any = {};
     if (status) filter.status = status;
     if (paymentMethod) filter.paymentMethod = paymentMethod;
-    if (wilaya) filter["customerInfo.wilaya"] = wilaya;
+    if (wilaya && typeof wilaya === "string") {
+      const matchedWilaya = findCanonicalWilaya(wilaya);
+      if (matchedWilaya) {
+        const variants = Array.from(
+          new Set([
+            wilaya,
+            matchedWilaya.name,
+            matchedWilaya.nameFr,
+            matchedWilaya.nameAr,
+            ...(matchedWilaya.aliases || []),
+          ])
+        );
+        filter["customerInfo.wilaya"] = { $in: variants };
+      } else {
+        filter["customerInfo.wilaya"] = wilaya;
+      }
+    }
+    if (source && typeof source === "string" && source !== "all") {
+      filter["trafficSource.source"] = source.trim().toLowerCase().slice(0, 64);
+    }
+    if (search && typeof search === "string" && search.trim()) {
+      const q = search.trim();
+      if (q.length > 64) {
+        return res.status(400).json({ message: "Search query too long" });
+      }
+      const re = { $regex: escapeOrderRegex(q), $options: "i" };
+      filter.$or = [
+        { orderNumber: re },
+        { "customerInfo.firstName": re },
+        { "customerInfo.lastName": re },
+        { "customerInfo.phone": re },
+        { dxnMemberId: re },
+      ];
+    }
 
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
-      .populate("customerId", "firstName lastName phone")
+      .populate("customerId", "firstName lastName phone dxnMemberId")
       .lean();
 
     const count = await Order.countDocuments(filter);
 
     res.json({
       success: true,
-      data: orders.map((o: any) => publicOrderPayload(o)),
+      data: orders.map((o: any) => adminOrderPayload(o)),
       pagination: { page: pageNum, limit: limitNum, total: count, pages: Math.ceil(count / limitNum) },
     });
   } catch (error) {
@@ -126,7 +180,7 @@ export const getOrderById = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    res.json({ success: true, data: publicOrderPayload(order) });
+    res.json({ success: true, data: isAdmin ? adminOrderPayload(order) : publicOrderPayload(order) });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("Cast to ObjectId")) {
@@ -164,6 +218,12 @@ export const createOrder = async (req: Request, res: Response) => {
     const commune: string = String(body.commune || "").trim().slice(0, 100);
     const rawAddress: string = String(body.address || "").trim().slice(0, 500);
     const paymentMethod: string = body.paymentMethod;
+    const dxnMemberCheck = normalizeOptionalDxnMemberId(body.dxnMemberId);
+    if (!dxnMemberCheck.valid) {
+      return res.status(400).json({ message: dxnMemberCheck.error || "Invalid DXN membership number" });
+    }
+    const normalizedDxnMemberId = dxnMemberCheck.value;
+    const normalizedTrafficSource = normalizeTrafficSource(body.trafficSource);
 
     if (!customerInfo.firstName || !customerInfo.lastName || !customerInfo.phone) {
       return res.status(400).json({ message: "Customer information is required" });
@@ -258,13 +318,27 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
-    // --- Shipping (server-authoritative) ------------------------------------
-    // Strict: unrecognized wilaya (not one of the 58 canonical wilayas) is
-    // rejected instead of silently charging the default fee.
-    const shippingFee = await resolveShippingFeeStrict(wilayaInput, deliveryMethod as "home" | "office");
-    if (shippingFee === null) {
+    // --- Shipping & courier coverage (server-authoritative, 69 wilayas) -----
+    // Strict: unrecognized wilaya (not in Algeria's 69 official wilayas) is
+    // rejected with 400 ("Invalid wilaya"), and wilayas or delivery methods
+    // configured as unserved by the courier are rejected with an honest reason
+    // instead of falsely promising delivery.
+    const shippingQuote = await resolveShippingQuote(
+      wilayaInput,
+      deliveryMethod as "home" | "office"
+    );
+    if (!shippingQuote.recognized) {
       return res.status(400).json({ message: "Invalid wilaya" });
     }
+    if (!shippingQuote.deliverable || shippingQuote.shippingFee === null) {
+      return res.status(400).json({
+        message:
+          shippingQuote.coverageNoticeFr ||
+          "Delivery is not currently available for the selected wilaya or delivery method",
+        code: shippingQuote.reason || "wilaya_unserved",
+      });
+    }
+    const shippingFee = shippingQuote.shippingFee;
 
     // --- Subtotal (server prices) + active offers discount ------------------
     const subtotal = roundMoney(resolvedItems.reduce((s, it) => s + it.totalPrice, 0));
@@ -358,6 +432,7 @@ export const createOrder = async (req: Request, res: Response) => {
         lastName: customerInfo.lastName,
         phone: customerInfo.phone,
         secondPhone: customerInfo.secondPhone || "",
+        dxnMemberId: normalizedDxnMemberId,
         wilaya: wilayaInput,
         commune,
         address,
@@ -366,6 +441,9 @@ export const createOrder = async (req: Request, res: Response) => {
     } else {
       customer.firstName = customerInfo.firstName;
       customer.lastName = customerInfo.lastName;
+      if (normalizedDxnMemberId) {
+        (customer as any).dxnMemberId = normalizedDxnMemberId;
+      }
       customer.wilaya = wilayaInput;
       customer.commune = commune;
       customer.address = address;
@@ -373,12 +451,26 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     // --- Create order (with retry on order-number collision) ----------------
-    // Server-computed stock claims snapshot (productId -> units). Used later to
-    // restore inventory exactly when an order is cancelled/rejected. It is
-    // ALWAYS overwritten from this server-side map ظ¤ client-supplied metadata
-    // can never influence what is restored.
-    const orderMetadata: Record<string, unknown> =
-      body.metadata && typeof body.metadata === "object" ? { ...body.metadata } : {};
+    // Server-computed metadata only: never copy arbitrary client-supplied
+    // `body.metadata` keys. Only `idempotencyKey` (populated by
+    // idempotencyMiddleware from the request header), `stockClaims`, and
+    // authoritative wilaya/coverage fields are persisted.
+    const orderMetadata: Record<string, unknown> = {};
+    if (typeof body?.metadata?.idempotencyKey === "string" && body.metadata.idempotencyKey) {
+      orderMetadata.idempotencyKey = body.metadata.idempotencyKey;
+    }
+    if (shippingQuote.wilayaCode) {
+      orderMetadata.wilayaCode = shippingQuote.wilayaCode;
+    }
+    if (shippingQuote.wilayaName) {
+      orderMetadata.wilayaCanonicalName = shippingQuote.wilayaName;
+    }
+    if (shippingQuote.coverageStatus) {
+      orderMetadata.deliveryCoverageStatus = shippingQuote.coverageStatus;
+    }
+    if (shippingQuote.parentWilayaCode) {
+      orderMetadata.parentWilayaCode = shippingQuote.parentWilayaCode;
+    }
     orderMetadata.stockClaims = demandEntries.map(([productId, quantity]) => ({
       productId,
       quantity,
@@ -411,6 +503,8 @@ export const createOrder = async (req: Request, res: Response) => {
         discount,
         total,
         items: resolvedItems,
+        dxnMemberId: normalizedDxnMemberId,
+        trafficSource: normalizedTrafficSource,
         metadata: orderMetadata,
       });
       try {
@@ -581,7 +675,14 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    res.json({ success: true, data: publicOrderPayload(updated) });
+    await recordAuditLog(req, {
+      action: "order.status_update",
+      resourceType: "Order",
+      resourceId: String(updated._id || id),
+      summary: `Order ${updated.orderNumber} transitioned ${fromStatus} -> ${status}`,
+    });
+
+    res.json({ success: true, data: adminOrderPayload(updated) });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("Cast to ObjectId")) {

@@ -41,6 +41,7 @@
 import path from "path";
 import mongoose from "mongoose";
 import { provisionAdminUser, seedStarterCatalog } from "../services/bootstrap.service";
+import { initializeDefaultWilayas } from "../controllers/shipping.controller";
 import { removePlaceholderCatalog } from "../services/catalogCleanup.service";
 import {
   describeSeedEnvFile,
@@ -54,8 +55,10 @@ import {
 
 const args = new Set(process.argv.slice(2));
 const wantsCleanup = args.has("--cleanup");
-const wantsAdmin = (args.has("--admin") || !args.has("--catalog")) && !wantsCleanup;
-const wantsCatalog = (args.has("--catalog") || !args.has("--admin")) && !wantsCleanup;
+const wantsWilayasOnly = args.has("--wilayas") && !args.has("--admin") && !args.has("--catalog");
+const wantsWilayas = args.has("--wilayas") || (!wantsCleanup && !args.has("--admin"));
+const wantsAdmin = (args.has("--admin") || (!args.has("--catalog") && !wantsWilayasOnly)) && !wantsCleanup;
+const wantsCatalog = (args.has("--catalog") || (!args.has("--admin") && !wantsWilayasOnly)) && !wantsCleanup;
 const wantsReset = args.has("--reset");
 
 /* ---- helpers --------------------------------------------------------- */
@@ -171,6 +174,16 @@ async function main() {
     );
     log(
       `Offers:   ${res.offersCreated} created, ${res.offersSkipped} skipped`
+    );
+    console.log();
+  }
+
+  // --- reconcile 69 Algerian wilayas (idempotent 58 → 69 migration) ---
+  if (wantsWilayas) {
+    console.log("🗺️  Reconciling 69 Algerian wilayas (Law n° 26-06)…");
+    const wStats = await initializeDefaultWilayas();
+    log(
+      `Wilayas: ${wStats.insertedWilayas} inserted, ${wStats.updatedWilayas} updated, ${wStats.insertedRates} default rates created`
     );
     console.log();
   }

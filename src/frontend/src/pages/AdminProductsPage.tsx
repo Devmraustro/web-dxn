@@ -20,6 +20,7 @@ interface AdminProductRow {
   _id: string;
   sku: string;
   slug: string;
+  category?: string;
   price: number;
   stockQuantity: number;
   isActive: boolean;
@@ -36,20 +37,38 @@ interface TranslationDoc {
   title?: string;
   description?: string;
   specifications?: string;
+  ingredients?: string;
+  usageInstructions?: string;
+  storageInstructions?: string;
   size?: string;
 }
 
 interface ProductForm {
   sku: string;
   slug: string;
+  category: string;
   price: string;
   stockQuantity: string;
   isActive: boolean;
   image: string;
   points: string;
   translations: {
-    ar: { title: string; description: string; specifications: string };
-    fr: { title: string; description: string; specifications: string };
+    ar: {
+      title: string;
+      description: string;
+      specifications: string;
+      ingredients: string;
+      usageInstructions: string;
+      storageInstructions: string;
+    };
+    fr: {
+      title: string;
+      description: string;
+      specifications: string;
+      ingredients: string;
+      usageInstructions: string;
+      storageInstructions: string;
+    };
   };
 }
 
@@ -58,14 +77,29 @@ function createEmptyForm(): ProductForm {
   return {
     sku: "",
     slug: "",
+    category: "supplements",
     price: "",
     stockQuantity: "",
     isActive: true,
     image: "",
     points: "",
     translations: {
-      ar: { title: "", description: "", specifications: "" },
-      fr: { title: "", description: "", specifications: "" },
+      ar: {
+        title: "",
+        description: "",
+        specifications: "",
+        ingredients: "",
+        usageInstructions: "",
+        storageInstructions: "",
+      },
+      fr: {
+        title: "",
+        description: "",
+        specifications: "",
+        ingredients: "",
+        usageInstructions: "",
+        storageInstructions: "",
+      },
     },
   };
 }
@@ -149,6 +183,7 @@ const AdminProductsPage = () => {
       setForm({
         sku: data?.sku || "",
         slug: data?.slug || "",
+        category: data?.category || "general",
         price: String(Number(data?.price) || 0),
         stockQuantity: String(Number(data?.stockQuantity) || 0),
         points: String(Number(data?.points) || 0),
@@ -159,11 +194,17 @@ const AdminProductsPage = () => {
             title: byLang("ar").title || "",
             description: byLang("ar").description || "",
             specifications: byLang("ar").specifications || "",
+            ingredients: byLang("ar").ingredients || "",
+            usageInstructions: byLang("ar").usageInstructions || "",
+            storageInstructions: byLang("ar").storageInstructions || "",
           },
           fr: {
             title: byLang("fr").title || "",
             description: byLang("fr").description || "",
             specifications: byLang("fr").specifications || "",
+            ingredients: byLang("fr").ingredients || "",
+            usageInstructions: byLang("fr").usageInstructions || "",
+            storageInstructions: byLang("fr").storageInstructions || "",
           },
         },
       });
@@ -275,6 +316,7 @@ const AdminProductsPage = () => {
     const payload = {
       sku: form.sku.trim(),
       slug: form.slug.trim(),
+      category: form.category || "general",
       price: Number(form.price),
       stockQuantity: Number(form.stockQuantity),
       points: form.points !== "" ? Number(form.points) : 0,
@@ -285,11 +327,17 @@ const AdminProductsPage = () => {
           title: form.translations.ar.title.trim() || undefined,
           description: form.translations.ar.description.trim() || undefined,
           specifications: form.translations.ar.specifications.trim() || undefined,
+          ingredients: form.translations.ar.ingredients.trim() || undefined,
+          usageInstructions: form.translations.ar.usageInstructions.trim() || undefined,
+          storageInstructions: form.translations.ar.storageInstructions.trim() || undefined,
         },
         fr: {
           title: form.translations.fr.title.trim() || undefined,
           description: form.translations.fr.description.trim() || undefined,
           specifications: form.translations.fr.specifications.trim() || undefined,
+          ingredients: form.translations.fr.ingredients.trim() || undefined,
+          usageInstructions: form.translations.fr.usageInstructions.trim() || undefined,
+          storageInstructions: form.translations.fr.storageInstructions.trim() || undefined,
         },
       },
     };
@@ -568,7 +616,21 @@ const AdminProductsPage = () => {
             </Row>
 
             <Row>
-              <Col md={4}>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>{t("التصنيف (الفئة)", "Catégorie")}</Form.Label>
+                  <Form.Select
+                    value={form.category}
+                    onChange={(e) => updateField("category", e.target.value)}
+                  >
+                    <option value="supplements">{t("المكملات الغذائية", "Compléments alimentaires")}</option>
+                    <option value="cosmetics">{t("الكوسميتيك والعناية", "Cosmétiques & Soins")}</option>
+                    <option value="beverages">{t("المشروبات والقهوة", "Boissons & Cafés")}</option>
+                    <option value="general">{t("منتجات متنوعة", "Autres produits")}</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>{t("الحالة", "Statut")}</Form.Label>
                   <Form.Select
@@ -668,14 +730,43 @@ const AdminProductsPage = () => {
                         maxLength={2000}
                       />
                     </Form.Group>
-                    <Form.Group className="mb-0">
+                    <Form.Group className="mb-3">
                       <Form.Label>{t("المواصفات (عربي)", "Spécifications (arabe)")}</Form.Label>
                       <Form.Control
                         as="textarea"
-                        rows={3}
+                        rows={2}
                         value={form.translations.ar.specifications}
                         onChange={(e) => updateField("translations.ar.specifications", e.target.value)}
                         maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>{t("المكونات (عربي)", "Ingrédients (arabe)")}</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={form.translations.ar.ingredients}
+                        onChange={(e) => updateField("translations.ar.ingredients", e.target.value)}
+                        maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>{t("طريقة الاستخدام الرسمية (عربي)", "Mode d'emploi officiel (arabe)")}</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={form.translations.ar.usageInstructions}
+                        onChange={(e) => updateField("translations.ar.usageInstructions", e.target.value)}
+                        maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-0">
+                      <Form.Label>{t("طريقة الحفظ والتخزين (عربي)", "Conservation (arabe)")}</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={form.translations.ar.storageInstructions}
+                        onChange={(e) => updateField("translations.ar.storageInstructions", e.target.value)}
+                        maxLength={3000}
                       />
                     </Form.Group>
                   </Card.Body>
@@ -704,14 +795,43 @@ const AdminProductsPage = () => {
                         maxLength={2000}
                       />
                     </Form.Group>
-                    <Form.Group className="mb-0">
+                    <Form.Group className="mb-3">
                       <Form.Label>{t("المواصفات (فرنسي)", "Spécifications (français)")}</Form.Label>
                       <Form.Control
                         as="textarea"
-                        rows={3}
+                        rows={2}
                         value={form.translations.fr.specifications}
                         onChange={(e) => updateField("translations.fr.specifications", e.target.value)}
                         maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>{t("المكونات (فرنسي)", "Ingrédients (français)")}</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={form.translations.fr.ingredients}
+                        onChange={(e) => updateField("translations.fr.ingredients", e.target.value)}
+                        maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>{t("طريقة الاستخدام الرسمية (فرنسي)", "Mode d'emploi officiel (français)")}</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={form.translations.fr.usageInstructions}
+                        onChange={(e) => updateField("translations.fr.usageInstructions", e.target.value)}
+                        maxLength={5000}
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-0">
+                      <Form.Label>{t("طريقة الحفظ والتخزين (فرنسي)", "Conservation (français)")}</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={form.translations.fr.storageInstructions}
+                        onChange={(e) => updateField("translations.fr.storageInstructions", e.target.value)}
+                        maxLength={3000}
                       />
                     </Form.Group>
                   </Card.Body>
