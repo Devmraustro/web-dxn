@@ -11,12 +11,15 @@
 | Verification Gate | Command | Result | Details |
 |---|---|---|---|
 | TypeScript Strict Check | `npm run typecheck` | **PASS (0 errors)** | Full backend + frontend TypeScript verification (`tsc -p tsconfig.json --noEmit`). |
-| Production Monorepo Build | `npm run build` | **PASS (0 errors)** | Backend compiled to `dist/index.js`; Vite 8 SPA compiled to `dist/frontend/build/` (594 modules, route-split chunks). |
-| Unit & DXN NADZ Platform Suite | `npx jest --config jest.unit.config.js --runInBand` | **PASS (4/4 suites, 67/67 tests)** | Covers DXN NADZ settings, sponsor immutability, CRM leads, CSV formula-injection defense, contact inbox, categories, 10 educational articles, SEO sitemap, commerce math, and security fixes. |
-| AI & Messaging Safety Suite | `npx jest --config jest.ai.config.js --runInBand` | **PASS (13/13 suites, 319/319 tests)** | Verifies zero regression across AI guardrails, Meta webhooks, order notifications, and commercial rules. |
-| Launch Prep, Phase 23 Admin & Telegram | `npx jest launch-prep phase23-product-admin.dbfree telegram.service --runInBand` | **PASS (3/3 suites, 55/55 tests)** | Verifies AR/FR locale key parity, COD-only validation, admin product creation, and Telegram token redaction. |
+| Production Monorepo Build | `npm run build` | **PASS (0 errors)** | Backend compiled; Vite 8 SPA compiled to `dist/frontend/build/` (594 modules, route-split chunks). |
+| Unit & DXN NADZ Platform Suite | `npm run test:unit` | **PASS (11/11 suites, 165/165 tests)** | Includes DXN NADZ DB-free platform coverage, commerce, security, Telegram mocks, and frontend utility suites. |
+| AI & Messaging Safety Suite | `npm run test:ai` | **PASS (13/13 suites, 319/319 tests)** | Verifies AI guardrails, Meta webhooks, order notifications, and commercial rules. |
 
-**Total Automated Tests Verified:** **441 / 441 Passing (100%)**
+**Latest reported automated total:** **484 / 484 passing** (165 unit + 319 AI/integration tests).
+
+**Historical-count reconciliation:** Earlier QA notes reported 441 tests by adding a 67-test platform run and a separate 55-test targeted run to the 319-test AI suite. The later final audit reports the canonical current commands as 165 unit tests plus 319 AI/integration tests. These historical figures are not added to the current total because the targeted suites may overlap.
+
+**Execution provenance:** The 484 result is recorded from the Arena final audit. GitHub Actions has now been configured to run these gates; a completed remote Actions run is still required before treating the result as independently CI-verified.
 
 ---
 
@@ -28,21 +31,28 @@
   - Title: `DXN NADZ — المنتجات الطبيعية والفرصة العالمية في منصة واحدة`
   - Primary CTA: `تصفح المنتجات` (`/products`)
   - Secondary CTA: `انضم إلى الفريق` (`/join`)
-- `ar.json` and `fr.json` maintain 100% identical key sets, with automatic `<html lang="ar" dir="rtl">` and `<html lang="fr" dir="ltr">` switching.
+- `ar.json` and `fr.json` maintain identical key sets, with automatic Arabic RTL and French LTR switching.
 
 ### B. Health, Medical & MLM Ethical Compliance
-- Every product detail page (`/product/:slug`) and educational article (`/education/:slug`) renders mandatory Arabic/French health disclaimers stating that DXN products are food supplements or personal-care items and **not medicines** intended to diagnose, treat, cure, or prevent disease.
-- Zero miracle-cure or guaranteed-income claims exist anywhere in the seed articles, FAQs, or recruitment copy.
-- `/join` explicitly informs applicants that submitting the form creates a **follow-up and guidance request** with the DXN NADZ team and does **not** automatically register an official membership in DXN's corporate system.
+- Product detail pages and educational articles render Arabic/French health disclaimers stating that DXN products are food supplements or personal-care items and **not medicines** intended to diagnose, treat, cure, or prevent disease.
+- The audit reports no miracle-cure or guaranteed-income claims in seed articles, FAQs, or recruitment copy.
+- `/join` informs applicants that submitting the form creates a follow-up and guidance request and does **not** automatically register official membership in DXN's corporate system.
 
 ### C. E-Commerce, Checkout & CRM Separation
-- Public catalog filters out placeholder/seed SKUs and organizes genuine products across Supplements, Cosmetics & Personal Care, Beverages, and General categories with instant search and URL-synced filters.
-- Checkout (`/checkout`) supports Cash-on-Delivery across Algeria's **69 official wilayas** (Law n° 26-06 of 4 April 2026 & Presidential Decree n° 26-206) with configurable per-wilaya courier coverage (`served`, `via_parent_wilaya`, `confirm_by_phone`, `unserved`), optional `"رقم عضوية DXN (اختياري)"`, and `?ref=` / UTM attribution.
-- Admin CRM (`/admin/leads`) cleanly separates **Store Customers**, **Recruitment Leads**, **Existing DXN Members**, and **Registered Team Members**, with 6 pipeline statuses, private notes, communication history, and UTF-8 BOM CSV export.
+- Public catalog filters out placeholder/seed SKUs and organizes products across Supplements, Cosmetics & Personal Care, Beverages, and General categories.
+- Checkout supports COD across 69 wilayas with configurable per-wilaya courier coverage, optional `رقم عضوية DXN (اختياري)`, and referral/UTM attribution.
+- Admin CRM separates store customers, recruitment leads, existing DXN members, and registered team members, with pipeline statuses, private notes, communication history, and UTF-8 BOM CSV export.
 
 ### D. Security Hardening
-- **Sponsor ID Immutability**: `POST /api/leads` ignores any client-supplied `sponsorMembershipNumber` or `?ref=` override and stamps the server-configured sponsor ID.
-- **Spreadsheet Formula Injection Protection**: CSV export prefixes cells starting with `=`, `+`, `-`, `@`, `\t`, or `\r` with `'`.
-- **XSS & URL Sanitization**: Social media and registration URLs in `/admin/settings` reject non-`https://` schemes (such as `javascript:`).
-- **Anti-Spam & Rate Limiting**: Public `/api/leads` and `/api/contact` routes enforce `publicFormRateLimiter`, hidden honeypot field (`website`) rejection, and explicit `privacyConsent`.
-- **Secret Isolation**: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` never appear in public or admin JSON responses and are redacted in error logs.
+- **Sponsor ID immutability:** `POST /api/leads` ignores client-supplied sponsor membership overrides and uses the server-configured sponsor ID.
+- **Spreadsheet formula injection protection:** CSV export neutralizes formula-triggering cells.
+- **XSS & URL sanitization:** social media and registration URLs reject unsafe schemes such as `javascript:`.
+- **Anti-spam & rate limiting:** public lead/contact routes enforce rate limiting, honeypot rejection, and explicit privacy consent.
+- **Secret isolation:** Telegram credentials are excluded from public/admin JSON and redacted from error logs.
+
+### E. Outstanding Operational Verification
+- The final audit reports Telegram as mock-verified only; live delivery must be tested in an egress-enabled production runtime.
+- MongoDB production migration and preservation of existing courier rates/coverage must be verified before release.
+- Product photos, DZD prices, stock, PV values, and bilingual product details must be checked against the genuine catalog.
+- Password reset delivery remains unavailable until an SMTP/email sender is configured and tested.
+- The newly added GitHub Actions workflow must complete successfully before CI is marked green.
