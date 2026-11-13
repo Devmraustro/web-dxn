@@ -12,6 +12,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import MobileNav from "./components/MobileNav";
 import FloatingWhatsApp from "./components/FloatingWhatsApp";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { ScrollToTop } from "./components/ScrollToTop";
 
 // Route-level code splitting for fast initial load across Algerian mobile networks
@@ -64,6 +65,7 @@ const App = () => (
   <HelmetProvider>
     <BrowserRouter>
       <SiteSettingsProvider>
+        <ErrorBoundary>
         <ScrollToTop />
         <Header />
         <PageSuspense>
@@ -158,6 +160,7 @@ const App = () => (
           <MobileNav />
         </PageSuspense>
         <PublicFloatingCtas />
+        </ErrorBoundary>
       </SiteSettingsProvider>
     </BrowserRouter>
   </HelmetProvider>

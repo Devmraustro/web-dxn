@@ -41,6 +41,76 @@ const PinIcon = () => (
   </svg>
 );
 
+/** Social icon links — rendered only when the owner has configured a real URL. */
+const FacebookIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5 3.7 9.16 8.44 9.94v-7.03H7.9v-2.9h2.54V9.85c0-2.53 1.5-3.92 3.78-3.92 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.57v1.88h2.78l-.44 2.9h-2.34V22c4.74-.79 8.43-4.95 8.43-9.94Z" />
+  </svg>
+);
+
+const InstagramIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const WhatsAppIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M20.52 3.48A11.86 11.86 0 0 0 12.06 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.15 1.6 5.95L0 24l6.33-1.66a11.9 11.9 0 0 0 5.73 1.46h.01c6.55 0 11.9-5.34 11.9-11.9 0-3.18-1.24-6.17-3.45-8.42ZM12.07 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.37a9.86 9.86 0 0 1-1.52-5.26c0-5.45 4.44-9.89 9.9-9.89 2.64 0 5.13 1.03 7 2.9a9.83 9.83 0 0 1 2.9 7c0 5.46-4.44 9.89-9.89 9.89Zm5.43-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.48-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" />
+  </svg>
+);
+
+const isSafeExternalUrl = (url: string): boolean =>
+  typeof url === "string" && /^https?:\/\//i.test(url);
+
+const SocialIcons: React.FC = () => {
+  const { settings } = useSiteSettings();
+  const { language } = useLanguage();
+
+  const items = [
+    {
+      key: "facebook",
+      href: settings.socialLinks.facebook,
+      label: language === "ar" ? "صفحة فيسبوك" : "Page Facebook",
+      Icon: FacebookIcon,
+    },
+    {
+      key: "instagram",
+      href: settings.socialLinks.instagram,
+      label: language === "ar" ? "حساب إنستغرام" : "Compte Instagram",
+      Icon: InstagramIcon,
+    },
+    {
+      key: "whatsapp",
+      href: settings.whatsappUrl,
+      label: language === "ar" ? "واتساب DXN NADZ" : "WhatsApp DXN NADZ",
+      Icon: WhatsAppIcon,
+    },
+  ].filter((item) => isSafeExternalUrl(item.href));
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="dxn-header-socials" aria-label={language === "ar" ? "روابط التواصل الاجتماعي" : "Liens sociaux"}>
+      {items.map(({ key, href, label, Icon }) => (
+        <a
+          key={key}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="dxn-social-icon"
+          aria-label={label}
+          title={label}
+        >
+          <Icon />
+        </a>
+      ))}
+    </div>
+  );
+};
+
 const MenuIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
     <line x1="3" y1="6" x2="21" y2="6" />
@@ -87,7 +157,8 @@ const Header = () => {
     { to: "/contact", label: t("تواصل معنا", "Contact") },
     { to: "/join", label: t("انضم إلى فريقنا", "Rejoindre l'équipe"), highlight: true },
     { to: "/cart", label: t("السلة", "Panier"), badge: cartCount },
-    ...(isAdmin ? [{ to: "/admin", label: t("لوحة التحكم", "Admin") }] : []),
+    // NOTE: the admin dashboard is intentionally NOT advertised in public
+    // navigation — owners reach /admin directly by URL (auth still enforced).
   ];
 
   return (
@@ -149,14 +220,11 @@ const Header = () => {
 
           <div className="dxn-header-actions">
             <LanguageSelector />
-            {isAdmin ? (
+            <SocialIcons />
+            {isAdmin && (
               <button type="button" className="dxn-logout-btn" onClick={handleLogout}>
                 {t("تسجيل الخروج", "Déconnexion")}
               </button>
-            ) : (
-              <Link to="/admin/login" className="dxn-login-btn">
-                {t("الإدارة", "Admin")}
-              </Link>
             )}
             <button
               type="button"
@@ -191,17 +259,13 @@ const Header = () => {
           <NavLink to="/why-dxn" className={linkClass} onClick={() => setMenuOpen(false)}>
             <span>{t("لماذا يختار الكثيرون DXN؟", "Pourquoi choisir DXN ?")}</span>
           </NavLink>
-          <div className="dxn-mobile-menu-row">
-            {isAdmin ? (
+          {isAdmin && (
+            <div className="dxn-mobile-menu-row">
               <button type="button" className="dxn-logout-btn" onClick={handleLogout}>
                 {t("تسجيل الخروج", "Déconnexion")}
               </button>
-            ) : (
-              <Link to="/admin/login" className="dxn-login-btn" onClick={() => setMenuOpen(false)}>
-                {t("دخول الإدارة", "Espace Admin")}
-              </Link>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </header>
     </>

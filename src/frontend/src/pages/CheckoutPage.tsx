@@ -470,7 +470,7 @@ const CheckoutPage = () => {
   const total = subtotal + shippingFee;
 
   return (
-    <Container className="mt-4 mb-5">
+    <Container className="dxn-checkout-shell mt-4 mb-5">
       <SeoHead
         title={t("إتمام الطلب", "Validation de commande")}
         canonicalPath="/checkout"

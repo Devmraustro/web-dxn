@@ -9,7 +9,11 @@
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  roots: ["<rootDir>/src/backend/tests", "<rootDir>/src/frontend/src/utils"],
+  roots: [
+    "<rootDir>/src/backend/tests",
+    "<rootDir>/src/frontend/src/utils",
+    "<rootDir>/src/frontend/src/components",
+  ],
   testMatch: [
     "<rootDir>/src/backend/tests/ai-guardrail.test.ts",
     "<rootDir>/src/backend/tests/security-fixes-v2.test.ts",
@@ -20,9 +24,10 @@ module.exports = {
     "<rootDir>/src/backend/tests/dxn-nadz-platform.dbfree.test.ts",
     "<rootDir>/src/backend/tests/final-release-audit.dbfree.test.ts",
     "<rootDir>/src/frontend/src/utils/*.test.ts",
+    "<rootDir>/src/frontend/src/components/*.test.tsx",
   ],
   transform: {
-    "^.+\\.ts$": [
+    "^.+\\.tsx?$": [
       "ts-jest",
       {
         tsconfig: {
@@ -40,5 +45,5 @@ module.exports = {
       },
     ],
   },
-  moduleFileExtensions: ["ts", "js", "json", "node"],
+  moduleFileExtensions: ["ts", "tsx", "js", "json", "node"],
 };
