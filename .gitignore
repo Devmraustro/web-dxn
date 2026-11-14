@@ -42,6 +42,7 @@ Thumbs.db
 docker-compose.override.yml
 
 # Test artifacts
+browser-report/
 *.log.err
 
 # Temporary verification directories (local mongod, smoke-test output)
