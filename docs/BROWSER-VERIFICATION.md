@@ -23,7 +23,7 @@ For every route (`/`, `/join`, `/products`) × storage mode (`normal`,
 | `document-navigation` | HTTP `200`/`203`/**`304`** accepted; anything else fails. A 304 is a revalidation of a complete document — never a failure. |
 | `no-uncaught-page-errors` | Zero `pageerror` events. |
 | `no-uncaught-cdp-exceptions` | Zero CDP `Runtime.exceptionThrown` (throw-site frames captured via `Debugger.setPauseOnExceptions`). |
-| `cache-isolation` | Zero responses with `response.fromCache() === true` or `fromServiceWorker() === true`. |
+| `cache-isolation` | Zero cached **documents**, zero service-worker responses, and zero cross-case cache hits (any cached response whose URL a *previous* case already requested). Same-case memory-cache hits on a subresource are recorded, not fatal — see below. |
 | `harness-isolation` | The case ran in a fresh browser context **and** with `Network.setCacheDisabled: true`. |
 | `react-root-mounted` | `#root` has element children plus React `__reactContainer$`/`__reactFiber$` markers (documented fallback: root children + site chrome). |
 | `route-ui` | `/` hero + header + footer; `/join` the five form controls; `/products` heading + cards + category tabs + at least one decoded product image. |
@@ -49,7 +49,13 @@ Now:
 * the navigation policy accepts `200/203/304` and records
   `documentSource: "network" | "revalidated-cache"`;
 * cache isolation is *asserted* per response, so no case can silently pass by
-  re-using a previous case's build.
+  re-using a previous case's build. Chromium cannot fully disable its in-process
+  memory cache, so a duplicated in-document fetch (React StrictMode double
+  effects, a `modulepreload` followed by an `import`) can still report
+  `fromCache: true` for a URL that was **first requested inside that same case**.
+  That is not cross-case contamination, so it is recorded in the evidence
+  (`sameCaseCacheHits`) instead of failing the case — while cached documents and
+  any URL first seen in an earlier case remain hard failures.
 
 ## Cache self-test (proof the harness itself is trustworthy)
 

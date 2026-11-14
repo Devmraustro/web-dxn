@@ -93,20 +93,46 @@ export function evaluateDocumentNavigation(input = {}) {
  * Summarise cache reuse for one case.
  *
  * `responses` entries: `{ url, status, fromCache, fromServiceWorker, cacheControl, resourceType }`
+ * `options.priorCaseUrls`: URLs already requested by earlier cases in this run.
+ *
+ * Not every `fromCache` hit is a methodology problem, so the policy is explicit:
+ *
+ *   - a cached **document** is always fatal: it means the case rendered a
+ *     document left behind by an earlier navigation instead of the served build;
+ *   - a cached response whose URL was already requested by a **previous case**
+ *     is fatal: that is exactly the cross-mode cache reuse this harness must
+ *     never allow (`normal` warming the cache for `blocked-storage`);
+ *   - a cached **subresource first requested in this same case** is a Chromium
+ *     memory-cache artefact of duplicate in-document fetches (e.g. StrictMode
+ *     double-effects or a preload followed by an import). It is recorded for
+ *     transparency but cannot mask a cross-case problem, because nothing from a
+ *     previous case is involved.
  */
-export function summarizeCacheEvidence(responses = []) {
+export function summarizeCacheEvidence(responses = [], options = {}) {
+  const priorCaseUrls = new Set(options.priorCaseUrls || []);
   const hits = responses.filter((r) => r.fromCache === true);
   const serviceWorker = responses.filter((r) => r.fromServiceWorker === true);
   const revalidated = responses.filter((r) => r.status === 304);
   const documents = responses.filter((r) => r.resourceType === "Document");
+  const detail = hits.map((r) => ({
+    url: r.url,
+    resourceType: r.resourceType,
+    status: r.status,
+    seenInPriorCase: priorCaseUrls.has(r.url),
+  }));
+  const crossCaseHits = detail.filter((hit) => hit.seenInPriorCase);
+  const sameCaseHits = detail.filter((hit) => !hit.seenInPriorCase);
+  const documentFromCacheCount = documents.filter((r) => r.fromCache === true).length;
   return {
     responseCount: responses.length,
     fromCacheCount: hits.length,
     fromServiceWorkerCount: serviceWorker.length,
     revalidatedCount: revalidated.length,
-    documentFromCacheCount: documents.filter((r) => r.fromCache === true).length,
-    cachedUrls: hits.map((r) => r.url).slice(0, 10),
-    ok: hits.length === 0 && serviceWorker.length === 0,
+    documentFromCacheCount,
+    cachedResponses: detail.slice(0, 10),
+    crossCaseCacheHits: crossCaseHits.slice(0, 10),
+    sameCaseCacheHits: sameCaseHits.slice(0, 10),
+    ok: documentFromCacheCount === 0 && serviceWorker.length === 0 && crossCaseHits.length === 0,
   };
 }
 
@@ -287,7 +313,7 @@ export function buildCaseVerdict(input = {}) {
     mode,
     route,
     documentNavigation = { ok: false, reasons: ["not-evaluated"] },
-    cacheEvidence = { ok: false, fromCacheCount: -1 },
+    cacheEvidence = { ok: false, fromCacheCount: -1, crossCaseCacheHits: [] },
     pageErrors = [],
     cdpExceptions = [],
     consoleErrors = [],
@@ -300,6 +326,7 @@ export function buildCaseVerdict(input = {}) {
     storageProbe = {},
     requireDbConnected = false,
     isolation = {},
+    priorCaseUrls = [],
   } = input;
 
   const checks = [];
@@ -320,10 +347,26 @@ export function buildCaseVerdict(input = {}) {
     { ok: cdpExceptions.length === 0, reasons: cdpExceptions.map((e) => String(e.text || e.exception?.description || "").slice(0, 160)) },
     { count: cdpExceptions.length }
   );
-  push("cache-isolation", cacheEvidence, {
-    fromCacheCount: cacheEvidence.fromCacheCount,
-    fromServiceWorkerCount: cacheEvidence.fromServiceWorkerCount,
-  });
+  push(
+    "cache-isolation",
+    {
+      ok: cacheEvidence.ok === true,
+      reasons: [
+        ...(Number(cacheEvidence.documentFromCacheCount ?? 0) > 0 ? ["cached-document"] : []),
+        ...(Number(cacheEvidence.fromServiceWorkerCount ?? 0) > 0 ? ["service-worker-response"] : []),
+        ...((cacheEvidence.crossCaseCacheHits || []).length > 0 ? ["cross-case-cache-reuse"] : []),
+      ],
+    },
+    {
+      fromCacheCount: cacheEvidence.fromCacheCount,
+      documentFromCacheCount: cacheEvidence.documentFromCacheCount,
+      fromServiceWorkerCount: cacheEvidence.fromServiceWorkerCount,
+      sameCaseMemoryCacheHits: (cacheEvidence.sameCaseCacheHits || []).length,
+      crossCaseCacheHits: cacheEvidence.crossCaseCacheHits || [],
+      cachedResponses: cacheEvidence.cachedResponses || [],
+      priorCaseUrlCount: priorCaseUrls.length,
+    }
+  );
   push("harness-isolation", { ok: isolation.context === REQUIRED_ISOLATION.context && isolation.cache === REQUIRED_ISOLATION.cache, reasons: [] }, isolation);
   push("react-root-mounted", evaluateReactMount(info));
   push("route-ui", evaluateRouteUi(route, info));
@@ -379,11 +422,11 @@ export function renderSummaryMarkdown(report = {}) {
     `Harness: ${report.harness?.isolation} · ${report.harness?.cachePolicy} · Chromium ${report.harness?.browserVersion ?? "?"}`,
     `Overall: ${report.failed ? "FAIL" : "PASS"}`,
     "",
-    "| Mode | Route | Result | HTTP | Document source | Cached responses | #root children | pageerrors | CDP exceptions | health | products | route UI | storage sim |",
+    "| Mode | Route | Result | HTTP | Document source | Cached docs / cross-case / same-case | #root children | pageerrors | CDP exceptions | health | products | route UI | storage sim |",
     "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   const rows = (report.results || []).map((r) =>
-    `| ${r.mode} | ${r.route} | ${r.ok ? "PASS" : "FAIL"} | ${r.documentNavigation?.status ?? r.error ?? ""} | ${r.documentNavigation?.documentSource ?? ""} | ${r.cacheEvidence?.fromCacheCount ?? ""} | ${r.info?.rootChildren ?? ""} | ${r.pageErrors?.length ?? ""} | ${r.cdpExceptions?.length ?? ""} | ${r.validations?.health?.ok ?? ""} | ${r.validations?.products?.ok ?? ""} | ${r.validations?.routeUi?.ok ?? ""} | ${r.storageProbe?.localStorage ?? ""}/${r.storageProbe?.sessionStorage ?? ""} |`
+    `| ${r.mode} | ${r.route} | ${r.ok ? "PASS" : "FAIL"} | ${r.documentNavigation?.status ?? r.error ?? ""} | ${r.documentNavigation?.documentSource ?? ""} | ${r.cacheEvidence?.documentFromCacheCount ?? ""} / ${(r.cacheEvidence?.crossCaseCacheHits || []).length} / ${(r.cacheEvidence?.sameCaseCacheHits || []).length} | ${r.info?.rootChildren ?? ""} | ${r.pageErrors?.length ?? ""} | ${r.cdpExceptions?.length ?? ""} | ${r.validations?.health?.ok ?? ""} | ${r.validations?.products?.ok ?? ""} | ${r.validations?.routeUi?.ok ?? ""} | ${r.storageProbe?.localStorage ?? ""}/${r.storageProbe?.sessionStorage ?? ""} |`
   );
   const failed = (report.results || []).filter((r) => !r.ok).flatMap((r) =>
     (r.failedChecks || []).map((c) => `- \`${r.mode} ${r.route}\` → **${c.id}**: ${c.reasons.join(", ") || "failed"}`)
@@ -423,8 +466,17 @@ export function buildCheckRunText(report = {}, limit = 60000) {
       route: r.route,
       ok: r.ok,
       documentNavigation: r.documentNavigation,
-      cacheEvidence: { fromCacheCount: r.cacheEvidence?.fromCacheCount, fromServiceWorkerCount: r.cacheEvidence?.fromServiceWorkerCount, revalidatedCount: r.cacheEvidence?.revalidatedCount },
+      cacheEvidence: {
+        ok: r.cacheEvidence?.ok,
+        fromCacheCount: r.cacheEvidence?.fromCacheCount,
+        documentFromCacheCount: r.cacheEvidence?.documentFromCacheCount,
+        fromServiceWorkerCount: r.cacheEvidence?.fromServiceWorkerCount,
+        revalidatedCount: r.cacheEvidence?.revalidatedCount,
+        cachedResponses: r.cacheEvidence?.cachedResponses,
+        crossCaseCacheHits: r.cacheEvidence?.crossCaseCacheHits,
+      },
       failedChecks: r.failedChecks,
+      checks: (r.checks || []).map((c) => ({ id: c.id, ok: c.ok, reasons: c.reasons })),
       rootChildren: r.info?.rootChildren,
       entryScript: r.info?.entryScript,
       validations: {

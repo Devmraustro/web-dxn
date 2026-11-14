@@ -122,23 +122,45 @@ test("a document that was not parsed or has no #root fails", () => {
   assert.equal(evaluateDocumentNavigation({ status: 200, responseReceived: true, readyState: "complete", rootPresent: false }).ok, false);
 });
 
-test("cache reuse is detected per response and summarised", () => {
-  const clean = summarizeCacheEvidence([
-    { url: "/a.js", status: 200, fromCache: false },
-    { url: "/", status: 200, fromCache: false, resourceType: "Document" },
-  ]);
+test("cache evidence separates fatal document/cross-case reuse from same-case memory-cache hits", () => {
+  const clean = summarizeCacheEvidence(
+    [
+      { url: "/a.js", status: 200, fromCache: false },
+      { url: "/", status: 200, fromCache: false, resourceType: "Document" },
+    ],
+    { priorCaseUrls: ["/"] }
+  );
   assert.equal(clean.ok, true);
   assert.equal(clean.fromCacheCount, 0);
 
-  const dirty = summarizeCacheEvidence([
-    { url: "/", status: 200, fromCache: true, resourceType: "Document" },
-    { url: "/a.js", status: 200, fromCache: true },
-    { url: "/b.js", status: 200, fromServiceWorker: true },
-  ]);
-  assert.equal(dirty.ok, false);
-  assert.equal(dirty.fromCacheCount, 2);
-  assert.equal(dirty.fromServiceWorkerCount, 1);
-  assert.equal(dirty.documentFromCacheCount, 1);
+  // A cached document is always fatal: the case rendered a stale document.
+  const cachedDocument = summarizeCacheEvidence([{ url: "/", status: 200, fromCache: true, resourceType: "Document" }]);
+  assert.equal(cachedDocument.ok, false);
+  assert.equal(cachedDocument.documentFromCacheCount, 1);
+
+  // A cached subresource that was first requested in THIS case is a Chromium
+  // memory-cache artefact of a duplicated in-document fetch; it must not be
+  // reported as a harness isolation failure, but it stays in the evidence.
+  const sameCase = summarizeCacheEvidence([{ url: "/api/settings/public", status: 200, fromCache: true, resourceType: "Fetch" }], {
+    priorCaseUrls: ["/", "/assets/index-abc.js"],
+  });
+  assert.equal(sameCase.ok, true);
+  assert.equal(sameCase.fromCacheCount, 1);
+  assert.equal(sameCase.sameCaseCacheHits.length, 1);
+  assert.equal(sameCase.crossCaseCacheHits.length, 0);
+
+  // Re-using anything that a PREVIOUS case already fetched is the exact defect
+  // this harness exists to prevent.
+  const crossCase = summarizeCacheEvidence([{ url: "/assets/index-abc.js", status: 200, fromCache: true }], {
+    priorCaseUrls: ["/", "/assets/index-abc.js"],
+  });
+  assert.equal(crossCase.ok, false);
+  assert.equal(crossCase.crossCaseCacheHits.length, 1);
+  assert.equal(crossCase.crossCaseCacheHits[0].seenInPriorCase, true);
+
+  const serviceWorker = summarizeCacheEvidence([{ url: "/", status: 200, fromServiceWorker: true, resourceType: "Document" }]);
+  assert.equal(serviceWorker.ok, false);
+  assert.equal(serviceWorker.fromServiceWorkerCount, 1);
 });
 
 test("third-party request failures are recorded but only same-origin failures fail the case", () => {

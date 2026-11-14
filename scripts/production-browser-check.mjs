@@ -169,23 +169,18 @@ async function navigateProbe(browser, url, { cacheDisabled, blockedStorage = fal
   await cdp.send("Page.enable");
   await cdp.send("Runtime.enable");
   if (blockedStorage) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: DENY_STORAGE_SOURCE });
-  let fromCache = false;
-  let status = 0;
-  page.on("response", (response) => {
-    try {
-      if (response.request().resourceType() === "Document") {
-        fromCache = response.fromCache();
-        status = response.status();
-      }
-    } catch {
-      /* response may already be detached */
-    }
-  });
   const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
+  // Read status/fromCache from the navigation response object itself: the
+  // `response` event listener is not a reliable source for the top-level
+  // document (a memory-cache hit can be reported without a request object).
+  const navigation = {
+    status: response?.status() ?? 0,
+    fromCache: response ? response.fromCache() : false,
+  };
   const nonce = await page.evaluate(() => window.__probeNonce ?? null);
   const storageProbe = await page.evaluate(STORAGE_PROBE);
   await context.close();
-  return { status: response?.status() ?? status, reportedFromCache: fromCache, nonce, storageProbe };
+  return { status: navigation.status, reportedFromCache: navigation.fromCache, nonce, storageProbe };
 }
 
 async function navigateTwiceInOneContext(browser, url, { cacheDisabled, blockedStorage = false }) {
@@ -198,19 +193,11 @@ async function navigateTwiceInOneContext(browser, url, { cacheDisabled, blockedS
   await cdp.send("Runtime.enable");
   if (blockedStorage) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: DENY_STORAGE_SOURCE });
   const navigations = [];
-  page.on("response", (response) => {
-    try {
-      if (response.request().resourceType() === "Document") {
-        navigations.push({ status: response.status(), fromCache: response.fromCache() });
-      }
-    } catch {
-      /* detached */
-    }
-  });
   const nonces = [];
   const storageProbes = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
+    const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
+    navigations.push({ status: response?.status() ?? 0, fromCache: response ? response.fromCache() : false });
     nonces.push(await page.evaluate(() => window.__probeNonce ?? null));
     storageProbes.push(await page.evaluate(STORAGE_PROBE));
   }
@@ -312,7 +299,7 @@ async function runCacheSelfTest(browser) {
 /* -------------------------------------------------------------------------- */
 /* Main matrix                                                                 */
 /* -------------------------------------------------------------------------- */
-async function runCase(browser, { mode, route, index }) {
+async function runCase(browser, { mode, route, index, priorCaseUrls }) {
   const url = `${base}${route}`;
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
@@ -331,7 +318,7 @@ async function runCase(browser, { mode, route, index }) {
     url,
     ok: false,
     isolation: { context: "fresh-browser-context-per-case", cache: "cdp-network-setCacheDisabled" },
-    cacheControl: { cacheDisabled: true, contextId: index },
+    cacheControl: { cacheDisabled: true, caseIndex: index, priorCaseUrlCount: priorCaseUrls.length },
   };
 
   const cdp = await page.createCDPSession();
@@ -484,7 +471,7 @@ async function runCase(browser, { mode, route, index }) {
       readyState: info.readyState,
       rootPresent: info.rootPresent,
     });
-    const cacheEvidence = summarizeCacheEvidence(responses);
+    const cacheEvidence = summarizeCacheEvidence(responses, { priorCaseUrls });
     const verdict = buildCaseVerdict({
       mode,
       route,
@@ -503,6 +490,7 @@ async function runCase(browser, { mode, route, index }) {
       storageProbe,
       requireDbConnected,
       isolation: result.isolation,
+      priorCaseUrls,
     });
 
     Object.assign(result, {
@@ -531,6 +519,7 @@ async function runCase(browser, { mode, route, index }) {
         }),
       },
       assets: assets.map((asset) => ({ url: asset.url, status: asset.status, contentType: asset.contentType, fromCache: asset.fromCache })),
+      observedUrls: [...new Set(responses.map((response) => response.url))],
       apiResponses: apiResponses.map((response) => ({ url: response.url, status: response.status, fromCache: response.fromCache })),
       info,
       storageProbe,
@@ -551,7 +540,7 @@ async function runCase(browser, { mode, route, index }) {
       debuggerFrames: debuggerFrames.slice(0, 3),
       firstCdpException: cdpExceptions[0],
       consoleErrors,
-      cacheEvidence: summarizeCacheEvidence(responses),
+      cacheEvidence: summarizeCacheEvidence(responses, { priorCaseUrls }),
       failedChecks: [{ id: "case-execution", reasons: [String(error?.message || error)] }],
     });
   } finally {
@@ -577,12 +566,14 @@ async function main() {
   });
 
   const results = [];
+  const priorCaseUrls = new Set();
   let index = 0;
   try {
     for (const mode of modes) {
       for (const route of routes) {
         index += 1;
-        const result = await runCase(browser, { mode, route, index });
+        const result = await runCase(browser, { mode, route, index, priorCaseUrls });
+        for (const url of result.observedUrls || []) priorCaseUrls.add(url);
         results.push(result);
         console.error(`[${result.ok ? "PASS" : "FAIL"}] ${mode} ${route} (document ${result.documentNavigation?.status ?? result.error ?? "?"})`);
       }
