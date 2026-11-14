@@ -71,6 +71,8 @@ five scenarios:
 | `cdp-cache-disabled-same-context` | fresh 200, new nonce | `Network.setCacheDisabled` defeats reuse inside one context |
 | `revalidated-document-304` | `304` classified as a valid navigation | the original false failure cannot come back |
 | `blocked-storage-after-normal-warm-cache` | fresh 200 + storage denied | a blocked-storage case never re-uses a normal case's document |
+| `detects-pre-mount-storage-throw` | case FAILS on `no-uncaught-*` only | the harness still catches the real defect, and never blames navigation/cache for it |
+| `control-page-clean-with-storage` | case PASSES | the negative control is caused by the denial, not by a broken probe |
 
 If any scenario stops holding, the harness fails even if the six app cases pass.
 

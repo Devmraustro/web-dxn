@@ -141,6 +141,28 @@ async function startSelfTestServer(puppeteerBrowser) {
       res.end(`<!doctype html><html><head><title>cache probe</title></head><body><div id="root"><h1>probe</h1></div><script>window.__probeNonce=${JSON.stringify(nonce)}</script></body></html>`);
       return;
     }
+    if (url.pathname === "/hostile") {
+      // Reproduces the pre-fix production bundle: an UNGUARDED storage read
+      // during module init, before React mounts. With storage denied this
+      // throws a SecurityError and leaves #root empty (the white screen).
+      // Used as a negative control: the harness must report this as an
+      // exception failure, never as a document-navigation or cache failure.
+      const nonce = `hostile-${++revalidateCounter}`;
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><title>hostile probe</title></head><body><div id="root"></div><script>
+        window.__probeNonce = ${JSON.stringify(nonce)};
+        var saved = window.localStorage.getItem("dxn_language");
+        var mount = document.getElementById("root");
+        mount.innerHTML = '<header>mounted</header><h1>DXN control page</h1><p>' +
+          'This control page mirrors the pre-fix bundle boot order: an unguarded storage read runs before the ' +
+          'application mounts, so when site storage is denied the exception aborts the script and the root element ' +
+          'stays empty. It exists only to prove the harness still detects that failure mode and attributes it to the ' +
+          'uncaught exception rather than to document navigation or HTTP cache state.</p><footer>control</footer>';
+        window.__hostileMountAttempted = true;
+        window.__hostileSavedLanguage = saved;
+      </script></body></html>`);
+      return;
+    }
     if (url.pathname === "/doc-revalidate") {
       const etag = `"probe-etag-v1"`;
       if (req.headers["if-none-match"] === etag) {
@@ -210,6 +232,105 @@ async function navigateTwiceInOneContext(browser, url, { cacheDisabled, blockedS
     status: last.status,
     reportedFromCache: last.fromCache,
     nonceReused: nonces[0] !== null && nonces[0] === nonces[1],
+  };
+}
+
+/**
+ * Run one probe page through the SAME verdict pipeline used for the real
+ * matrix, so the negative control exercises real detection code (pageerror,
+ * CDP exceptions, document navigation, cache accounting, verdict attribution).
+ */
+async function runControlCase(browser, url, { mode, route = "/" }) {
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  const cdp = await page.createCDPSession();
+  const pageErrors = [];
+  const cdpExceptions = [];
+  const responses = [];
+  await cdp.send("Network.enable");
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+  await cdp.send("Page.enable");
+  await cdp.send("Runtime.enable");
+  if (mode === "blocked-storage") {
+    await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: DENY_STORAGE_SOURCE });
+  }
+  cdp.on("Runtime.exceptionThrown", (event) => cdpExceptions.push(describeException(event)));
+  page.on("pageerror", (error) => pageErrors.push({ message: error.message, stack: error.stack }));
+  page.on("response", (response) => {
+    try {
+      responses.push({
+        url: response.url(),
+        status: response.status(),
+        fromCache: response.fromCache(),
+        fromServiceWorker: response.fromServiceWorker(),
+        resourceType: response.request().resourceType(),
+      });
+    } catch {
+      /* detached */
+    }
+  });
+  let navigationResponse = null;
+  let navigationError = null;
+  try {
+    navigationResponse = await page.goto(url, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
+  } catch (error) {
+    navigationError = String(error?.message || error);
+  }
+  await wait(300);
+  const info = await page.evaluate(() => {
+    const root = document.getElementById("root");
+    return {
+      readyState: document.readyState,
+      rootPresent: !!root,
+      rootChildren: root ? root.childElementCount : -1,
+      headerPresent: !!document.querySelector("header"),
+      footerPresent: !!document.querySelector("footer"),
+      h1: document.querySelector("h1")?.textContent?.trim() ?? null,
+      bodyTextLength: document.body.innerText.trim().length,
+      hostileMountAttempted: window.__hostileMountAttempted === true,
+    };
+  });
+  const storageProbe = await page.evaluate(STORAGE_PROBE);
+  await context.close();
+
+  const verdict = buildCaseVerdict({
+    mode,
+    route,
+    origin: new URL(url).origin,
+    documentNavigation: evaluateDocumentNavigation({
+      status: navigationResponse?.status() ?? 0,
+      responseReceived: !!navigationResponse && !navigationError,
+      readyState: info.readyState,
+      rootPresent: info.rootPresent,
+    }),
+    cacheEvidence: summarizeCacheEvidence(responses),
+    pageErrors,
+    cdpExceptions,
+    consoleErrors: [],
+    failedRequests: [],
+    assets: [],
+    apiResponses: [],
+    health: { status: 200, contentType: "application/json", body: { status: "ok", db: "fixture", timestamp: new Date().toISOString() } },
+    products: { status: 200, contentType: "application/json", body: { success: true, count: 1, data: [{ _id: "1", slug: "probe", price: 1, image: "/x.svg" }] } },
+    info,
+    storageProbe,
+    requireDbConnected: false,
+    isolation: { context: "fresh-browser-context-per-case", cache: "cdp-network-setCacheDisabled" },
+  });
+  const exceptionChecks = verdict.failedChecks.filter((c) => c.id.startsWith("no-uncaught")).map((c) => c.id);
+  return {
+    caseOk: verdict.ok,
+    exceptionChecks,
+    attributedChecks: verdict.failedChecks.map((c) => c.id),
+    pageErrorCount: pageErrors.length,
+    cdpExceptionCount: cdpExceptions.length,
+    firstCdpException: cdpExceptions[0],
+    documentNavigation: verdict.checks.find((c) => c.id === "document-navigation"),
+    cacheOk: verdict.checks.find((c) => c.id === "cache-isolation")?.ok === true,
+    rootChildren: info.rootChildren,
+    hostileMountAttempted: info.hostileMountAttempted,
+    navigationError,
+    storageProbe,
   };
 }
 
@@ -289,6 +410,42 @@ async function runCacheSelfTest(browser) {
         { status: warm.status, fromCache: warm.reportedFromCache },
         { status: blocked.status, fromCache: blocked.reportedFromCache },
       ],
+    });
+    // 6. Negative control: the pre-fix failure mode must still be detected, and
+    //    attributed to the uncaught exception rather than to navigation/cache.
+    const hostileBlocked = await runControlCase(browser, `${origin}/hostile`, { mode: "blocked-storage" });
+    scenarios.push({
+      name: "detects-pre-mount-storage-throw",
+      description: "A pre-mount unguarded storage read with storage denied must fail the case as an uncaught exception (never as a 304/cache problem).",
+      expect: "detected-defect",
+      status: hostileBlocked.documentNavigation?.detail?.status,
+      fromCache: false,
+      nonceReused: false,
+      caseOk: hostileBlocked.caseOk,
+      exceptionChecks: hostileBlocked.exceptionChecks,
+      attributedChecks: hostileBlocked.attributedChecks,
+      pageErrorCount: hostileBlocked.pageErrorCount,
+      cdpExceptionCount: hostileBlocked.cdpExceptionCount,
+      firstCdpException: hostileBlocked.firstCdpException,
+      rootChildren: hostileBlocked.rootChildren,
+      storageProbe: hostileBlocked.storageProbe,
+    });
+
+    // 7. The same control page with working storage must be clean, so scenario 6
+    //    cannot pass merely because the probe page is broken for other reasons.
+    const hostileNormal = await runControlCase(browser, `${origin}/hostile`, { mode: "normal" });
+    scenarios.push({
+      name: "control-page-clean-with-storage",
+      description: "The same probe page with working storage must render and throw nothing.",
+      expect: "not-detected-defect",
+      status: hostileNormal.documentNavigation?.detail?.status,
+      fromCache: false,
+      nonceReused: false,
+      caseOk: hostileNormal.caseOk,
+      exceptionChecks: hostileNormal.exceptionChecks,
+      attributedChecks: hostileNormal.attributedChecks,
+      rootChildren: hostileNormal.rootChildren,
+      hostileMountAttempted: hostileNormal.hostileMountAttempted,
     });
   } finally {
     await close();

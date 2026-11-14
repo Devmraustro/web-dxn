@@ -312,6 +312,41 @@ test("self-test proves the harness detects caching AND defeats it", () => {
   assert.equal(assessSelfTest([]).ok, false, "no scenarios means no proof");
 });
 
+test("self-test negative control: a pre-mount throw is detected and correctly attributed", () => {
+  const detected = assessSelfTest([
+    {
+      name: "detects-pre-mount-storage-throw",
+      expect: "detected-defect",
+      caseOk: false,
+      exceptionChecks: ["no-uncaught-cdp-exceptions", "no-uncaught-page-errors"],
+      attributedChecks: ["no-uncaught-cdp-exceptions", "no-uncaught-page-errors", "route-ui"],
+    },
+    { name: "control-page-clean-with-storage", expect: "not-detected-defect", caseOk: true, exceptionChecks: [], attributedChecks: [] },
+  ]);
+  assert.equal(detected.ok, true, JSON.stringify(detected.results.filter((r) => !r.ok)));
+
+  // Blind harness: the defect slips through.
+  const blind = assessSelfTest([{ name: "detects-pre-mount-storage-throw", expect: "detected-defect", caseOk: true, exceptionChecks: [] }]);
+  assert.equal(blind.ok, false);
+
+  // The failure must not be blamed on navigation/cache (the original false attribution).
+  const misattributed = assessSelfTest([
+    {
+      name: "detects-pre-mount-storage-throw",
+      expect: "detected-defect",
+      caseOk: false,
+      exceptionChecks: ["no-uncaught-cdp-exceptions"],
+      attributedChecks: ["no-uncaught-cdp-exceptions", "document-navigation", "cache-isolation"],
+    },
+  ]);
+  assert.equal(misattributed.ok, false);
+  assert.match(JSON.stringify(misattributed.results[0].reasons), /mis-attributed/);
+
+  // The clean control must also hold, otherwise the detection above is vacuous.
+  const dirtyControl = assessSelfTest([{ name: "control-page-clean-with-storage", expect: "not-detected-defect", caseOk: false, exceptionChecks: [] }]);
+  assert.equal(dirtyControl.ok, false);
+});
+
 test("summary and check-run text are renderable and size-capped", () => {
   const report = {
     target: "local-production-build",
@@ -340,7 +375,7 @@ test("summary and check-run text are renderable and size-capped", () => {
   const markdown = renderSummaryMarkdown(report);
   assert.match(markdown, /Overall: PASS/);
   assert.match(markdown, /\| normal \| \/products \| PASS \|/);
-  assert.match(markdown, /Harness cache self-test/);
+  assert.match(markdown, /Harness self-test/);
 
   const text = buildCheckRunText(report);
   assert.ok(text.length < 60000);

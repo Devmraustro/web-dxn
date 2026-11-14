@@ -414,6 +414,20 @@ export function assessSelfTest(scenarios = []) {
     } else if (scenario.expect === "revalidated") {
       if (scenario.status !== 304) reasons.push(`expected-304-got-${scenario.status}`);
       if (scenario.navigationOk !== true) reasons.push("revalidated-navigation-rejected");
+    } else if (scenario.expect === "detected-defect") {
+      // Negative control: a page that throws before mounting MUST be reported as
+      // a failure caused by the exception — never by document navigation or
+      // cache accounting. This is the guard against the harness going blind, and
+      // against reintroducing cache-related false attributions.
+      if (scenario.caseOk !== false) reasons.push("defect-not-detected");
+      if (!(scenario.exceptionChecks || []).length) reasons.push("exception-not-attributed");
+      if ((scenario.attributedChecks || []).includes("document-navigation")) reasons.push("mis-attributed-to-document-navigation");
+      if ((scenario.attributedChecks || []).includes("cache-isolation")) reasons.push("mis-attributed-to-cache");
+    } else if (scenario.expect === "not-detected-defect") {
+      // The same control without the defect must be clean, so the previous
+      // scenario cannot pass just because the probe is broken.
+      if (scenario.caseOk !== true) reasons.push("control-case-unexpectedly-failed");
+      if ((scenario.exceptionChecks || []).length) reasons.push("unexpected-exceptions");
     }
     return { name: scenario.name, expect: scenario.expect, ok: reasons.length === 0, reasons, scenario };
   });
@@ -438,17 +452,22 @@ export function renderSummaryMarkdown(report = {}) {
   const failed = (report.results || []).filter((r) => !r.ok).flatMap((r) =>
     (r.failedChecks || []).map((c) => `- \`${r.mode} ${r.route}\` → **${c.id}**: ${c.reasons.join(", ") || "failed"}`)
   );
+  const observed = (scenario) => {
+    if (scenario.expect === "detected-defect" || scenario.expect === "not-detected-defect") {
+      const exceptions = (scenario.exceptionChecks || []).length;
+      return `caseOk=${scenario.caseOk} · exceptions=${exceptions} · rootChildren=${scenario.rootChildren ?? ""}`;
+    }
+    return `status=${scenario.status ?? ""} · fromCache=${scenario.fromCache ?? ""} · nonceReused=${scenario.nonceReused ?? ""}`;
+  };
   const selfTest = report.selfTest
     ? [
         "",
-        "### Harness cache self-test",
+        "### Harness self-test (cache behaviour + negative control)",
         `Result: ${report.selfTest.ok ? "PASS" : "FAIL"}`,
         "",
-        "| Scenario | Expected | Status | fromCache | Nonce reused | Result |",
-        "|---|---|---|---|---|---|",
-        ...report.selfTest.results.map(
-          (r) => `| ${r.name} | ${r.expect} | ${r.scenario.status ?? ""} | ${r.scenario.fromCache ?? ""} | ${r.scenario.nonceReused ?? ""} | ${r.ok ? "PASS" : "FAIL"} |`
-        ),
+        "| Scenario | Expected | Observed | Result |",
+        "|---|---|---|---|",
+        ...report.selfTest.results.map((r) => `| ${r.name} | ${r.expect} | ${observed(r.scenario)} | ${r.ok ? "PASS" : "FAIL"} |`),
       ]
     : [];
   return [...header, ...rows, ...(failed.length ? ["", "### Failed checks", ...failed] : []), ...selfTest].join("\n");
