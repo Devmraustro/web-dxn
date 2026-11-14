@@ -104,7 +104,7 @@ const ProductListPage = () => {
   return (
     <div className="dxn-page">
       <SeoHead
-        title={t("المنتجات — متجر DXN NADZ", "Catalogue Produits — DXN NADZ")}
+        title={t("المنتجات — متجر DXN للحياة الطبيعية", "Catalogue Produits — DXN Natural Life")}
         description={t(
           "تصفّح منتجات DXN الأصلية من المكملات الغذائية والكوسميتيك والمشروبات مع التوصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية شركة التوصيل) والدفع عند الاستلام.",
           "Parcourez les produits authentiques DXN : compléments alimentaires, cosmétiques et boissons avec livraison en Algérie (69 wilayas — selon couverture du transporteur) et paiement à la livraison."
@@ -115,7 +115,7 @@ const ProductListPage = () => {
       <section className="dxn-hero" style={{ padding: "3.2rem 0" }}>
         <div className="container dxn-hero-inner">
           <span className="dxn-hero-eyebrow">
-            {t("كتالوج منتجات DXN NADZ", "Catalogue officiel DXN NADZ")}
+            {t("كتالوج منتجات DXN للحياة الطبيعية", "Catalogue officiel DXN Natural Life")}
           </span>
           <h1 className="mb-2">
             {t("اكتشف تشكيلة منتجات DXN", "Découvrez notre gamme de produits DXN")}

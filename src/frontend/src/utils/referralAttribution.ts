@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Client-Side Referral & Traffic Source Attribution (Phase 9).
+ * DXN Natural Life — Client-Side Referral & Traffic Source Attribution (Phase 9).
  *
  * Captures `?ref=facebook|instagram|tiktok|whatsapp` and UTM query parameters
  * on landing, preserves them across internal navigation, and returns a clean

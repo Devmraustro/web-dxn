@@ -384,7 +384,7 @@ const adminNoteSchema = new Schema({
 const AdminNote = mongoose.model("AdminNote", adminNoteSchema);
 
 // ==========================================
-// MEMBERSHIP LEADS (DXN NADZ RECRUITMENT & CRM)
+// MEMBERSHIP LEADS (DXN Natural Life RECRUITMENT & CRM)
 // ==========================================
 
 const membershipLeadSchema = new Schema({
@@ -514,7 +514,7 @@ const NotificationLog = mongoose.model("NotificationLog", notificationLogSchema)
 
 const siteSettingsSchema = new Schema({
   key: { type: String, unique: true, required: true, default: "global" },
-  brandName: { type: String, default: "DXN NADZ", trim: true, maxlength: 80 },
+  brandName: { type: String, default: "DXN Natural Life", trim: true, maxlength: 80 },
   sponsorMembershipNumber: { type: String, trim: true, maxlength: 32, default: "" },
   sponsorNameAr: { type: String, trim: true, maxlength: 120, default: "" },
   sponsorNameFr: { type: String, trim: true, maxlength: 120, default: "" },

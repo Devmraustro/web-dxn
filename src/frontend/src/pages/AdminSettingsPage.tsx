@@ -17,7 +17,7 @@ const AdminSettingsPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    brandName: "DXN NADZ",
+    brandName: "DXN Natural Life",
     sponsorMembershipNumber: "",
     sponsorNameAr: "",
     sponsorNameFr: "",
@@ -130,7 +130,7 @@ const AdminSettingsPage: React.FC = () => {
 
       if (data) {
         setForm({
-          brandName: data.brandName || "DXN NADZ",
+          brandName: data.brandName || "DXN Natural Life",
           sponsorMembershipNumber: data.sponsorMembershipNumber || "",
           sponsorNameAr: data.sponsorNameAr || "",
           sponsorNameFr: data.sponsorNameFr || "",
@@ -255,7 +255,7 @@ const AdminSettingsPage: React.FC = () => {
                     <Form.Control
                       value={form.sponsorNameAr}
                       onChange={(e) => setForm({ ...form, sponsorNameAr: e.target.value })}
-                      placeholder="فريق DXN NADZ"
+                      placeholder="فريق DXN للحياة الطبيعية"
                     />
                   </Col>
                   <Col md={6}>
@@ -265,7 +265,7 @@ const AdminSettingsPage: React.FC = () => {
                     <Form.Control
                       value={form.sponsorNameFr}
                       onChange={(e) => setForm({ ...form, sponsorNameFr: e.target.value })}
-                      placeholder="Équipe DXN NADZ"
+                      placeholder="Équipe DXN Natural Life"
                     />
                   </Col>
                 </Row>

@@ -5,7 +5,7 @@ import { useSiteSettings } from "../context/SiteSettingsContext";
 import { STORE_EMAIL } from "../config/site";
 
 /**
- * DXN NADZ — Professional Footer (Phase 2.2 section 13 & Phase 11 & Phase 12).
+ * DXN Natural Life — Professional Footer (Phase 2.2 section 13 & Phase 11 & Phase 12).
  * Displays only verified, configured links and clear health/income disclaimers.
  */
 const Footer = () => {
@@ -30,7 +30,7 @@ const Footer = () => {
             </span>
             <span>
               <span className="dxn-brand-name" style={{ color: "#fff", fontSize: "1.1rem" }}>
-                {settings.brandName || "DXN NADZ"}
+                {settings.brandName || "DXN Natural Life"}
               </span>
               <span className="dxn-brand-sub d-block">
                 {t("منتجات متنوعة • معرفة موثوقة • فرصة عمل منظمة", "Produits • Éducation • Opportunité")}
@@ -39,8 +39,8 @@ const Footer = () => {
           </div>
           <p className="mt-2">
             {t(
-              "منصة DXN NADZ للتسوق المباشر، التثقيف المسؤول بالمنتجات، ومرافقة الراغبين في الانضمام إلى نشاط البيع المباشر مع DXN بشفافية واحترافية.",
-              "Plateforme DXN NADZ dédiée aux produits DXN, à l'information responsable et à l'accompagnement transparent de notre équipe."
+              "منصة DXN للحياة الطبيعية للتسوق المباشر، التثقيف المسؤول بالمنتجات، ومرافقة الراغبين في الانضمام إلى نشاط البيع المباشر مع DXN بشفافية واحترافية.",
+              "Plateforme DXN Natural Life dédiée aux produits DXN, à l'information responsable et à l'accompagnement transparent de notre équipe."
             )}
           </p>
         </div>
@@ -62,7 +62,7 @@ const Footer = () => {
           <Link to="/founder">{t("تعرّف على مؤسس DXN", "Fondateur de DXN")}</Link>
           <Link to="/why-dxn">{t("لماذا يختار الكثيرون DXN؟", "Pourquoi choisir DXN ?")}</Link>
           <Link to="/education">{t("مركز التثقيف بالمنتجات", "Centre éducatif produits")}</Link>
-          <Link to="/join">{t("انضم إلى فريق DXN NADZ", "Rejoindre l'équipe DXN NADZ")}</Link>
+          <Link to="/join">{t("انضم إلى فريق DXN للحياة الطبيعية", "Rejoindre l'équipe DXN Natural Life")}</Link>
         </div>
 
         {/* Trust, Support & Socials */}
@@ -155,7 +155,7 @@ const Footer = () => {
       </div>
 
       <div className="dxn-footer-bottom">
-        © {new Date().getFullYear()} {settings.brandName || "DXN NADZ"} —{" "}
+        © {new Date().getFullYear()} {settings.brandName || "DXN Natural Life"} —{" "}
         {t("جميع الحقوق محفوظة", "Tous droits réservés")}
       </div>
     </footer>

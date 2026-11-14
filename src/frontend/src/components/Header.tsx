@@ -85,7 +85,7 @@ const SocialIcons: React.FC = () => {
     {
       key: "whatsapp",
       href: settings.whatsappUrl,
-      label: language === "ar" ? "واتساب DXN NADZ" : "WhatsApp DXN NADZ",
+      label: language === "ar" ? "واتساب DXN للحياة الطبيعية" : "WhatsApp DXN Natural Life",
       Icon: WhatsAppIcon,
     },
   ].filter((item) => isSafeExternalUrl(item.href));
@@ -183,7 +183,7 @@ const Header = () => {
           <Link to="/" className="dxn-brand" onClick={() => setMenuOpen(false)}>
             <span className="dxn-brand-badge">DXN</span>
             <span>
-              <span className="dxn-brand-name d-block">{settings.brandName || "DXN NADZ"}</span>
+              <span className="dxn-brand-name d-block">{settings.brandName || "DXN Natural Life"}</span>
               <span className="dxn-brand-sub">
                 {t("منتجات متنوعة • معرفة موثوقة", "Produits • Savoir • Équipe")}
               </span>

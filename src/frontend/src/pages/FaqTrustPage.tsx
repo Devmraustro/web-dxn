@@ -53,8 +53,8 @@ const FaqTrustPage: React.FC = () => {
       <SeoHead
         title={tx("الأسئلة الشائعة ومركز الثقة", "FAQ & Centre de confiance")}
         description={tx(
-          "إجابات واضحة وموثقة حول شركة DXN، المنتجات، الطلب بدون عضوية، الانضمام إلى فريق DXN NADZ، وضوابط الامتثال الصحي.",
-          "Réponses claires sur DXN, la commande sans adhésion, l'équipe DXN NADZ et nos engagements de conformité."
+          "إجابات واضحة وموثقة حول شركة DXN، المنتجات، الطلب بدون عضوية، الانضمام إلى فريق DXN للحياة الطبيعية، وضوابط الامتثال الصحي.",
+          "Réponses claires sur DXN, la commande sans adhésion, l'équipe DXN Natural Life et nos engagements de conformité."
         )}
         canonicalPath="/faq"
         jsonLd={faqJsonLd}
@@ -153,8 +153,8 @@ const FaqTrustPage: React.FC = () => {
                 <h2 className="h5 fw-bold mb-2">{tx("إخلاء المسؤولية الصحية", "Avertissement sanitaire")}</h2>
                 <p className="text-muted small mb-0" style={{ lineHeight: 1.8 }}>
                   {tx(
-                    "المكملات الغذائية والمشروبات ومنتجات العناية المعروضة في DXN NADZ ليست أدوية طبية، ولا تهدف إلى تشخيص أو علاج أو شفاء أو الوقاية من أي مرض. استشر الطبيب المختص دائماً قبل تناول أي مكمل غذائي.",
-                    "Les produits proposés sur DXN NADZ ne sont pas des médicaments et ne visent pas à diagnostiquer, traiter, guérir ou prévenir une maladie."
+                    "المكملات الغذائية والمشروبات ومنتجات العناية المعروضة في DXN للحياة الطبيعية ليست أدوية طبية، ولا تهدف إلى تشخيص أو علاج أو شفاء أو الوقاية من أي مرض. استشر الطبيب المختص دائماً قبل تناول أي مكمل غذائي.",
+                    "Les produits proposés sur DXN Natural Life ne sont pas des médicaments et ne visent pas à diagnostiquer, traiter, guérir ou prévenir une maladie."
                   )}
                 </p>
               </div>

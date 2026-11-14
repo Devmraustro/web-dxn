@@ -97,10 +97,10 @@ const ContactPage: React.FC = () => {
   return (
     <div className="dxn-page">
       <SeoHead
-        title={tx("تواصل معنا — DXN NADZ", "Contactez-nous — DXN NADZ")}
+        title={tx("تواصل معنا — DXN للحياة الطبيعية", "Contactez-nous — DXN Natural Life")}
         description={tx(
-          "تواصل مع فريق DXN NADZ للاستفسار عن المنتجات، الطلبات، أو الانضمام إلى الفريق.",
-          "Contactez l'équipe DXN NADZ pour toute question sur les produits, commandes ou l'équipe."
+          "تواصل مع فريق DXN للحياة الطبيعية للاستفسار عن المنتجات، الطلبات، أو الانضمام إلى الفريق.",
+          "Contactez l'équipe DXN Natural Life pour toute question sur les produits, commandes ou l'équipe."
         )}
         canonicalPath="/contact"
       />
@@ -108,7 +108,7 @@ const ContactPage: React.FC = () => {
       <section className="dxn-hero" style={{ padding: "3.5rem 0" }}>
         <div className="container">
           <span className="dxn-hero-eyebrow">{tx("خدمة العملاء والاستفسارات", "Contact & Assistance")}</span>
-          <h1 className="mb-2">{tx("تواصل مع فريق DXN NADZ", "Contacter l'équipe DXN NADZ")}</h1>
+          <h1 className="mb-2">{tx("تواصل مع فريق DXN للحياة الطبيعية", "Contacter l'équipe DXN Natural Life")}</h1>
           <p className="dxn-hero-lead mb-0">
             {tx(
               "يسعدنا الرد على استفساراتكم بخصوص المنتجات المتوفرة، متابعة الطلبات، أو خطوات الانضمام إلى الفريق.",
@@ -199,7 +199,7 @@ const ContactPage: React.FC = () => {
                       </h2>
                       <p className="text-muted mb-3">
                         {tx(
-                          "شكراً لتواصلك مع DXN NADZ. سيقوم فريقنا بالرد عليك في أقرب وقت ممكن.",
+                          "شكراً لتواصلك مع DXN للحياة الطبيعية. سيقوم فريقنا بالرد عليك في أقرب وقت ممكن.",
                           "Merci de nous avoir écrit. Notre équipe vous répondra dans les meilleurs délais."
                         )}
                       </p>

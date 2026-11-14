@@ -19,7 +19,7 @@ jest.mock("../context/CartContext", () => ({
 jest.mock("../context/SiteSettingsContext", () => ({
   useSiteSettings: () => ({
     settings: {
-      brandName: "DXN NADZ",
+      brandName: "DXN Natural Life",
       whatsappUrl: "https://wa.me/213551234567",
       socialLinks: {
         facebook: "https://www.facebook.com/dxnnadz",

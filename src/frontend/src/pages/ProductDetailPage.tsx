@@ -149,8 +149,8 @@ const ProductDetailPage = () => {
   const whatsappInquiryHref = settings.whatsappUrl
     ? `${settings.whatsappUrl}${settings.whatsappUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(
         language === "ar"
-          ? `السلام عليكم فريق DXN NADZ، أود الاستفسار عن المنتج: ${title} (${product.sku || ""})`
-          : `Bonjour DXN NADZ, je souhaite me renseigner sur le produit : ${title} (${product.sku || ""})`
+          ? `السلام عليكم فريق DXN للحياة الطبيعية، أود الاستفسار عن المنتج: ${title} (${product.sku || ""})`
+          : `Bonjour DXN Natural Life, je souhaite me renseigner sur le produit : ${title} (${product.sku || ""})`
       )}`
     : "";
 
@@ -211,7 +211,7 @@ const ProductDetailPage = () => {
               ) : (
                 <div className="py-5 text-secondary">
                   <div className="fw-bold mb-1" style={{ fontSize: "1.2rem", color: "#0b3d1f" }}>
-                    DXN NADZ
+                    DXN Natural Life
                   </div>
                   <div className="small">
                     {t("الصورة الرسمية للمنتج غير مرفقة حالياً", "Photo officielle non disponible pour le moment")}

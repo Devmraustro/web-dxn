@@ -351,7 +351,7 @@ export const reviewUpdateSchema = yup.object({
   isPublished: yup.boolean(),
 });
 
-// --- DXN NADZ: International phone validator for Recruitment & Contact ---
+// --- DXN Natural Life: International phone validator for Recruitment & Contact ---
 
 const internationalPhoneTest = (value?: string | null): boolean => {
   if (!value) return false;
@@ -367,7 +367,7 @@ const optionalDxnMemberTest = (value?: string | null): boolean => {
   return /^[A-Za-z0-9]{5,24}$/.test(compact);
 };
 
-// --- DXN NADZ: Membership Lead (Recruitment & CRM) schemas ---
+// --- DXN Natural Life: Membership Lead (Recruitment & CRM) schemas ---
 
 export const membershipLeadCreateSchema = yup.object({
   firstName: yup.string().trim().min(2, "First name is too short").max(100).required("First name is required"),
@@ -443,7 +443,7 @@ export const membershipLeadCommSchema = yup.object({
   outcome: yup.string().trim().max(300).optional(),
 });
 
-// --- DXN NADZ: Contact Message schemas ---
+// --- DXN Natural Life: Contact Message schemas ---
 
 export const contactCreateSchema = yup
   .object({
@@ -488,7 +488,7 @@ export const contactCreateSchema = yup
     }
   );
 
-// --- DXN NADZ: Site Settings & Categories & CMS schemas ---
+// --- DXN Natural Life: Site Settings & Categories & CMS schemas ---
 
 export const siteSettingsUpdateSchema = yup.object({
   brandName: yup.string().trim().max(80).optional(),

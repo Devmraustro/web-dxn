@@ -132,7 +132,7 @@ const FounderPage: React.FC = () => {
               {tx("استكشف مركز التثقيف بالمنتجات", "Explorer le centre éducatif")}
             </Link>
             <Link to="/join" className="dxn-btn dxn-btn-gold">
-              {tx("انضم إلى فريق DXN NADZ", "Rejoindre l'équipe DXN NADZ")}
+              {tx("انضم إلى فريق DXN للحياة الطبيعية", "Rejoindre l'équipe DXN Natural Life")}
             </Link>
           </div>
         </div>

@@ -14,11 +14,11 @@ import { recordAuditLog } from "../services/audit.service";
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * POST /api/leads — Public DXN NADZ Team Recruitment Form Submission (Phase 6).
+ * POST /api/leads — Public DXN Natural Life Team Recruitment Form Submission (Phase 6).
  *
  * STRICT COMPLIANCE & SECURITY:
  * 1. Never creates an official DXN membership automatically — creates a CRM lead
- *    for personal follow-up by the DXN NADZ team.
+ *    for personal follow-up by the DXN Natural Life team.
  * 2. Sponsor membership number is ALWAYS resolved from server-side settings,
  *    never accepted from client payloads or ?ref= URL query parameters.
  * 3. Honeypot (`website`) rejects automated bot spam cleanly.

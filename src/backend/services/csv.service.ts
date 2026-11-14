@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Secure RFC-4180 CSV Serializer for Admin CRM Exports.
+ * DXN Natural Life — Secure RFC-4180 CSV Serializer for Admin CRM Exports.
  *
  * SECURITY & COMPATIBILITY:
  * 1. Prepends UTF-8 BOM (\uFEFF) so Microsoft Excel & LibreOffice render Arabic

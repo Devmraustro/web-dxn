@@ -152,7 +152,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
     const topProducts = await enrichSalesRows(await Order.aggregate(salesAggregation(5)));
 
-    // --- DXN NADZ Phase 9 & Phase 10: Real Customers, CRM Leads, Messages & Referral Analytics ---
+    // --- DXN Natural Life Phase 9 & Phase 10: Real Customers, CRM Leads, Messages & Referral Analytics ---
     const totalCustomers =
       Customer && typeof Customer.countDocuments === "function"
         ? await Customer.countDocuments()

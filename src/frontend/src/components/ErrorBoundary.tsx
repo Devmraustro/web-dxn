@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * DXN NADZ — Application Error Boundary.
+ * DXN Natural Life — Application Error Boundary.
  *
  * ROOT CAUSE CONTEXT (post-release): an uncaught render/runtime error (e.g. a
  * failed lazy-chunk load, a transient hydration/API error during navigation)
@@ -22,7 +22,7 @@ interface ErrorBoundaryState {
 }
 
 /**
- * DXN NADZ — Recoverable error fallback UI (never a blank page).
+ * DXN Natural Life — Recoverable error fallback UI (never a blank page).
  * Exported separately so it can be unit-tested without a client DOM.
  */
 export const ErrorFallback: React.FC<{ onRetry: () => void }> = ({ onRetry }) => {
@@ -84,7 +84,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   componentDidCatch(error: unknown, info: unknown): void {
     // Surface the real error in the browser console for diagnosis while the
     // user always sees a recoverable UI (never a blank page).
-    console.error("DXN NADZ render error:", error, info);
+    console.error("DXN Natural Life render error:", error, info);
   }
 
   handleRetry = (): void => {

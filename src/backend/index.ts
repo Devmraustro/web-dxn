@@ -24,7 +24,7 @@ export const connectToDatabase = async (): Promise<void> => {
 export const startListening = (): Server => {
   const bindHost = process.env.HOST || "0.0.0.0";
   const server = app.listen(portNumber, bindHost, () => {
-    console.log(`DXN NADZ API running on ${bindHost}:${portNumber}`);
+    console.log(`DXN Natural Life API running on ${bindHost}:${portNumber}`);
   });
   return server;
 };
