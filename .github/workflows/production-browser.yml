@@ -40,7 +40,7 @@ jobs:
       - name: Verify production renders in a real browser
         run: node scripts/production-browser-check.mjs
         env:
-          PRODUCTION_URL: https://dxnnadz.vercel.app
+          PRODUCTION_URL: https://web-mqzw1l9fp-devmraustros-projects.vercel.app
           BROWSER_REPORT_DIR: browser-report
           BROWSER_MODES: normal,blocked-storage
 
