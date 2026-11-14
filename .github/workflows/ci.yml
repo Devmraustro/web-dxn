@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
   group: dxn-nadz-ci-${{ github.workflow }}-${{ github.ref }}
@@ -127,9 +128,140 @@ jobs:
             echo "no report produced"
           fi
 
+      # Artifact and log blobs are not reachable from every environment, so the
+      # evidence is also published as a check run output, readable with
+      #   gh api repos/{owner}/{repo}/check-runs/{id} --jq .output.text
+      - name: Publish live asset evidence
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const read = (p) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null);
+            const cached = read('browser-report/live-assets.json');
+            const fresh = read('browser-report/live-assets-fresh.json');
+            const report = { cached, fresh };
+            if (!cached) {
+              core.setFailed('live asset probe produced no report');
+              return;
+            }
+            const lines = [];
+            lines.push(`Document: HTTP ${cached.document?.status} · sha256 ${cached.document?.sha256} · cache-control: ${cached.document?.cacheControl}`);
+            lines.push(`Served graph links: ${cached.integrity.ok ? 'YES (PASS)' : 'NO (FAIL)'} — ${cached.integrity.checkedModules} modules, ${cached.integrity.checkedImports} named imports`);
+            lines.push('');
+            lines.push('Served assets (as a browser receives them):');
+            for (const asset of cached.servedAssets) {
+              lines.push(`  HTTP ${asset.status}  ${String(asset.bytes).padStart(8)} B  ${asset.sha256}  edge=${asset.vercelCache || '-'} age=${asset.age || '-'}  ${asset.path}`);
+            }
+            if (fresh) {
+              lines.push('');
+              lines.push('Origin assets (cache-bypassed):');
+              for (const asset of fresh.servedAssets) {
+                lines.push(`  HTTP ${asset.status}  ${String(asset.bytes).padStart(8)} B  ${asset.sha256}  edge=${asset.vercelCache || '-'}  ${asset.path}`);
+              }
+            }
+            if (cached.integrity.errors.length || cached.integrity.warnings.length) {
+              lines.push('');
+              lines.push('Link errors / warnings:');
+              for (const e of cached.integrity.errors) lines.push(`  ERROR ${e.reason}: ${e.detail}`);
+              for (const w of cached.integrity.warnings) lines.push(`  WARN ${w.reason}: ${w.file} -> ${w.specifier}`);
+            }
+            const text = JSON.stringify(report).length > 60000
+              ? JSON.stringify({ note: 'report truncated', document: cached.document, integrity: cached.integrity, servedAssets: cached.servedAssets })
+              : JSON.stringify(report);
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Live asset integrity evidence',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: cached.integrity.ok
+                  ? 'Served bundle links; served assets differ from this build (expected before deploy)'
+                  : 'Served bundle FAILS to link',
+                summary: lines.join('\n'),
+                text,
+              },
+            });
+            core.info(`Published live asset evidence: ${check.data.html_url}`);
+
       - name: Upload live asset evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-asset-integrity
+          path: browser-report/
+
+  live-browser:
+    name: Live production browser probe
+    # Renders the deployed site in headless Chromium in a fresh profile: proves
+    # whether the production page mounts React and whether a module-linking
+    # SyntaxError is raised by the bytes the edge actually serves.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Puppeteer with Chromium
+        run: npm install --no-save --no-audit --no-fund puppeteer@25.17.0
+
+      - name: Probe the deployed site in a real browser
+        continue-on-error: true
+        run: node scripts/production-browser-check.mjs
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
+          BROWSER_TARGET: production
+          EXPECT_DB_CONNECTED: "0"
+          HARNESS_SELF_TEST: "0"
+          BROWSER_MODES: normal,blocked-storage
+          BROWSER_ROUTES: "/,/join,/products"
+          BROWSER_REPORT_DIR: browser-report
+
+      - name: Publish live browser evidence
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const p = 'browser-report/production-browser-report.json';
+            if (!fs.existsSync(p)) {
+              core.setFailed('live browser probe produced no report');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(p, 'utf8'));
+            let text = JSON.stringify(report);
+            if (text.length > 60000) text = JSON.stringify({ note: 'truncated', failed: report.failed, cases: report.cases?.map((c) => ({ name: c.name, ok: c.ok, errors: c.pageErrors })) });
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Live production browser evidence',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: report.failed ? 'Live production FAILED browser verification' : 'Live production PASSED browser verification',
+                summary: fs.existsSync('browser-report/check-run-summary.md')
+                  ? fs.readFileSync('browser-report/check-run-summary.md', 'utf8')
+                  : `Overall: ${report.failed ? 'FAIL' : 'PASS'}`,
+                text,
+              },
+            });
+            core.info(`Published live browser evidence: ${check.data.html_url}`);
+
+      - name: Upload live browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-production-browser-report
           path: browser-report/
