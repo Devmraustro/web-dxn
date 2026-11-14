@@ -119,3 +119,52 @@ catalogue renders zero cards and the harness would report an application failure
 that is really an environment failure — the same class of false result this work
 removes. Live API/DB truth is verified separately by the `production-live` job
 with `EXPECT_DB_CONNECTED=1`.
+
+## Bundle linkage gate (`check-bundle-integrity`)
+
+A page can pass every HTTP and DOM check and still never render: ES module
+imports are resolved *before* application code runs, so one chunk importing a
+symbol that its provider chunk does not export aborts the whole graph with
+
+```
+Uncaught SyntaxError: The requested module './vendor-react-XXXX.js'
+does not provide an export named 'k'
+```
+
+Nothing after that point executes — no React, no error boundary, no page error
+handler inside the app. The browser-level harness only sees "nothing mounted".
+
+`scripts/check-bundle-integrity.mjs` closes that gap by validating the emitted
+bytes themselves:
+
+```bash
+# emitted build (hard gate in CI, runs after every `npm run build`)
+npm run check:bundle-integrity
+
+# the bytes a deployment actually serves (add --fresh to bypass edge caches)
+node scripts/check-bundle-integrity.mjs --url https://dxnnadz.vercel.app \
+  --compare-dir dist/frontend/build --json browser-report/live-assets.json
+```
+
+It parses every chunk (minified, single-line, including `import`, `export {}`,
+`export * from`, `export {} from` and dynamic `import()`), resolves relative
+specifiers, and fails when
+
+* an `index.html` asset reference has no matching emitted file,
+* a relative import points at a chunk that is not in the build,
+* a named import / re-export does not exist in the target chunk's export table,
+* a chunk looks truncated (unbalanced delimiters).
+
+With `--compare-dir` it also hashes every served chunk against a fresh build, so
+"the deployment serves assets from more than one build" becomes a machine-checked
+fact instead of a guess.
+
+### Operational note: a client stuck on a blank page
+
+If a single browser keeps reporting a missing-export error while a fresh browser
+loads the site fine, that browser is holding a stale or damaged copy of one
+chunk at an `/assets/*` URL that is served `immutable, max-age=31536000`.
+Deployment-side that cannot be repaired from the server: the fix is a hard
+reload (DevTools → Network → *Disable cache* → reload, or *Clear site data*).
+Once a release ships chunks with new names, those clients recover on their next
+navigation without any action.

@@ -19,7 +19,7 @@ on:
   deployment_status:
   push:
     branches:
-      - arena/d43672c3-web-dxn
+      - "arena/**"
     paths:
       - "scripts/**"
       - ".github/workflows/production-browser.yml"
