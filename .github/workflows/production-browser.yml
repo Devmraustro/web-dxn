@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   browser:
@@ -49,3 +50,60 @@ jobs:
         with:
           name: production-browser-report
           path: browser-report/
+
+      # The sandbox cannot download Actions artifact/log blobs (egress allowlist),
+      # so also publish the evidence as a Check Run output readable via the API.
+      - name: Publish browser evidence check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'browser-report/production-browser-report.json';
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed('Browser report was not produced');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const rows = report.results.map((r) =>
+              `| ${r.mode} | ${r.route} | ${r.ok ? 'PASS' : 'FAIL'} | ${r.httpStatus ?? r.error ?? ''} | ${r.info?.rootChildren ?? ''} | ${r.pageErrors?.length ?? ''} | ${r.cdpExceptions?.length ?? ''} | ${r.apiChecks?.health?.ok ?? ''} | ${r.apiChecks?.products?.ok ?? ''} | ${r.routeOk ?? ''} |`
+            ).join('\n');
+            const summary = [
+              `Base: ${report.base}`,
+              `Checked at: ${report.checkedAt}`,
+              `Overall: ${report.failed ? 'FAIL' : 'PASS'}`,
+              '',
+              '| Mode | Route | Result | HTTP | #root children | pageerrors | CDP exceptions | health API | products API | route UI |',
+              '|---|---|---|---|---|---|---|---|---|---|',
+              rows,
+            ].join('\n');
+            const evidence = report.results.map((r) => ({
+              route: r.route,
+              mode: r.mode,
+              ok: r.ok,
+              httpStatus: r.httpStatus,
+              error: r.error,
+              info: r.info,
+              apiChecks: r.apiChecks,
+              assetFailures: r.assetFailures,
+              pageErrors: r.pageErrors,
+              firstCdpException: r.cdpExceptions?.[0],
+              debuggerFrames: r.debuggerFrames?.slice(0, 2),
+              consoleErrors: r.consoleErrors?.slice(0, 5),
+              failedRequests: r.failedRequests?.slice(0, 5),
+            }));
+            const text = JSON.stringify(evidence, null, 2).slice(0, 60000);
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Production browser evidence',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: report.failed ? 'failure' : 'success',
+              output: {
+                title: report.failed ? 'Production browser rendering FAILED' : 'Production browser rendering PASSED',
+                summary,
+                text,
+              },
+            });
+            core.info(`Created check run ${check.data.id}: ${check.data.html_url}`);
