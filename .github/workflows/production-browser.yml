@@ -2,6 +2,14 @@ name: Production browser verification
 
 on:
   workflow_dispatch:
+  deployment_status:
+  # Temporary pre-merge diagnostic trigger for the active remediation branch.
+  push:
+    branches:
+      - arena/bc0a8c5c-web-dxn
+    paths:
+      - scripts/production-browser-check.mjs
+      - .github/workflows/production-browser.yml
 
 permissions:
   contents: read
@@ -9,6 +17,11 @@ permissions:
 jobs:
   browser:
     name: Real-browser production rendering check
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       (github.event.deployment.environment == 'Production' ||
+        github.event.deployment.environment == 'production'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -28,6 +41,7 @@ jobs:
         env:
           PRODUCTION_URL: https://dxnnadz.vercel.app
           BROWSER_REPORT_DIR: browser-report
+          BROWSER_MODES: normal,blocked-storage
 
       - name: Upload browser evidence
         if: always()
