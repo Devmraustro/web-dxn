@@ -55,6 +55,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Bundle integrity (emitted production build)
+        run: npm run check:bundle-integrity
+
       - name: Harness unit tests (cache/304/assertion logic)
         run: npm run test:harness
 
@@ -135,6 +138,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Verify the served bundle links (no missing module exports)
+        run: |
+          node scripts/check-bundle-integrity.mjs \
+            --url "$PRODUCTION_URL" \
+            --json browser-report/live-assets.json \
+            --verbose
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
 
       - name: Install Puppeteer with Chromium
         run: npm install --no-save --no-audit --no-fund puppeteer@25.17.0

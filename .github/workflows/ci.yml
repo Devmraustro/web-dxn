@@ -42,6 +42,13 @@ jobs:
       - name: Production build
         run: npm run build
 
+      # Link-time integrity of the emitted bundle: every HTML asset reference
+      # must exist and every named import must be exported by the chunk it is
+      # imported from. A missing export blanks the page before React mounts, so
+      # this gate is cheaper and stricter than any post-mount smoke test.
+      - name: Bundle integrity (emitted production build)
+        run: npm run check:bundle-integrity
+
       - name: Browser-verification harness tests
         run: npm run test:harness
 
@@ -50,3 +57,79 @@ jobs:
 
       - name: AI and messaging safety test suite
         run: npm run test:ai -- --coverage=false
+
+  live-assets:
+    name: Live deployment bundle integrity
+    # Fetches the assets the production domain actually serves, verifies the
+    # served module graph links, and diffs every served chunk against the build
+    # of this commit. A deployment that serves chunks from more than one build —
+    # or a truncated/stale chunk at an immutable /assets/* URL — is detected here
+    # instead of in a user's browser.
+    #
+    # While the deployed commit is known to be broken this job records evidence
+    # without failing the workflow (the corrective build is not deployed yet).
+    # Remove `continue-on-error` from the probe steps once this lands on main so
+    # the probe is a hard gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Production build (reference build for comparison)
+        run: npm run build
+
+      - name: Probe deployed assets (as browsers receive them)
+        continue-on-error: true
+        run: |
+          node scripts/check-bundle-integrity.mjs \
+            --url "$PRODUCTION_URL" \
+            --compare-dir dist/frontend/build \
+            --json browser-report/live-assets.json \
+            --verbose
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
+
+      - name: Probe deployed assets (origin, cache bypassed)
+        continue-on-error: true
+        run: |
+          node scripts/check-bundle-integrity.mjs \
+            --url "$PRODUCTION_URL" \
+            --fresh \
+            --compare-dir dist/frontend/build \
+            --json browser-report/live-assets-fresh.json \
+            --verbose
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
+
+      - name: Print served-asset summary
+        if: always()
+        run: |
+          if [ -f browser-report/live-assets.json ]; then
+            node -e '
+              const r = require("./browser-report/live-assets.json");
+              console.log(`document: HTTP ${r.document?.status} sha256 ${r.document?.sha256?.slice(0,16)} cache-control=${r.document?.cacheControl}`);
+              console.log(`integrity: ${r.integrity.ok ? "PASS" : "FAIL"} (${r.integrity.checkedModules} modules, ${r.integrity.checkedImports} imports)`);
+              for (const a of r.servedAssets) console.log(`asset ${a.status} ${String(a.bytes).padStart(8)}B ${a.sha256.slice(0,16)} edge=${a.vercelCache || "-"} ${a.path}`);
+              for (const e of r.integrity.errors) console.log(`::error file=${e.file}::${e.detail}`);
+              for (const d of r.comparison) console.log(`::warning::${d.reason}: ${d.path}${d.served ? ` served=${d.served.slice(0,16)} local=${d.local.slice(0,16)}` : ""}`);
+            '
+          else
+            echo "no report produced"
+          fi
+
+      - name: Upload live asset evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-asset-integrity
+          path: browser-report/

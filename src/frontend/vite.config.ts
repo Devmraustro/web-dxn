@@ -25,24 +25,24 @@ export default defineConfig(({ command }) => ({
     outDir: buildOutDir,
     emptyOutDir: true,
     sourcemap: false,
-    rollupOptions: command === "build" ? {
-      output: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
-            }
-            if (id.includes('bootstrap')) {
-              return 'vendor-bootstrap';
-            }
-            if (id.includes('clsx') || id.includes('date-fns')) {
-              return 'vendor-utils';
-            }
-            return 'vendor-other';
-          }
-        },
-      },
-    } : {},
+    // Rolling our own chunking with `manualChunks` substring matching
+    // (`id.includes('react')`) forced every React-adjacent package —
+    // react-dom, react-router, react-i18next, react-bootstrap,
+    // react-helmet-async — into one long-lived `vendor-react` chunk whose
+    // module set (and therefore its content-hashed file name) stayed stable
+    // across releases while its cross-chunk export table was recomputed from
+    // whatever the application chunks happened to import. It also duplicated
+    // React's core module into a second vendor chunk. A stale copy of such a
+    // shared chunk at an immutable `/assets/*` URL is enough to make the whole
+    // module graph unlinkable and blank the page before React mounts
+    // ("does not provide an export named 'k'").
+    //
+    // The bundler now derives chunk boundaries from the real module graph, so
+    // every chunk name is content-addressed over exactly the code it contains
+    // and no chunk carries a hand-maintained "public API" of renamed exports.
+    // Bundle integrity is enforced after every build by
+    // scripts/check-bundle-integrity.mjs.
+    rollupOptions: command === "build" ? { output: {} } : {},
   },
   server: {
     host: "0.0.0.0",
