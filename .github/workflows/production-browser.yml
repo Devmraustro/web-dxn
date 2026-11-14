@@ -83,16 +83,19 @@ jobs:
               ok: r.ok,
               httpStatus: r.httpStatus,
               error: r.error,
-              info: r.info,
+              info: r.info ? { ...r.info, bodyStart: (r.info.bodyStart || '').slice(0, 200) } : r.info,
               apiChecks: r.apiChecks,
               assetFailures: r.assetFailures,
               pageErrors: r.pageErrors,
               firstCdpException: r.cdpExceptions?.[0],
-              debuggerFrames: r.debuggerFrames?.slice(0, 2),
-              consoleErrors: r.consoleErrors?.slice(0, 5),
-              failedRequests: r.failedRequests?.slice(0, 5),
+              debuggerFrames: r.debuggerFrames?.slice(0, 1),
+              consoleErrors: r.consoleErrors?.slice(0, 3),
+              failedRequests: r.failedRequests?.slice(0, 3),
             }));
-            const text = JSON.stringify(evidence, null, 2).slice(0, 60000);
+            let text = JSON.stringify(evidence, null, 2);
+            if (text.length > 60000) {
+              text = JSON.stringify({ truncated: true, summary, results: evidence.map(({ route, mode, ok, httpStatus, error, pageErrors, firstCdpException }) => ({ route, mode, ok, httpStatus, error, pageErrors, firstCdpException })) }, null, 2);
+            }
             const check = await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
