@@ -4,6 +4,7 @@ import { Container, Row, Col, Form, Button, Alert, Badge, Table, Spinner } from 
 import { useLanguage } from "../context/LanguageContext";
 import { useSiteSettings } from "../context/SiteSettingsContext";
 import { ALGERIAN_WILAYAS, WilayaCoverageStatus } from "../../../backend/data/algerianWilayas";
+import { safeStorageGetItem } from "../utils/safeStorage";
 
 const AdminSettingsPage: React.FC = () => {
   const { language, dir } = useLanguage();
@@ -93,7 +94,7 @@ const AdminSettingsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const token = localStorage.getItem("token");
+      const token = safeStorageGetItem("token");
       await axios.put(
         `/api/shipping/coverage/${selectedWilayaCode}`,
         {

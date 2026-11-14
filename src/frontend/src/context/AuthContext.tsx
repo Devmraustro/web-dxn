@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
+import { safeStorageGetItem, safeStorageRemoveItem, safeStorageSetItem } from "../utils/safeStorage";
 
 interface AuthUser {
   id: string;
@@ -36,10 +37,10 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => safeStorageGetItem(TOKEN_KEY));
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
-      return JSON.parse(localStorage.getItem(USER_KEY) || "null");
+      return JSON.parse(safeStorageGetItem(USER_KEY) || "null");
     } catch {
       return null;
     }
@@ -55,8 +56,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const newToken = data?.token;
     const newUser = data?.user;
     if (newToken) {
-      localStorage.setItem(TOKEN_KEY, newToken);
-      if (newUser) localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+      safeStorageSetItem(TOKEN_KEY, newToken);
+      if (newUser) safeStorageSetItem(USER_KEY, JSON.stringify(newUser));
       setToken(newToken);
       setUser(newUser || null);
     }
@@ -64,8 +65,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    safeStorageRemoveItem(TOKEN_KEY);
+    safeStorageRemoveItem(USER_KEY);
     setToken(null);
     setUser(null);
   };

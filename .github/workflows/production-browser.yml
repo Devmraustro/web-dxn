@@ -1,0 +1,37 @@
+name: Production browser verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Real-browser production rendering check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Puppeteer with Chromium
+        run: npm install --no-save --no-audit --no-fund puppeteer@25.17.0
+
+      - name: Verify production renders in a real browser
+        run: node scripts/production-browser-check.mjs
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
+          BROWSER_REPORT_DIR: browser-report
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-browser-report
+          path: browser-report/

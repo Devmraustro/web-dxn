@@ -1,17 +1,14 @@
 import axios from "axios";
+import { safeStorageGetItem } from "../utils/safeStorage";
 
 const api = axios.create({
   baseURL: "/api",
 });
 
 api.interceptors.request.use((config) => {
-  try {
-    const token = typeof window !== "undefined" ? window.localStorage.getItem("dxn_token") : null;
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  } catch {
-    // Ignore storage access errors in restricted browsers
+  const token = safeStorageGetItem("dxn_token");
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });

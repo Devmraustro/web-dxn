@@ -8,6 +8,7 @@ import {
   type UiLanguage,
   type DocumentDirection,
 } from "../utils/languageSwitcher";
+import { getBrowserStorage } from "../utils/safeStorage";
 
 interface LanguageContextType {
   language: UiLanguage;
@@ -26,11 +27,10 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
   // read. Previously the raw string was used verbatim, so any persisted value
   // other than the exact byte "ar" silently rendered French + LTR while the
   // AR/FR buttons both appeared inactive — i.e. a "reversed" switcher.
-  const [language, setLanguage] = useState<UiLanguage>(() =>
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
-      ? readSavedLanguage(window.localStorage)
-      : "ar"
-  );
+  const [language, setLanguage] = useState<UiLanguage>(() => {
+    const storage = getBrowserStorage("localStorage");
+    return storage ? readSavedLanguage(storage) : "ar";
+  });
 
   const dir = resolveDirection(language);
 
@@ -43,8 +43,9 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
       document.documentElement.lang = language;
     }
     i18n.changeLanguage(language);
-    if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
-      writeSavedLanguage(window.localStorage, language);
+    const storage = getBrowserStorage("localStorage");
+    if (storage) {
+      writeSavedLanguage(storage, language);
     }
   }, [language, dir]);
 
