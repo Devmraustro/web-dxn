@@ -1,0 +1,198 @@
+name: Browser verification
+
+# Real-browser verification of the production bundle.
+#
+#  - `local-production` runs on every push to the remediation branch: it builds
+#    the real production bundle, boots the compiled Express app locally and runs
+#    the full matrix (3 routes × normal/blocked-storage) in headless Chromium.
+#  - `production-live` runs only on demand / after a production deployment: it
+#    probes the deployed domain with the same harness and requires a
+#    DB-connected health response.
+#
+# Harness guarantees (see scripts/lib/browser-harness.mjs):
+#   fresh browser context per case, CDP Network.setCacheDisabled, cache-reuse
+#   assertions, HTTP 304 accepted as a valid document navigation, and a cache
+#   self-test that proves the harness both detects and defeats cache reuse.
+
+on:
+  workflow_dispatch:
+  deployment_status:
+  push:
+    branches:
+      - arena/d43672c3-web-dxn
+    paths:
+      - "scripts/**"
+      - ".github/workflows/production-browser.yml"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  local-production:
+    name: Local production build — 3 routes × 2 storage modes
+    # Only on an explicit push (the branch under test) or a manual dispatch.
+    # `deployment_status` events belong to the live probe below.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Harness unit tests (cache/304/assertion logic)
+        run: npm run test:harness
+
+      - name: Install Puppeteer with Chromium
+        run: npm install --no-save --no-audit --no-fund puppeteer@25.17.0
+
+      - name: Verify local production build in a real browser
+        run: node scripts/verify-local-browser.mjs --port 4173
+        env:
+          BROWSER_MODES: normal,blocked-storage
+          BROWSER_ROUTES: "/,/join,/products"
+          BROWSER_REPORT_DIR: browser-report
+          HARNESS_SELF_TEST: "1"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-production-browser-report
+          path: browser-report/
+
+      - name: Publish browser evidence check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryPath = 'browser-report/check-run-summary.md';
+            const textPath = 'browser-report/check-run-text.json';
+            const reportPath = 'browser-report/production-browser-report.json';
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed('Browser report was not produced');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const summary = fs.existsSync(summaryPath)
+              ? fs.readFileSync(summaryPath, 'utf8')
+              : `Overall: ${report.failed ? 'FAIL' : 'PASS'}`;
+            let text = fs.existsSync(textPath) ? fs.readFileSync(textPath, 'utf8') : '{}';
+            if (text.length > 60000) {
+              text = JSON.stringify({ note: 'evidence truncated by workflow', failed: report.failed });
+            }
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Browser evidence — local production build',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: report.failed ? 'failure' : 'success',
+              output: {
+                title: report.failed
+                  ? 'Local production build FAILED browser verification'
+                  : 'Local production build PASSED browser verification',
+                summary,
+                text,
+              },
+            });
+            core.info(`Created check run ${check.data.id}: ${check.data.html_url}`);
+
+  production-live:
+    name: Live production rendering probe
+    # Push runs verify the local build; the live domain is probed on demand and
+    # after a production deployment (it is expected to fail until the fix in
+    # this branch is deployed).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' &&
+        github.event.deployment_status.state == 'success' &&
+        (github.event.deployment.environment == 'Production' ||
+         github.event.deployment.environment == 'production'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Puppeteer with Chromium
+        run: npm install --no-save --no-audit --no-fund puppeteer@25.17.0
+
+      - name: Verify live production renders in a real browser
+        run: node scripts/production-browser-check.mjs
+        env:
+          PRODUCTION_URL: https://dxnnadz.vercel.app
+          BROWSER_TARGET: production
+          EXPECT_DB_CONNECTED: "1"
+          HARNESS_SELF_TEST: "0"
+          BROWSER_MODES: normal,blocked-storage
+          BROWSER_ROUTES: "/,/join,/products"
+          BROWSER_REPORT_DIR: browser-report
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-browser-report
+          path: browser-report/
+
+      # The sandbox cannot download Actions artifact/log blobs (egress allowlist),
+      # so also publish the evidence as a Check Run output readable via the API.
+      - name: Publish browser evidence check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryPath = 'browser-report/check-run-summary.md';
+            const textPath = 'browser-report/check-run-text.json';
+            const reportPath = 'browser-report/production-browser-report.json';
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed('Browser report was not produced');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const summary = fs.existsSync(summaryPath)
+              ? fs.readFileSync(summaryPath, 'utf8')
+              : `Overall: ${report.failed ? 'FAIL' : 'PASS'}`;
+            let text = fs.existsSync(textPath) ? fs.readFileSync(textPath, 'utf8') : '{}';
+            if (text.length > 60000) {
+              text = JSON.stringify({ note: 'evidence truncated by workflow', failed: report.failed });
+            }
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Browser evidence — live production',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: report.failed ? 'failure' : 'success',
+              output: {
+                title: report.failed
+                  ? 'Live production FAILED browser verification'
+                  : 'Live production PASSED browser verification',
+                summary,
+                text,
+              },
+            });
+            core.info(`Created check run ${check.data.id}: ${check.data.html_url}`);

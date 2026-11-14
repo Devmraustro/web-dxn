@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { reconcileCart, CatalogEntry, ReconcileItem } from "../utils/cartReconcile";
+import { safeStorageGetItem, safeStorageSetItem } from "../utils/safeStorage";
 
 export interface CartItem {
   productId?: string;
@@ -61,7 +62,7 @@ const CartContext = createContext<CartContextType>({
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = safeStorageGetItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -76,7 +77,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [liveItems, setLiveItems] = useState<ReconcileItem[]>(() => []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    safeStorageSetItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
   useEffect(() => {

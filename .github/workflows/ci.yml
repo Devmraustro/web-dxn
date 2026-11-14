@@ -42,6 +42,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Browser-verification harness tests
+        run: npm run test:harness
+
       - name: Unit test suite
         run: npm run test:unit -- --coverage=false
 
