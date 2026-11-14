@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Site Settings Service (Public Safe Config + Admin Management).
+ * DXN Natural Life — Site Settings Service (Public Safe Config + Admin Management).
  *
  * SECURITY INVARIANTS:
  * 1. Secret environment variables (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
@@ -158,7 +158,7 @@ function mergeWithEnvDefaults(doc: any | null): AdminSiteSettings {
     brandName:
       typeof doc?.brandName === "string" && doc.brandName.trim()
         ? doc.brandName.trim()
-        : "DXN NADZ",
+        : "DXN Natural Life",
     sponsorMembershipNumber,
     sponsorConfigured: Boolean(sponsorMembershipNumber),
     sponsorNameAr: typeof doc?.sponsorNameAr === "string" ? doc.sponsorNameAr.trim() : "",

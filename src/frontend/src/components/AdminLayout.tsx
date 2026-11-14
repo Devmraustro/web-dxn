@@ -42,11 +42,11 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="admin-shell">
-      <SeoHead title="DXN NADZ — لوحة التحكم" canonicalPath="/admin" noindex />
+      <SeoHead title="DXN للحياة الطبيعية — لوحة التحكم" canonicalPath="/admin" noindex />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-title">
           <ShieldIcon />
-          <span>DXN NADZ Admin</span>
+          <span>DXN Natural Life Admin</span>
         </div>
         <nav className="admin-sidebar-nav" aria-label="Admin navigation">
           <NavLink to="/admin" end className={linkCls}>

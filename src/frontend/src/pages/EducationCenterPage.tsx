@@ -68,8 +68,8 @@ const EducationCenterPage: React.FC = () => {
       "@type": "Article",
       headline: loc.title,
       description: loc.summary,
-      author: { "@type": "Organization", name: "DXN NADZ" },
-      publisher: { "@type": "Organization", name: "DXN NADZ" },
+      author: { "@type": "Organization", name: "DXN Natural Life" },
+      publisher: { "@type": "Organization", name: "DXN Natural Life" },
     };
 
     return (

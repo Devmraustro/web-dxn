@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Verified Educational Content, Default Categories, and Compliance FAQs.
+ * DXN Natural Life — Verified Educational Content, Default Categories, and Compliance FAQs.
  *
  * STRICT COMPLIANCE INVARIANTS:
  * 1. Dietary supplements and food/cosmetic products are NEVER described as medicines.
@@ -449,9 +449,9 @@ export const DEFAULT_EDUCATIONAL_ARTICLES: EducationalArticleSeed[] = [
       traditionalUses:
         "المعرفة الموثوقة والشفافية هما أساس الثقة المستدامة بين المستهلك وأي علامة تجارية مسؤولة.",
       unprovenClaimsNotice:
-        "احذر من أي مصدر على الإنترنت يروج لوصفات علاجية عبر المكملات أو يعد بنتائج فورية مضمونة؛ في منصة DXN NADZ نلتزم بالمعلومة المسؤولة والشفافة فقط.",
+        "احذر من أي مصدر على الإنترنت يروج لوصفات علاجية عبر المكملات أو يعد بنتائج فورية مضمونة؛ في منصة DXN للحياة الطبيعية نلتزم بالمعلومة المسؤولة والشفافة فقط.",
       usageAndStorage:
-        "إذا كانت لديك استفسارات حول مكونات منتج معين أو طريقة طلبه، يمكنك مراجعة بطاقة المنتج أو التواصل مع فريق DXN NADZ للاستفسار العام حول المنتجات المتوفرة.",
+        "إذا كانت لديك استفسارات حول مكونات منتج معين أو طريقة طلبه، يمكنك مراجعة بطاقة المنتج أو التواصل مع فريق DXN للحياة الطبيعية للاستفسار العام حول المنتجات المتوفرة.",
       disclaimer: MANDATORY_HEALTH_DISCLAIMER_AR,
     },
     fr: {
@@ -464,7 +464,7 @@ export const DEFAULT_EDUCATIONAL_ARTICLES: EducationalArticleSeed[] = [
       traditionalUses:
         "Une information transparente et responsable constitue le socle d'une relation de confiance durable.",
       unprovenClaimsNotice:
-        "Méfiez-vous des promesses de résultats miraculeux : DXN NADZ s'engage strictement pour une information factuelle et conforme.",
+        "Méfiez-vous des promesses de résultats miraculeux : DXN Natural Life s'engage strictement pour une information factuelle et conforme.",
       usageAndStorage:
         "Consultez la fiche détaillée de chaque produit ou contactez notre équipe pour toute question pratique sur les références disponibles.",
       disclaimer: MANDATORY_HEALTH_DISCLAIMER_FR,
@@ -520,12 +520,12 @@ export const DEFAULT_FAQ_ITEMS: DefaultFaqSeed[] = [
     sortOrder: 3,
     isPublished: true,
     ar: {
-      question: "هل أحتاج رقم عضوية للشراء من متجر DXN NADZ؟",
+      question: "هل أحتاج رقم عضوية للشراء من متجر DXN للحياة الطبيعية؟",
       answer:
         "لا، لا تحتاج إلى أي رقم عضوية للشراء. يمكن لأي زائر أو عميل اختيار المنتجات وإتمام الطلب مباشرة بسهولة تامة مع الدفع عند الاستلام.",
     },
     fr: {
-      question: "Ai-je besoin d'un numéro de membre pour acheter sur DXN NADZ ?",
+      question: "Ai-je besoin d'un numéro de membre pour acheter sur DXN Natural Life ?",
       answer:
         "Non, aucun numéro d'adhésion n'est requis pour commander. Tout client peut acheter librement sur la boutique avec paiement à la livraison.",
     },
@@ -552,12 +552,12 @@ export const DEFAULT_FAQ_ITEMS: DefaultFaqSeed[] = [
     sortOrder: 5,
     isPublished: true,
     ar: {
-      question: "كيف أنضم إلى فريق DXN NADZ؟",
+      question: "كيف أنضم إلى فريق DXN للحياة الطبيعية؟",
       answer:
         "يمكنك التوجه إلى صفحة «انضم إلى فريقنا» وتعبئة نموذج طلب الانضمام ببياناتك الصحيحة ووسيلة التواصل المفضلة لديك. سيقوم فريقنا بالتواصل معك لشرح الخطوات الرسمية ومرافقتك في إجراءات التسجيل الرسمي خطوة بخطوة.",
     },
     fr: {
-      question: "Comment rejoindre l'équipe DXN NADZ ?",
+      question: "Comment rejoindre l'équipe DXN Natural Life ?",
       answer:
         "Rendez-vous sur la page « Rejoindre notre équipe » et remplissez le formulaire de contact. Notre équipe vous recontactera pour répondre à vos questions et vous accompagner dans les démarches officielles d'inscription.",
     },
@@ -586,7 +586,7 @@ export const DEFAULT_FAQ_ITEMS: DefaultFaqSeed[] = [
     ar: {
       question: "كيف يتم التواصل معي بعد إرسال طلب الانضمام؟",
       answer:
-        "فور إرسال النموذج يظهر لك رقم مرجعي لطلبك، ويتلقى فريق إدارة DXN NADZ إشعاراً فورياً لمراجعة طلبك والتواصل معك عبر الوسيلة التي اخترتها (واتساب، مكالمة هاتفية، تيليجرام، أو بريد إلكتروني) لتقديم الشرح الكامل والإجابة عن أسئلتك دون أي تسجيل تلقائي.",
+        "فور إرسال النموذج يظهر لك رقم مرجعي لطلبك، ويتلقى فريق إدارة DXN للحياة الطبيعية إشعاراً فورياً لمراجعة طلبك والتواصل معك عبر الوسيلة التي اخترتها (واتساب، مكالمة هاتفية، تيليجرام، أو بريد إلكتروني) لتقديم الشرح الكامل والإجابة عن أسئلتك دون أي تسجيل تلقائي.",
     },
     fr: {
       question: "Comment se passe le suivi après l'envoi du formulaire d'adhésion ?",
@@ -632,12 +632,12 @@ export const DEFAULT_FAQ_ITEMS: DefaultFaqSeed[] = [
     sortOrder: 10,
     isPublished: true,
     ar: {
-      question: "كيف أتواصل مع فريق DXN NADZ؟",
+      question: "كيف أتواصل مع فريق DXN للحياة الطبيعية؟",
       answer:
         "يمكنك التواصل معنا في أي وقت عبر صفحة «تواصل معنا» بإرسال رسالة مباشرة، أو عبر البريد الإلكتروني وقنوات التواصل الاجتماعي الرسمية وواتساب الموضحة في الموقع.",
     },
     fr: {
-      question: "Comment contacter l'équipe DXN NADZ ?",
+      question: "Comment contacter l'équipe DXN Natural Life ?",
       answer:
         "Vous pouvez nous écrire à tout moment depuis la page « Contact » via notre formulaire sécurisé, par e-mail ou via nos canaux officiels affichés sur le site.",
     },

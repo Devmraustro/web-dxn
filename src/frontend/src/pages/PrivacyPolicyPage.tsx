@@ -15,7 +15,7 @@ const PrivacyPolicyPage = () => {
 
   // SEO: set document title and meta tags
   useEffect(() => {
-    document.title = `${t("privacyPolicyTitle")} | DXN NADZ`;
+    document.title = `${t("privacyPolicyTitle")} | DXN Natural Life`;
   }, [language, t]);
 
   const currentYear = new Date().getFullYear();
@@ -24,17 +24,17 @@ const PrivacyPolicyPage = () => {
   return (
     <>
       <Helmet>
-        <title>{t("privacyPolicyTitle")} | DXN NADZ</title>
+        <title>{t("privacyPolicyTitle")} | DXN Natural Life</title>
         <meta name="description" content={t("privacyPolicySubtitle")} />
         <meta name="robots" content="index, follow" />
         <link rel="canonical" href={`${window.location.origin}/privacy`} />
-        <meta property="og:title" content={`${t("privacyPolicyTitle")} | DXN NADZ`} />
+        <meta property="og:title" content={`${t("privacyPolicyTitle")} | DXN Natural Life`} />
         <meta property="og:description" content={t("privacyPolicySubtitle")} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${window.location.origin}/privacy`} />
         <meta property="og:locale" content={language === "ar" ? "ar_DZ" : "fr_DZ"} />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${t("privacyPolicyTitle")} | DXN NADZ`} />
+        <meta name="twitter:title" content={`${t("privacyPolicyTitle")} | DXN Natural Life`} />
         <meta name="twitter:description" content={t("privacyPolicySubtitle")} />
       </Helmet>
 

@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Referral Attribution & Optional Membership ID Normalization.
+ * DXN Natural Life — Referral Attribution & Optional Membership ID Normalization.
  *
  * SECURITY & BUSINESS RULES:
  * 1. Referral parameters (?ref=facebook|instagram|tiktok|whatsapp, utm_*) are

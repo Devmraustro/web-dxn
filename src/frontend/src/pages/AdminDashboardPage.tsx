@@ -67,7 +67,7 @@ const AdminDashboardPage = () => {
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 dxn-admin-header mb-4">
         <div>
           <h1 className="dxn-admin-title h3 mb-1">
-            {t("لوحة تحكم DXN NADZ", "Tableau de bord DXN NADZ")}
+            {t("لوحة تحكم DXN للحياة الطبيعية", "Tableau de bord DXN Natural Life")}
           </h1>
           <p className="dxn-admin-sub mb-0">
             {t(

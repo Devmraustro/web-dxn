@@ -268,6 +268,13 @@ app.use((req, res) => {
     // never returned for a backend endpoint.
     const indexHtml = path.resolve(__dirname, "../frontend/build", "index.html");
     if (fs.existsSync(indexHtml)) {
+      // The HTML shell references content-hashed assets whose names change on
+      // every build. It MUST be revalidated at the edge, otherwise a cached
+      // index.html from a previous deployment references entry hashes that no
+      // longer exist (Vite emptyOutDir removes them) -> blank page / 404
+      // bundles. Hashed /assets/* files stay immutable (see express.static
+      // above); the shell stays fresh.
+      res.setHeader("Cache-Control", "no-cache");
       res.sendFile(indexHtml);
     } else {
       // No built frontend in this deployment (e.g. an API-only Vercel

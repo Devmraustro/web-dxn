@@ -32,8 +32,8 @@ const WhyDxnPage: React.FC = () => {
     {
       title: tx("حرية الشراء بدون التزام", "Liberté d'achat sans obligation"),
       body: tx(
-        "في متجر DXN NADZ يمكن لأي عميل شراء ما يحتاجه مباشرة دون اشتراط الانضمام أو التسجيل، مع إمكانية الدفع عند الاستلام.",
-        "Sur DXN NADZ, tout visiteur peut commander librement sans obligation d'adhésion, avec paiement à la livraison."
+        "في متجر DXN للحياة الطبيعية يمكن لأي عميل شراء ما يحتاجه مباشرة دون اشتراط الانضمام أو التسجيل، مع إمكانية الدفع عند الاستلام.",
+        "Sur DXN Natural Life, tout visiteur peut commander librement sans obligation d'adhésion, avec paiement à la livraison."
       ),
     },
     {
@@ -44,7 +44,7 @@ const WhyDxnPage: React.FC = () => {
       ),
     },
     {
-      title: tx("دعم وتوجيه مستمر مع فريق DXN NADZ", "Accompagnement sérieux par l'équipe DXN NADZ"),
+      title: tx("دعم وتوجيه مستمر مع فريق DXN للحياة الطبيعية", "Accompagnement sérieux par l'équipe DXN Natural Life"),
       body: tx(
         "نوفر شرحاً واقعياً وأميناً، وتدريباً على فهم المنتجات وأساسيات التسويق الأخلاقي بعيداً عن المبالغات والوعود الوهمية.",
         "Nous offrons une orientation transparente, éducative et éthique, sans promesses irréalistes."
@@ -91,7 +91,7 @@ const WhyDxnPage: React.FC = () => {
           </div>
 
           <div className="dxn-compliance-banner mt-5">
-            <strong>{tx("مبدأ الشفافية في DXN NADZ:", "Principe de transparence DXN NADZ :")}</strong>{" "}
+            <strong>{tx("مبدأ الشفافية في DXN للحياة الطبيعية:", "Principe de transparence DXN Natural Life :")}</strong>{" "}
             {tx(
               "نحرص على تقديم منتجات DXN بوصفها منتجات غذائية واستهلاكية وعناية شخصية وليست علاجات طبية، ونعرض فرصة العمل بوصفها نشاطاً تجارياً يعتمد على الجهد والمبيعات الحقيقية دون أي ضمانات ربح تلقائي.",
               "Nous présentons les produits DXN comme des produits alimentaires et cosmétiques (non médicaux), et l'opportunité commerciale comme une activité fondée sur le travail réel sans revenu garanti."

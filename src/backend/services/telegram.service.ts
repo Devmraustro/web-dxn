@@ -258,7 +258,7 @@ function formatTelegramDate(value: unknown): string {
 }
 
 /**
- * DXN NADZ — Order notification (bilingual AR/FR/EN, legacy Markdown).
+ * DXN Natural Life — Order notification (bilingual AR/FR/EN, legacy Markdown).
  * Only dynamic (user/database-controlled) values pass through escapeMarkdown;
  * static labels are literal formatting.
  */
@@ -294,7 +294,7 @@ function buildOrderMessage(order: any): string {
       : esc(order.deliveryMethod || "—");
 
   const lines = [
-    "🛒 DXN NADZ — *NEW ORDER*",
+    "🛒 DXN Natural Life — *NEW ORDER*",
     "",
     `Order: ${esc(order.orderNumber)}`,
   ];
@@ -340,12 +340,12 @@ function buildOrderMessage(order: any): string {
 }
 
 /**
- * DXN NADZ — New Membership Lead notification (Phase 8.2).
+ * DXN Natural Life — New Membership Lead notification (Phase 8.2).
  */
 export function buildMembershipLeadMessage(lead: any): string {
   const esc = escapeMarkdown;
   const lines = [
-    "🤝 DXN NADZ — *NEW MEMBERSHIP LEAD*",
+    "🤝 DXN Natural Life — *NEW MEMBERSHIP LEAD*",
     "",
     `Lead Reference: ${esc(lead.leadReference || "—")}`,
     `Timestamp: ${esc(formatTelegramDate(lead.createdAt))}`,
@@ -376,12 +376,12 @@ export function buildMembershipLeadMessage(lead: any): string {
 }
 
 /**
- * DXN NADZ — New Contact Request notification (Phase 8.3).
+ * DXN Natural Life — New Contact Request notification (Phase 8.3).
  */
 export function buildContactRequestMessage(contact: any): string {
   const esc = escapeMarkdown;
   const lines = [
-    "✉️ DXN NADZ — *NEW CONTACT REQUEST*",
+    "✉️ DXN Natural Life — *NEW CONTACT REQUEST*",
     "",
     `Reference: ${esc(contact.reference || "—")}`,
     `Timestamp: ${esc(formatTelegramDate(contact.createdAt))}`,

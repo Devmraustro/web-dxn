@@ -28,7 +28,7 @@ export interface SiteSettingsState {
 }
 
 const DEFAULT_SETTINGS: SiteSettingsState = {
-  brandName: "DXN NADZ",
+  brandName: "DXN Natural Life",
   sponsorMembershipNumber: null,
   sponsorConfigured: false,
   sponsorNameAr: "",
@@ -73,7 +73,7 @@ export const SiteSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const data = res?.data?.data;
       if (data && typeof data === "object") {
         setSettings({
-          brandName: data.brandName || "DXN NADZ",
+          brandName: data.brandName || "DXN Natural Life",
           sponsorMembershipNumber: data.sponsorMembershipNumber || null,
           sponsorConfigured: Boolean(data.sponsorConfigured && data.sponsorMembershipNumber),
           sponsorNameAr: data.sponsorNameAr || "",

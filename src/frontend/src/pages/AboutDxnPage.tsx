@@ -100,7 +100,7 @@ const AboutDxnPage: React.FC = () => {
                   <dd className="col-7 fw-bold">Datuk Dr. Lim Siow Jin</dd>
                   <dt className="col-5 text-muted">{tx("نموذج التشغيل:", "Modèle opérationnel :")}</dt>
                   <dd className="col-7 fw-bold">{tx("زراعة وتصنيع متكامل + بيع مباشر", "Production intégrée & vente directe")}</dd>
-                  <dt className="col-5 text-muted">{tx("دور منصة DXN NADZ:", "Rôle de DXN NADZ :")}</dt>
+                  <dt className="col-5 text-muted">{tx("دور منصة DXN للحياة الطبيعية:", "Rôle de DXN Natural Life :")}</dt>
                   <dd className="col-7 fw-bold">
                     {tx("متجر إلكتروني وتثقيف ومرافقة للانضمام إلى الفريق", "Boutique, centre éducatif et accompagnement d'équipe")}
                   </dd>

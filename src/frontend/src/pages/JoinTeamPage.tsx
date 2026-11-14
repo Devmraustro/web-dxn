@@ -163,10 +163,10 @@ const JoinTeamPage: React.FC = () => {
   return (
     <div className="dxn-page">
       <SeoHead
-        title={tx("انضم إلى فريق DXN NADZ", "Rejoindre l'équipe DXN NADZ")}
+        title={tx("انضم إلى فريق DXN للحياة الطبيعية", "Rejoindre l'équipe DXN Natural Life")}
         description={tx(
-          "تعرّف بشفافية على نظام العضوية والبيع المباشر في DXN، وقدّم طلب الانضمام إلى فريق DXN NADZ للحصول على المرافقة والتدريب.",
-          "Comprenez de manière transparente l'adhésion et la vente directe DXN et rejoignez l'équipe DXN NADZ."
+          "تعرّف بشفافية على نظام العضوية والبيع المباشر في DXN، وقدّم طلب الانضمام إلى فريق DXN للحياة الطبيعية للحصول على المرافقة والتدريب.",
+          "Comprenez de manière transparente l'adhésion et la vente directe DXN et rejoignez l'équipe DXN Natural Life."
         )}
         canonicalPath="/join"
       />
@@ -175,7 +175,7 @@ const JoinTeamPage: React.FC = () => {
       <section className="dxn-hero" style={{ padding: "3.5rem 0" }}>
         <div className="container">
           <span className="dxn-hero-eyebrow">{tx("فرصة العمل الجماعي المنظم", "Accompagnement & Réseau DXN")}</span>
-          <h1 className="mb-2">{tx("انضم إلى فريق DXN NADZ", "Rejoindre l'équipe DXN NADZ")}</h1>
+          <h1 className="mb-2">{tx("انضم إلى فريق DXN للحياة الطبيعية", "Rejoindre l'équipe DXN Natural Life")}</h1>
           <p className="dxn-hero-lead mb-0">
             {tx(
               "نموذج بيع مباشر واضح ومرافقة تدريبية خطوة بخطوة لفهم المنتجات وإجراءات التسجيل الرسمي بشفافية كاملة.",
@@ -191,8 +191,8 @@ const JoinTeamPage: React.FC = () => {
           <div className="dxn-compliance-banner mb-5">
             <strong>{tx("إفصاح الشفافية والأخلاقيات المهنية:", "Déclaration de transparence et d'éthique :")}</strong>{" "}
             {tx(
-              "الانضمام عبر هذا النموذج هو طلب تواصل واستشارة للالتحاق بفريق DXN NADZ، ولا يُنشئ عضوية رسمية تلقائياً في شركة DXN دون مراجعتك وموافقتك الكاملة. كما نؤكد بوضوح أنه لا توجد أرباح مضمونة أو دخل ثابت أو ثراء سريع؛ فالعوائد في نظام البيع المباشر ترتبط حصرياً بالمبيعات الفعلية للمنتجات والجهد الشخصي والتعلم المستمر.",
-              "L'envoi de ce formulaire constitue une demande d'accompagnement auprès de l'équipe DXN NADZ et ne crée pas automatiquement de compte officiel DXN. Aucun revenu n'est garanti ni automatique : les résultats dépendent exclusivement des ventes réelles de produits, de l'apprentissage et de l'effort personnel."
+              "الانضمام عبر هذا النموذج هو طلب تواصل واستشارة للالتحاق بفريق DXN للحياة الطبيعية، ولا يُنشئ عضوية رسمية تلقائياً في شركة DXN دون مراجعتك وموافقتك الكاملة. كما نؤكد بوضوح أنه لا توجد أرباح مضمونة أو دخل ثابت أو ثراء سريع؛ فالعوائد في نظام البيع المباشر ترتبط حصرياً بالمبيعات الفعلية للمنتجات والجهد الشخصي والتعلم المستمر.",
+              "L'envoi de ce formulaire constitue une demande d'accompagnement auprès de l'équipe DXN Natural Life et ne crée pas automatiquement de compte officiel DXN. Aucun revenu n'est garanti ni automatique : les résultats dépendent exclusivement des ventes réelles de produits, de l'apprentissage et de l'effort personnel."
             )}
           </div>
 
@@ -220,11 +220,11 @@ const JoinTeamPage: React.FC = () => {
                 <span className="badge rounded-pill mb-2" style={{ background: "#e6f4ec", color: "#0b3d1f" }}>
                   {tx("الخيار الثاني", "Option 2")}
                 </span>
-                <h2 className="h4 fw-bold mb-2">{tx("الانضمام كعضو في فريق DXN NADZ", "Rejoindre comme membre DXN")}</h2>
+                <h2 className="h4 fw-bold mb-2">{tx("الانضمام كعضو في فريق DXN للحياة الطبيعية", "Rejoindre comme membre DXN")}</h2>
                 <ul className="text-muted mb-3" style={{ lineHeight: 1.9 }}>
                   <li>{tx("الحصول على رقم عضوية رسمي خاص بك بعد استكمال التسجيل الرسمي.", "Obtention d'un identifiant officiel DXN après inscription validée.")}</li>
                   <li>{tx("الاستفادة من نظام النقاط (PV) ومزايا الأعضاء وفق لوائح DXN.", "Accès au système de points (PV) et aux avantages membres officiels.")}</li>
-                  <li>{tx("تدريب ومرافقة مستمرة من فريق DXN NADZ حول المنتجات والتسويق المسؤول.", "Formation et mentorat continus par l'équipe DXN NADZ.")}</li>
+                  <li>{tx("تدريب ومرافقة مستمرة من فريق DXN للحياة الطبيعية حول المنتجات والتسويق المسؤول.", "Formation et mentorat continus par l'équipe DXN Natural Life.")}</li>
                 </ul>
                 <a href="#join-form" className="dxn-btn dxn-btn-primary btn-sm">
                   {tx("انتقل إلى نموذج الانضمام ↓", "Aller au formulaire d'adhésion ↓")}
@@ -243,8 +243,8 @@ const JoinTeamPage: React.FC = () => {
                 </div>
                 <p className="small mb-3" style={{ color: "rgba(255,255,255,0.88)", lineHeight: 1.7 }}>
                   {tx(
-                    "يُستخدم رقم الراعي لتوثيق ارتباطك بفريق DXN NADZ أثناء التسجيل الرسمي لدى شركة DXN (هذا هو رقم قائد الفريق وليس رقم عضوية جديداً خاصاً بك).",
-                    "Cet identifiant de parrainage rattache votre future inscription officielle à l'équipe DXN NADZ (il s'agit du numéro du parrain et non de votre futur identifiant personnel)."
+                    "يُستخدم رقم الراعي لتوثيق ارتباطك بفريق DXN للحياة الطبيعية أثناء التسجيل الرسمي لدى شركة DXN (هذا هو رقم قائد الفريق وليس رقم عضوية جديداً خاصاً بك).",
+                    "Cet identifiant de parrainage rattache votre future inscription officielle à l'équipe DXN Natural Life (il s'agit du numéro du parrain et non de votre futur identifiant personnel)."
                   )}
                 </p>
 
@@ -271,8 +271,8 @@ const JoinTeamPage: React.FC = () => {
                     style={{ background: "rgba(255,255,255,0.12)", border: "1px dashed rgba(255,255,255,0.3)" }}
                   >
                     {tx(
-                      "رقم الراعي قيد الضبط من إدارة المنصة — سيتم تزويدك برقم الراعي الرسمي مباشرة فور تواصل فريق DXN NADZ معك.",
-                      "Le numéro de parrain officiel vous sera communiqué directement par l'équipe DXN NADZ lors de la prise de contact."
+                      "رقم الراعي قيد الضبط من إدارة المنصة — سيتم تزويدك برقم الراعي الرسمي مباشرة فور تواصل فريق DXN للحياة الطبيعية معك.",
+                      "Le numéro de parrain officiel vous sera communiqué directement par l'équipe DXN Natural Life lors de la prise de contact."
                     )}
                   </div>
                 )}
@@ -284,7 +284,7 @@ const JoinTeamPage: React.FC = () => {
                 <ol className="ps-3 mb-0 text-muted d-grid gap-2" style={{ lineHeight: 1.8 }}>
                   <li>
                     {tx(
-                      "تستلم فوراً رقماً مرجعياً لطلبك ويصل إشعار فوري لفريق إدارة DXN NADZ.",
+                      "تستلم فوراً رقماً مرجعياً لطلبك ويصل إشعار فوري لفريق إدارة DXN للحياة الطبيعية.",
                       "Vous recevez immédiatement une référence de suivi et notre équipe est notifiée."
                     )}
                   </li>
@@ -315,7 +315,7 @@ const JoinTeamPage: React.FC = () => {
               <div className="dxn-form-card">
                 <div className="dxn-form-card-head">
                   <span className="dxn-step">★</span>
-                  {tx("نموذج طلب الانضمام إلى فريق DXN NADZ", "Formulaire de demande d'adhésion à l'équipe")}
+                  {tx("نموذج طلب الانضمام إلى فريق DXN للحياة الطبيعية", "Formulaire de demande d'adhésion à l'équipe")}
                 </div>
                 <div className="dxn-form-card-body">
                   {submittedRef ? (
@@ -331,7 +331,7 @@ const JoinTeamPage: React.FC = () => {
                       </h2>
                       <p className="text-muted mb-3">
                         {tx(
-                          "شكراً لاهتمامك بالانضمام إلى فريق DXN NADZ. سيقوم فريقنا بمراجعة بياناتك والتواصل معك عبر الوسيلة التي اخترتها قريباً.",
+                          "شكراً لاهتمامك بالانضمام إلى فريق DXN للحياة الطبيعية. سيقوم فريقنا بمراجعة بياناتك والتواصل معك عبر الوسيلة التي اخترتها قريباً.",
                           "Merci pour votre intérêt. Notre équipe examinera votre demande et vous recontactera très prochainement."
                         )}
                       </p>
@@ -531,8 +531,8 @@ const JoinTeamPage: React.FC = () => {
                               label={
                                 <span className="small">
                                   {tx(
-                                    "أوافق على معالجة بياناتي من قِبل فريق DXN NADZ لغرض التواصل معي بخصوص طلب الانضمام وفق ",
-                                    "J'accepte le traitement de mes données par l'équipe DXN NADZ afin d'être recontacté conformément à la "
+                                    "أوافق على معالجة بياناتي من قِبل فريق DXN للحياة الطبيعية لغرض التواصل معي بخصوص طلب الانضمام وفق ",
+                                    "J'accepte le traitement de mes données par l'équipe DXN Natural Life afin d'être recontacté conformément à la "
                                   )}
                                   <Link to="/privacy" target="_blank">
                                     {tx("سياسة الخصوصية", "politique de confidentialité")}

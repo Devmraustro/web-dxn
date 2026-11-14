@@ -24,12 +24,16 @@ const SeoHead: React.FC<SeoHeadProps> = ({
   jsonLd,
 }) => {
   const { language } = useLanguage();
-  const fullTitle = title.includes("DXN NADZ") ? title : `${title} | DXN NADZ`;
+  const brandSuffix = language === "ar" ? "DXN للحياة الطبيعية" : "DXN Natural Life";
+  const fullTitle =
+    title.includes("DXN Natural Life") || title.includes("DXN للحياة الطبيعية")
+      ? title
+      : `${title} | ${brandSuffix}`;
   const cleanDesc =
     description ||
     (language === "ar"
-      ? "منصة DXN NADZ — منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري."
-      : "DXN NADZ — Produits variés, information fiable et opportunité entrepreneuriale.");
+      ? "منصة DXN للحياة الطبيعية — منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري."
+      : "DXN Natural Life — Produits variés, information fiable et opportunité entrepreneuriale.");
   const canonicalUrl = `${PUBLIC_ORIGIN}${canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`}`;
 
   return (
@@ -39,7 +43,7 @@ const SeoHead: React.FC<SeoHeadProps> = ({
       <meta name="description" content={cleanDesc} />
       <meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
       {!noindex && <link rel="canonical" href={canonicalUrl} />}
-      <meta property="og:site_name" content="DXN NADZ" />
+      <meta property="og:site_name" content="DXN Natural Life" />
       <meta property="og:type" content={ogType} />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={cleanDesc} />

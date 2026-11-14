@@ -118,7 +118,7 @@ const HomePage: React.FC = () => {
     {
       num: "02",
       title: tx("أرسل طلب الانضمام عبر المنصة", "Envoyer une demande d'accompagnement"),
-      body: tx("عبّئ نموذج الانضمام ليتواصل معك فريق DXN NADZ عبر وسيلتك المفضلة دون أي التزام مسبق.", "Remplissez le formulaire pour être recontacté par notre équipe via votre canal préféré."),
+      body: tx("عبّئ نموذج الانضمام ليتواصل معك فريق DXN للحياة الطبيعية عبر وسيلتك المفضلة دون أي التزام مسبق.", "Remplissez le formulaire pour être recontacté par notre équipe via votre canal préféré."),
     },
     {
       num: "03",
@@ -138,22 +138,22 @@ const HomePage: React.FC = () => {
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: settings.brandName || "DXN NADZ",
+    name: settings.brandName || "DXN Natural Life",
     url: "https://dxnnadz.vercel.app/",
     email: settings.contactEmail || STORE_EMAIL,
     description: tx(
-      "منصة DXN NADZ للتسوق المباشر، التثقيف الموثوق بالمنتجات، والانضمام إلى فريق البيع المباشر.",
-      "Plateforme DXN NADZ — Boutique, éducation produits et accompagnement d'équipe."
+      "منصة DXN للحياة الطبيعية للتسوق المباشر، التثقيف الموثوق بالمنتجات، والانضمام إلى فريق البيع المباشر.",
+      "Plateforme DXN Natural Life — Boutique, éducation produits et accompagnement d'équipe."
     ),
   };
 
   return (
     <div className="dxn-page">
       <SeoHead
-        title={tx("DXN NADZ — اكتشف عالم DXN", "DXN NADZ — Découvrez l'univers DXN")}
+        title={tx("DXN للحياة الطبيعية — اكتشف عالم DXN", "DXN Natural Life — Découvrez l'univers DXN")}
         description={tx(
-          "اكتشف عالم DXN مع منصة DXN NADZ: منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري مع التوصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية التوصيل).",
-          "Découvrez l'univers DXN avec DXN NADZ : produits variés, savoir fiable et opportunité de développer votre activité à travers les 69 wilayas d'Algérie."
+          "اكتشف عالم DXN مع منصة DXN للحياة الطبيعية: منتجات متنوعة، معرفة موثوقة، وفرصة لتطوير نشاطك التجاري مع التوصيل عبر ولايات الجزائر (69 ولاية — حسب تغطية التوصيل).",
+          "Découvrez l'univers DXN avec DXN Natural Life : produits variés, savoir fiable et opportunité de développer votre activité à travers les 69 wilayas d'Algérie."
         )}
         canonicalPath="/"
         jsonLd={orgJsonLd}
@@ -166,7 +166,7 @@ const HomePage: React.FC = () => {
             <div className="col-lg-7">
               <span className="dxn-hero-eyebrow">
                 <span aria-hidden="true">✦</span>
-                {settings.brandName || "DXN NADZ"} — {tx("منصة التسوق والمعرفة والفريق", "Boutique • Savoir • Équipe")}
+                {settings.brandName || "DXN Natural Life"} — {tx("منصة التسوق والمعرفة والفريق", "Boutique • Savoir • Équipe")}
               </span>
               <h1>{tx("اكتشف عالم DXN", "Découvrez l'univers DXN")}</h1>
               <p className="dxn-hero-lead">
@@ -215,7 +215,7 @@ const HomePage: React.FC = () => {
                 ) : (
                   <div>
                     <div className="small fw-bold mb-2" style={{ color: "#fce588" }}>
-                      {settings.brandName || "DXN NADZ"}
+                      {settings.brandName || "DXN Natural Life"}
                     </div>
                     <h2 className="h4 fw-bold text-white mb-3">
                       {tx("منصة متكاملة للتسوق والتثقيف وبناء الفريق", "Une plateforme complète : Produits, Éducation & Réseau")}
@@ -224,7 +224,7 @@ const HomePage: React.FC = () => {
                       <li>• {tx("تسوّق المكملات الغذائية والكوسميتيك بأسعار واضحة", "Commandez compléments et cosmétiques en toute clarté")}</li>
                       <li>• {tx("حقل اختياري لإدخال رقم عضويتك الحالية عند الطلب", "Champ optionnel pour votre numéro de membre DXN au paiement")}</li>
                       <li>• {tx("مركز معرفة علمي يشرح المكونات وطريقة الحفظ والاستخدام", "Centre éducatif détaillant ingrédients, usage et conservation")}</li>
-                      <li>• {tx("مرافقة شخصية للراغبين في الانضمام إلى فريق DXN NADZ", "Accompagnement personnalisé pour rejoindre l'équipe DXN NADZ")}</li>
+                      <li>• {tx("مرافقة شخصية للراغبين في الانضمام إلى فريق DXN للحياة الطبيعية", "Accompagnement personnalisé pour rejoindre l'équipe DXN Natural Life")}</li>
                     </ul>
                   </div>
                 )}
@@ -500,7 +500,7 @@ const HomePage: React.FC = () => {
       <section className="dxn-section">
         <div className="container">
           <div className="dxn-cta-band">
-            <h2 className="mb-2">{tx("انضم إلى فريق DXN NADZ", "Rejoignez l'équipe DXN NADZ")}</h2>
+            <h2 className="mb-2">{tx("انضم إلى فريق DXN للحياة الطبيعية", "Rejoignez l'équipe DXN Natural Life")}</h2>
             <p className="mb-4">
               {tx(
                 "سواء كنت ترغب في التعرف على نظام العضوية أو بدء نشاطك التجاري في البيع المباشر بمرافقة وتدريب مستمر، سيسعد فريقنا بالتواصل معك والإجابة عن جميع استفساراتك.",
@@ -603,8 +603,8 @@ const HomePage: React.FC = () => {
               <h2 className="dxn-section-title mb-2">{tx("هل لديك استفسار حول المنتجات أو الانضمام؟", "Une question sur nos produits ou l'équipe ?")}</h2>
               <p className="text-muted mb-3">
                 {tx(
-                  "تواصل مباشرة مع فريق DXN NADZ عبر نموذج المراسلة السريع أو البريد الإلكتروني الرسمي، وسنرد عليك في أقرب وقت.",
-                  "Écrivez directement à l'équipe DXN NADZ via notre formulaire de contact ou par e-mail."
+                  "تواصل مباشرة مع فريق DXN للحياة الطبيعية عبر نموذج المراسلة السريع أو البريد الإلكتروني الرسمي، وسنرد عليك في أقرب وقت.",
+                  "Écrivez directement à l'équipe DXN Natural Life via notre formulaire de contact ou par e-mail."
                 )}
               </p>
               <div className="small text-muted">

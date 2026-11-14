@@ -71,7 +71,7 @@ export const updateAdminSettingsHandler = async (req: AuthRequest, res: Response
     const patch: Record<string, any> = {};
 
     if (body.brandName !== undefined) {
-      patch.brandName = String(body.brandName || "DXN NADZ").trim().slice(0, 80) || "DXN NADZ";
+      patch.brandName = String(body.brandName || "DXN Natural Life").trim().slice(0, 80) || "DXN Natural Life";
     }
     if (body.sponsorMembershipNumber !== undefined) {
       const check = normalizeOptionalDxnMemberId(body.sponsorMembershipNumber);

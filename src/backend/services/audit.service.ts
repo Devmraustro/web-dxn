@@ -1,5 +1,5 @@
 /**
- * DXN NADZ — Best-Effort Admin Security Audit Logger.
+ * DXN Natural Life — Best-Effort Admin Security Audit Logger.
  *
  * Never blocks or throws if the database is disconnected or mocked in unit tests.
  * Never logs raw passwords, tokens, or secret credentials.

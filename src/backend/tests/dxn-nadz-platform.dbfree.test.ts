@@ -214,8 +214,8 @@ describe("DXN NADZ Platform — Brand, Compliance, CRM, CMS & Security", () => {
       const fr = JSON.parse(frRaw);
 
       expect(Object.keys(ar).sort()).toEqual(Object.keys(fr).sort());
-      expect(arRaw).toContain("DXN NADZ");
-      expect(frRaw).toContain("DXN NADZ");
+      expect(arRaw).toContain("DXN للحياة الطبيعية");
+      expect(frRaw).toContain("DXN Natural Life");
       expect(arRaw).not.toContain("DXN Store");
       expect(frRaw).not.toContain("DXN Store");
       expect(arRaw).toContain("69 ولاية");
@@ -244,7 +244,7 @@ describe("DXN NADZ Platform — Brand, Compliance, CRM, CMS & Security", () => {
       const res = await request(app).get("/api/settings/public");
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.brandName).toBe("DXN NADZ");
+      expect(res.body.data.brandName).toBe("DXN Natural Life");
       expect(res.body.data.sponsorMembershipNumber).toBe("820998877");
       expect(JSON.stringify(res.body)).not.toContain("TELEGRAM_BOT_TOKEN");
       expect(res.body.data.telegramBotToken).toBeUndefined();
