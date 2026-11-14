@@ -34,6 +34,9 @@ permissions:
 jobs:
   local-production:
     name: Local production build — 3 routes × 2 storage modes
+    # Only on an explicit push (the branch under test) or a manual dispatch.
+    # `deployment_status` events belong to the live probe below.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -117,11 +120,11 @@ jobs:
     # after a production deployment (it is expected to fail until the fix in
     # this branch is deployed).
     if: >-
-      github.event_name != 'push' &&
-      (github.event_name != 'deployment_status' ||
-        (github.event.deployment_status.state == 'success' &&
-         (github.event.deployment.environment == 'Production' ||
-          github.event.deployment.environment == 'production')))
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' &&
+        github.event.deployment_status.state == 'success' &&
+        (github.event.deployment.environment == 'Production' ||
+         github.event.deployment.environment == 'production'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

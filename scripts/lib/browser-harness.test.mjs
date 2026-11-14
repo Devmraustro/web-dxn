@@ -158,6 +158,16 @@ test("cache evidence separates fatal document/cross-case reuse from same-case me
   assert.equal(crossCase.crossCaseCacheHits.length, 1);
   assert.equal(crossCase.crossCaseCacheHits[0].seenInPriorCase, true);
 
+  // data: URIs are embedded bytes, not HTTP cache entries: never fatal, even
+  // when the same URI appears in an earlier case.
+  const dataUri = summarizeCacheEvidence(
+    [{ url: "data:image/svg+xml,%3csvg%3e%3c/svg%3e", status: 200, fromCache: true, resourceType: "image" }],
+    { priorCaseUrls: ["data:image/svg+xml,%3csvg%3e%3c/svg%3e"] }
+  );
+  assert.equal(dataUri.ok, true);
+  assert.equal(dataUri.fromCacheCount, 0);
+  assert.equal(dataUri.crossCaseCacheHits.length, 0);
+
   const serviceWorker = summarizeCacheEvidence([{ url: "/", status: 200, fromServiceWorker: true, resourceType: "Document" }]);
   assert.equal(serviceWorker.ok, false);
   assert.equal(serviceWorker.fromServiceWorkerCount, 1);

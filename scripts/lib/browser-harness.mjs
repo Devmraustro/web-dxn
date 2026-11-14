@@ -110,7 +110,14 @@ export function evaluateDocumentNavigation(input = {}) {
  */
 export function summarizeCacheEvidence(responses = [], options = {}) {
   const priorCaseUrls = new Set(options.priorCaseUrls || []);
-  const hits = responses.filter((r) => r.fromCache === true);
+  // `data:`/`blob:` resources are decoded in-process and have no HTTP cache
+  // entry, no validator and no build identity: Chromium reports them as
+  // "cached" simply because the bytes are embedded in the document. They can
+  // never serve a stale build, so they are excluded from cache accounting
+  // (otherwise a Bootstrap chevron `data:image/svg+xml` URI would look like
+  // cross-case cache reuse — a false failure).
+  const isNetworkUrl = (url) => !/^(data|blob|about|chrome|file|chrome-extension):/i.test(String(url || ""));
+  const hits = responses.filter((r) => r.fromCache === true && isNetworkUrl(r.url));
   const serviceWorker = responses.filter((r) => r.fromServiceWorker === true);
   const revalidated = responses.filter((r) => r.status === 304);
   const documents = responses.filter((r) => r.resourceType === "Document");

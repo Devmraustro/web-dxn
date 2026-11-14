@@ -55,7 +55,9 @@ Now:
   `fromCache: true` for a URL that was **first requested inside that same case**.
   That is not cross-case contamination, so it is recorded in the evidence
   (`sameCaseCacheHits`) instead of failing the case — while cached documents and
-  any URL first seen in an earlier case remain hard failures.
+  any URL first seen in an earlier case remain hard failures. `data:`/`blob:`
+  resources are excluded from cache accounting entirely: they are bytes embedded
+  in the document, have no HTTP cache entry and no build identity.
 
 ## Cache self-test (proof the harness itself is trustworthy)
 
