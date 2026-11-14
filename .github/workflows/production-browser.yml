@@ -77,24 +77,45 @@ jobs:
               '|---|---|---|---|---|---|---|---|---|---|',
               rows,
             ].join('\n');
-            const evidence = report.results.map((r) => ({
-              route: r.route,
-              mode: r.mode,
-              ok: r.ok,
-              httpStatus: r.httpStatus,
-              error: r.error,
-              info: r.info ? { ...r.info, bodyStart: (r.info.bodyStart || '').slice(0, 200) } : r.info,
-              apiChecks: r.apiChecks,
-              assetFailures: r.assetFailures,
-              pageErrors: r.pageErrors,
-              firstCdpException: r.cdpExceptions?.[0],
-              debuggerFrames: r.debuggerFrames?.slice(0, 1),
-              consoleErrors: r.consoleErrors?.slice(0, 3),
-              failedRequests: r.failedRequests?.slice(0, 3),
-            }));
-            let text = JSON.stringify(evidence, null, 2);
+            // Compact evidence only: the full report lives in the uploaded artifact.
+            // GitHub caps each check-output field at 65535 chars, so keep this small.
+            const cap = (s, n) => (typeof s === 'string' ? s.slice(0, n) : s);
+            const evidence = report.results.map((r) => {
+              const ex = r.cdpExceptions?.[0];
+              const props = {};
+              for (const p of ex?.exception?.preview?.properties || []) props[p.name] = p.value;
+              return {
+                route: r.route,
+                mode: r.mode,
+                ok: r.ok,
+                httpStatus: r.httpStatus,
+                error: cap(r.error, 300),
+                title: r.info?.title,
+                rootChildren: r.info?.rootChildren,
+                entryScript: r.info?.entryScript,
+                healthOk: r.apiChecks?.health?.ok,
+                productsOk: r.apiChecks?.products?.ok,
+                assetFailures: r.assetFailures,
+                pageErrors: (r.pageErrors || []).map((e) => ({ message: cap(e.message, 300), stack: cap(e.stack, 1000) })),
+                firstCdpException: ex ? {
+                  text: ex.text,
+                  className: ex.exception?.className,
+                  description: cap(ex.exception?.description, 500),
+                  name: props.name,
+                  message: props.message,
+                  code: props.code,
+                } : undefined,
+                debuggerFrames: (r.debuggerFrames || []).slice(0, 1).map((f) => ({
+                  reason: f.reason,
+                  callFrames: (f.callFrames || []).slice(0, 4),
+                })),
+              };
+            });
+            const text = JSON.stringify(evidence, null, 2);
+            core.info(`Evidence text length: ${text.length} chars (limit 65535)`);
             if (text.length > 60000) {
-              text = JSON.stringify({ truncated: true, summary, results: evidence.map(({ route, mode, ok, httpStatus, error, pageErrors, firstCdpException }) => ({ route, mode, ok, httpStatus, error, pageErrors, firstCdpException })) }, null, 2);
+              core.setFailed(`Evidence text too large (${text.length} chars); refusing to publish`);
+              return;
             }
             const check = await github.rest.checks.create({
               owner: context.repo.owner,
